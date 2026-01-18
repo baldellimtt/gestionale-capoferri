@@ -34,7 +34,7 @@ function ConfirmDeleteModal({ show, onClose, onConfirm, loading = false }) {
             <h5 className="modal-title" style={{ 
               color: '#2a3f54',
               fontWeight: 700,
-              fontFamily: 'Inter, sans-serif'
+              fontFamily: 'var(--font-display)'
             }}>
               Elimina attività
             </h5>
@@ -52,7 +52,7 @@ function ConfirmDeleteModal({ show, onClose, onConfirm, loading = false }) {
               color: '#1a1a1a',
               marginBottom: '1rem',
               fontSize: '1rem',
-              fontFamily: 'Inter, sans-serif'
+              fontFamily: 'var(--font-sans)'
             }}>
               Sei sicuro di voler eliminare questa attività?
             </p>

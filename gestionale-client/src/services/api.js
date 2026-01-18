@@ -41,7 +41,7 @@ class ApiService {
         throw new Error(data.error || `HTTP error! status: ${response.status}`);
       }
 
-      // Per DELETE, se non c'è data, restituisci success: true
+      // Per DELETE, se non c'? data, restituisci success: true
       if (options.method === 'DELETE' && Object.keys(data).length === 0) {
         return { success: true };
       }

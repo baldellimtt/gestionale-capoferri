@@ -152,7 +152,7 @@ function AnagraficaClienti({ clienti, onUpdateClienti, onBack }) {
               className="btn btn-secondary"
               onClick={onBack}
             >
-              ← Indietro
+              Indietro
             </button>
           )}
         </div>
