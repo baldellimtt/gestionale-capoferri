@@ -343,6 +343,21 @@ header .logo {
   background: #e4efff;
 }
 
+.attivita-table tbody tr.row-incomplete td {
+  background: #fff3cd !important;
+}
+
+.attivita-table tbody tr.row-incomplete:hover td {
+  background: #ffe8a1 !important;
+}
+
+.attivita-table td.row-incomplete-cell {
+  background: #fff3cd !important;
+}
+
+.attivita-table tbody tr.row-incomplete:hover td.row-incomplete-cell {
+  background: #ffe8a1 !important;
+}
 .azioni-cell .d-flex {
   justify-content: center;
 }

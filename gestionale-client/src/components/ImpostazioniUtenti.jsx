@@ -8,6 +8,7 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onBack }) {
   const [editingId, setEditingId] = useState(null)
   const [editData, setEditData] = useState({})
   const [saving, setSaving] = useState(false)
+  const [showCreate, setShowCreate] = useState(false)
   const [createData, setCreateData] = useState({
     username: '',
     password: '',
@@ -86,6 +87,7 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onBack }) {
         targa: '',
         rimborso_km: ''
       })
+      setShowCreate(false)
     } catch (err) {
       console.error('Errore creazione utente:', err)
       setError(err.message || 'Errore nella creazione utente.')
@@ -154,87 +156,103 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onBack }) {
         </div>
       )}
 
-      <div className="card mb-4">
-        <div className="card-header">Nuovo utente</div>
-        <div className="card-body">
-          <div className="row g-3">
-            <div className="col-md-4">
-              <label className="form-label">Username</label>
-              <input
-                className="form-control"
-                value={createData.username}
-                onChange={(e) => setCreateData((prev) => ({ ...prev, username: e.target.value }))}
-              />
+      {!showCreate && (
+        <div className="mb-4 d-flex gap-2 align-items-center flex-wrap">
+          <button
+            className="btn btn-primary"
+            onClick={() => setShowCreate(true)}
+            disabled={saving}
+          >
+            + Aggiungi Utente
+          </button>
+        </div>
+      )}
+
+      {showCreate && (
+        <div className="card mb-4">
+          <div className="card-body">
+            <div className="row g-3">
+              <div className="col-md-4">
+                <label className="form-label">Username</label>
+                <input
+                  className="form-control"
+                  value={createData.username}
+                  onChange={(e) => setCreateData((prev) => ({ ...prev, username: e.target.value }))}
+                />
+              </div>
+              <div className="col-md-4">
+                <label className="form-label">Password</label>
+                <input
+                  type="password"
+                  className="form-control"
+                  value={createData.password}
+                  onChange={(e) => setCreateData((prev) => ({ ...prev, password: e.target.value }))}
+                />
+              </div>
+              <div className="col-md-4">
+                <label className="form-label">Ruolo</label>
+                <select
+                  className="form-select"
+                  value={createData.role}
+                  onChange={(e) => setCreateData((prev) => ({ ...prev, role: e.target.value }))}
+                >
+                  <option value="user">Utente</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+              <div className="col-md-4">
+                <label className="form-label">Nome</label>
+                <input
+                  className="form-control"
+                  value={createData.nome}
+                  onChange={(e) => setCreateData((prev) => ({ ...prev, nome: e.target.value }))}
+                />
+              </div>
+              <div className="col-md-4">
+                <label className="form-label">Cognome</label>
+                <input
+                  className="form-control"
+                  value={createData.cognome}
+                  onChange={(e) => setCreateData((prev) => ({ ...prev, cognome: e.target.value }))}
+                />
+              </div>
+              <div className="col-md-4">
+                <label className="form-label">Veicolo</label>
+                <input
+                  className="form-control"
+                  value={createData.mezzo}
+                  onChange={(e) => setCreateData((prev) => ({ ...prev, mezzo: e.target.value }))}
+                />
+              </div>
+              <div className="col-md-4">
+                <label className="form-label">Targa</label>
+                <input
+                  className="form-control"
+                  value={createData.targa}
+                  onChange={(e) => setCreateData((prev) => ({ ...prev, targa: e.target.value }))}
+                />
+              </div>
+              <div className="col-md-4">
+                <label className="form-label">Costo km</label>
+                <input
+                  className="form-control"
+                  value={createData.rimborso_km}
+                  onChange={(e) => setCreateData((prev) => ({ ...prev, rimborso_km: e.target.value }))}
+                  placeholder="0.00"
+                />
+              </div>
             </div>
-            <div className="col-md-4">
-              <label className="form-label">Password</label>
-              <input
-                type="password"
-                className="form-control"
-                value={createData.password}
-                onChange={(e) => setCreateData((prev) => ({ ...prev, password: e.target.value }))}
-              />
+            <div className="mt-4 d-flex gap-2">
+              <button className="btn btn-primary" onClick={handleCreate} disabled={saving}>
+                {saving ? 'Salvataggio...' : 'Crea utente'}
+              </button>
+              <button className="btn btn-secondary" onClick={() => setShowCreate(false)} disabled={saving}>
+                Annulla
+              </button>
             </div>
-            <div className="col-md-4">
-              <label className="form-label">Ruolo</label>
-              <select
-                className="form-select"
-                value={createData.role}
-                onChange={(e) => setCreateData((prev) => ({ ...prev, role: e.target.value }))}
-              >
-                <option value="user">Utente</option>
-                <option value="admin">Admin</option>
-              </select>
-            </div>
-            <div className="col-md-4">
-              <label className="form-label">Nome</label>
-              <input
-                className="form-control"
-                value={createData.nome}
-                onChange={(e) => setCreateData((prev) => ({ ...prev, nome: e.target.value }))}
-              />
-            </div>
-            <div className="col-md-4">
-              <label className="form-label">Cognome</label>
-              <input
-                className="form-control"
-                value={createData.cognome}
-                onChange={(e) => setCreateData((prev) => ({ ...prev, cognome: e.target.value }))}
-              />
-            </div>
-            <div className="col-md-4">
-              <label className="form-label">Veicolo</label>
-              <input
-                className="form-control"
-                value={createData.mezzo}
-                onChange={(e) => setCreateData((prev) => ({ ...prev, mezzo: e.target.value }))}
-              />
-            </div>
-            <div className="col-md-4">
-              <label className="form-label">Targa</label>
-              <input
-                className="form-control"
-                value={createData.targa}
-                onChange={(e) => setCreateData((prev) => ({ ...prev, targa: e.target.value }))}
-              />
-            </div>
-            <div className="col-md-4">
-              <label className="form-label">Costo km</label>
-              <input
-                className="form-control"
-                value={createData.rimborso_km}
-                onChange={(e) => setCreateData((prev) => ({ ...prev, rimborso_km: e.target.value }))}
-                placeholder="0.00"
-              />
-            </div>
-          </div>
-          <div className="mt-4">
-            <button className="btn btn-primary" onClick={handleCreate} disabled={saving}>
-              {saving ? 'Salvataggio...' : 'Crea utente'}
-            </button>
           </div>
         </div>
-      </div>
+      )}
 
       <div className="card">
         <div className="card-header">Elenco utenti</div>

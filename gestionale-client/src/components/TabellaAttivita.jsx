@@ -687,8 +687,8 @@ function TabellaAttivita({ clienti, user }) {
                       const isTemporary = row.isTemporary
 
                       return (
-                        <tr key={row.id}>
-                          <td>
+                        <tr key={row.id} className={isIncomplete ? 'row-incomplete' : ''}>
+                          <td className={isIncomplete ? 'row-incomplete-cell' : ''}>
                             <input
                               type="date"
                               className="form-control"
@@ -701,7 +701,7 @@ function TabellaAttivita({ clienti, user }) {
                               disabled={isToday}
                             />
                           </td>
-                          <td>
+                          <td className={isIncomplete ? 'row-incomplete-cell' : ''}>
                             <div className="autocomplete-container">
                               <input
                                 type="text"
@@ -753,7 +753,7 @@ function TabellaAttivita({ clienti, user }) {
                               )}
                             </div>
                           </td>
-                          <td>
+                          <td className={isIncomplete ? 'row-incomplete-cell' : ''}>
                             <select
                               className="form-select"
                               value={row.attivita}
@@ -772,7 +772,7 @@ function TabellaAttivita({ clienti, user }) {
                               ))}
                             </select>
                           </td>
-                          <td>
+                          <td className={isIncomplete ? 'row-incomplete-cell' : ''}>
                             <input
                               type="text"
                               className="form-control"
@@ -796,7 +796,7 @@ function TabellaAttivita({ clienti, user }) {
                               inputMode="decimal"
                             />
                           </td>
-                          <td>
+                          <td className={isIncomplete ? 'row-incomplete-cell' : ''}>
                             <input
                               type="checkbox"
                               className="form-check-input"
@@ -811,18 +811,15 @@ function TabellaAttivita({ clienti, user }) {
                               }}
                             />
                           </td>
-                          <td>
+                          <td className={isIncomplete ? 'row-incomplete-cell' : ''}>
                             <div className="d-flex gap-2 justify-content-center">
                               <button
                                 className="btn btn-sm btn-danger btn-icon"
                                 onClick={() => handleDeleteClick(row)}
                                 title="Elimina riga"
                               >
-                                <svg viewBox="0 0 24 24" aria-hidden="true">
-                                  <path
-                                    fill="currentColor"
-                                    d="M9 3h6l1 2h4v2H4V5h4l1-2Zm1 6h2v8h-2V9Zm4 0h2v8h-2V9ZM7 9h2v8H7V9Z"
-                                  />
+                                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M4 7h16M9 7V4h6v3M8 7v13h8V7M10 11v6M14 11v6" />
                                 </svg>
                               </button>
                               <button
@@ -838,9 +835,6 @@ function TabellaAttivita({ clienti, user }) {
                                 </svg>
                               </button>
                             </div>
-                            {isIncomplete && (
-                              <span className="badge bg-warning text-dark ms-2">Incompleta</span>
-                            )}
                           </td>
                         </tr>
                       )
