@@ -125,7 +125,8 @@ header .logo {
   padding: 1.5rem;
   box-shadow: var(--shadow-1);
   position: sticky;
-  top: 1.5rem;
+  top: 1.25rem;
+  margin-top: 1.25rem;
 }
 
 .sidebar-nav {
@@ -161,10 +162,11 @@ header .logo {
   border-radius: 0;
   padding: 1.75rem;
   box-shadow: var(--shadow-1);
+  margin-top: 1.25rem;
 }
 
 .rimborsi-section {
-  margin-top: 1.25rem;
+  margin-top: 0;
 }
 
 .auth-layout {

@@ -785,6 +785,10 @@ function TabellaAttivita({ clienti, user }) {
               <span className="visually-hidden">Caricamento...</span>
             </div>
           </div>
+        ) : !expanded && !hasHomeRows ? (
+          <div className="alert alert-info mt-3">
+            Nessuna riga da compilare negli ultimi giorni lavorativi.
+          </div>
         ) : (
           <div className="attivita-table-scroll" ref={tableScrollRef}>
             <table className="table table-dark attivita-table">
@@ -974,12 +978,6 @@ function TabellaAttivita({ clienti, user }) {
                 })}
               </tbody>
             </table>
-          </div>
-        )}
-
-        {!loading && !expanded && !hasHomeRows && (
-          <div className="alert alert-info mt-3">
-            Nessuna riga da compilare negli ultimi giorni lavorativi.
           </div>
         )}
 
