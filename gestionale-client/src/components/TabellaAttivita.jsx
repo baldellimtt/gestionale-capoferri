@@ -353,7 +353,7 @@ function TabellaAttivita({ clienti, user }) {
   const exportPDF = async () => {
     const doc = new jsPDF()
     const headerTextTopY = 18
-    let headerX = 70
+    let headerX = 14
     let logoBottomY = 10
 
     try {
@@ -375,7 +375,7 @@ function TabellaAttivita({ clienti, user }) {
             const logoX = 14
             const logoY = 12
             doc.addImage(logoImg, 'PNG', logoX, logoY, w, h)
-            headerX = logoX + w + 8
+            headerX = logoX
             logoBottomY = logoY + h
             resolve()
           } catch {
@@ -388,26 +388,18 @@ function TabellaAttivita({ clienti, user }) {
       // Continua anche se il logo non si carica
     }
 
-    doc.setFontSize(16)
-    doc.setTextColor(42, 63, 84)
-    doc.setFont('helvetica', 'bold')
-    doc.text('Studio Capoferri', headerX, headerTextTopY)
-
-    doc.setFontSize(11)
-    doc.setFont('helvetica', 'normal')
-    doc.text('Ingegneria | Architettura | Urbanistica', headerX, headerTextTopY + 7)
-
     doc.setFontSize(9)
+    doc.setFont('helvetica', 'normal')
     doc.setTextColor(60, 60, 60)
-    doc.text('Via Piave 35, 25030 Adro (BS)', headerX, headerTextTopY + 14)
-    doc.text('Tel: +39 030 7357263 | Email: info@studiocapoferri.eu', headerX, headerTextTopY + 20)
-    doc.text('P.IVA: 04732710985', headerX, headerTextTopY + 26)
+    doc.text('Via Piave 35, 25030 Adro (BS)', headerX, headerTextTopY + 10)
+    doc.text('Tel: +39 030 7357263 | Email: info@studiocapoferri.eu', headerX, headerTextTopY + 16)
+    doc.text('P.IVA: 04732710985', headerX, headerTextTopY + 22)
 
-    const headerTextBottomY = headerTextTopY + 26
+    const headerTextBottomY = headerTextTopY + 22
     const headerBottomY = Math.max(logoBottomY, headerTextBottomY)
 
     doc.setFontSize(14)
-    doc.setTextColor(42, 63, 84)
+    doc.setTextColor(60, 60, 60)
     doc.setFont('helvetica', 'bold')
     const reportTitleY = headerBottomY + 12
     doc.text('Report Attività', 14, reportTitleY)
