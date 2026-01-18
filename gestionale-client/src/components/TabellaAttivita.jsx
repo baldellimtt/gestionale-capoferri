@@ -14,7 +14,7 @@ import {
   normalizeAttivitaFromApi
 } from '../utils/attivita'
 
-function TabellaAttivita({ clienti }) {
+function TabellaAttivita({ clienti, user }) {
   const [attivita, setAttivita] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -31,6 +31,7 @@ function TabellaAttivita({ clienti }) {
   const [hiddenTempDates, setHiddenTempDates] = useState(new Set())
   const [newRowDate, setNewRowDate] = useState(getIsoDate())
   const lastCreatedDateRef = useRef(null)
+  const [rimborsoKm, setRimborsoKm] = useState(user?.rimborso_km ?? 0)
 
   const ATTIVITA_OPTIONS = ['SOPRALLUOGO', 'TRASFERTA']
 
@@ -53,6 +54,10 @@ function TabellaAttivita({ clienti }) {
   useEffect(() => {
     loadAttivita()
   }, [loadAttivita])
+
+  useEffect(() => {
+    setRimborsoKm(user?.rimborso_km ?? 0)
+  }, [user])
 
   useEffect(() => {
     if (expanded) {
@@ -317,6 +322,26 @@ function TabellaAttivita({ clienti }) {
   }, [filteredAttivita])
 
   const totals = useMemo(() => calculateTotals(filteredAttivita), [filteredAttivita])
+  const rimborsoTotale = useMemo(() => {
+    const kmValue = Number(totals.totalKm) || 0
+    const rateValue = Number(rimborsoKm) || 0
+    return kmValue * rateValue
+  }, [totals.totalKm, rimborsoKm])
+
+  const totalsTitle = useMemo(() => {
+    if (filterType === 'mese') {
+      const now = new Date()
+      const monthLabel = now.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })
+      const formatted = monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1)
+      return `Totale ${formatted}`
+    }
+    if (filterType === 'trimestre') {
+      const now = new Date()
+      const quarter = Math.floor(now.getMonth() / 3) + 1
+      return `Totale Trimestre ${quarter} ${now.getFullYear()}`
+    }
+    return 'Totale periodo selezionato'
+  }, [filterType])
 
   const getFilteredClienti = (searchTerm) => {
     if (!searchTerm) return []
@@ -448,6 +473,25 @@ function TabellaAttivita({ clienti }) {
       }
     })
 
+    const summaryStartY = (doc.lastAutoTable?.finalY || filterY + 6) + 10
+    const pageHeight = doc.internal.pageSize.height
+    let summaryY = summaryStartY
+    if (summaryY > pageHeight - 30) {
+      doc.addPage()
+      summaryY = 20
+    }
+
+    doc.setFontSize(10)
+    doc.setTextColor(42, 63, 84)
+    doc.setFont('helvetica', 'bold')
+    doc.text('Rimborso chilometrico', 14, summaryY)
+
+    doc.setFontSize(9)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(80, 80, 80)
+    const rimborsoText = `Totale KM (${totals.totalKm.toFixed(2)}) x Costo/km (€ ${Number(rimborsoKm || 0).toFixed(2)}) = € ${rimborsoTotale.toFixed(2)}`
+    doc.text(rimborsoText, 14, summaryY + 6)
+
     const dataGenerazione = new Date().toLocaleDateString('it-IT', {
       day: '2-digit',
       month: '2-digit',
@@ -516,6 +560,7 @@ function TabellaAttivita({ clienti }) {
       return false
     }
   }
+
 
   return (
     <div>
@@ -635,30 +680,9 @@ function TabellaAttivita({ clienti }) {
                 if (expanded && rows.length === 0 && date !== todayDate) return null
 
                 const dateLabel = dateGroups.find((d) => d.date === date)?.label || ''
-                const dateFormatted = formatDateEuropean(date)
 
                 return (
                   <React.Fragment key={date}>
-                    <tr>
-                      <td colSpan="6" className="date-group">
-                        <div className="date-group-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span>{dateLabel ? `${dateLabel} - ${dateFormatted}` : dateFormatted}</span>
-                          <button
-                            className="btn btn-sm btn-secondary"
-                            onClick={() => addRowForDate(date)}
-                            disabled={loading}
-                            style={{
-                              padding: '0.25rem 0.5rem',
-                              fontSize: '0.875rem',
-                              lineHeight: '1.2'
-                            }}
-                            title="Aggiungi riga per questo giorno"
-                          >
-                            + Riga
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
                     {rows.length > 0 ? rows.map((row) => {
                       const rowId = row.id ? Number(row.id) : null
                       if (rowId && deletedIds.has(rowId)) {
@@ -796,14 +820,32 @@ function TabellaAttivita({ clienti }) {
                             />
                           </td>
                           <td>
-                            <button
-                              className="btn btn-sm btn-danger"
-                              onClick={() => handleDeleteClick(row)}
-                              disabled={!isTemporary && isToday && rows.length === 1}
-                              title={!isTemporary && isToday && rows.length === 1 ? 'La riga di oggi non puo essere eliminata' : ''}
-                            >
-                              Elimina
-                            </button>
+                            <div className="d-flex gap-2 justify-content-center">
+                              <button
+                                className="btn btn-sm btn-danger btn-icon"
+                                onClick={() => handleDeleteClick(row)}
+                                title="Elimina riga"
+                              >
+                                <svg viewBox="0 0 24 24" aria-hidden="true">
+                                  <path
+                                    fill="currentColor"
+                                    d="M9 3h6l1 2h4v2H4V5h4l1-2Zm1 6h2v8h-2V9Zm4 0h2v8h-2V9ZM7 9h2v8H7V9Z"
+                                  />
+                                </svg>
+                              </button>
+                              <button
+                                className="btn btn-sm btn-secondary btn-icon"
+                                onClick={() => addRowForDate(row.data)}
+                                title={`Aggiungi riga (${dateLabel || row.data})`}
+                              >
+                                <svg viewBox="0 0 24 24" aria-hidden="true">
+                                  <path
+                                    fill="currentColor"
+                                    d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5Z"
+                                  />
+                                </svg>
+                              </button>
+                            </div>
                             {isIncomplete && (
                               <span className="badge bg-warning text-dark ms-2">Incompleta</span>
                             )}
@@ -834,7 +876,7 @@ function TabellaAttivita({ clienti }) {
       {expanded && (
         <div className="card mt-4" style={{ marginTop: '1.5rem' }}>
           <div className="card-header">
-            Totale periodo selezionato
+            {totalsTitle}
           </div>
           <div className="card-body">
             {loading ? (
@@ -852,6 +894,14 @@ function TabellaAttivita({ clienti }) {
                 <div className="total-item">
                   <div className="total-item-label">Indennità</div>
                   <div className="total-item-value">{totals.totalIndennita}</div>
+                </div>
+                <div className="total-item">
+                  <div className="total-item-label">Costo KM</div>
+                  <div className="total-item-value">€ {Number(rimborsoKm || 0).toFixed(2)}</div>
+                </div>
+                <div className="total-item">
+                  <div className="total-item-label">Rimborso KM</div>
+                  <div className="total-item-value">€ {rimborsoTotale.toFixed(2)}</div>
                 </div>
               </div>
             )}

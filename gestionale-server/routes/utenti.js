@@ -1,0 +1,196 @@
+const express = require('express');
+const Logger = require('../utils/logger');
+const { hashPassword } = require('../utils/auth');
+
+const router = express.Router();
+
+function createRouter(db) {
+  const getAllStmt = db.prepare(`
+    SELECT id, username, role, nome, cognome, mezzo, targa, rimborso_km, created_at, updated_at
+    FROM utenti
+    ORDER BY cognome ASC, nome ASC, username ASC
+  `);
+  const getByIdStmt = db.prepare('SELECT * FROM utenti WHERE id = ?');
+  const createStmt = db.prepare(`
+    INSERT INTO utenti (username, role, password_hash, password_salt, nome, cognome, mezzo, targa, rimborso_km)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const updateStmt = db.prepare(`
+    UPDATE utenti SET
+      username = ?,
+      role = ?,
+      nome = ?,
+      cognome = ?,
+      mezzo = ?,
+      targa = ?,
+      rimborso_km = ?,
+      updated_at = datetime('now', 'localtime')
+    WHERE id = ?
+  `);
+  const updatePasswordStmt = db.prepare(`
+    UPDATE utenti SET
+      password_hash = ?,
+      password_salt = ?,
+      updated_at = datetime('now', 'localtime')
+    WHERE id = ?
+  `);
+  const deleteStmt = db.prepare('DELETE FROM utenti WHERE id = ?');
+
+  router.get('/', (req, res) => {
+    try {
+      const utenti = getAllStmt.all();
+      res.json(utenti);
+    } catch (error) {
+      Logger.error('Errore GET /utenti', error);
+      res.status(500).json({ error: 'Errore interno del server' });
+    }
+  });
+
+  router.post('/', (req, res) => {
+    try {
+      const {
+        username,
+        role = 'user',
+        password,
+        nome,
+        cognome,
+        mezzo,
+        targa,
+        rimborso_km,
+      } = req.body || {};
+
+      if (!username || !password) {
+        return res.status(400).json({ error: 'Username e password obbligatori' });
+      }
+
+      const rateValue = Number(rimborso_km || 0);
+      if (!Number.isFinite(rateValue) || rateValue < 0) {
+        return res.status(400).json({ error: 'Costo km non valido' });
+      }
+
+      const { hash, salt } = hashPassword(password);
+      const result = createStmt.run(
+        username,
+        role,
+        hash,
+        salt,
+        nome || null,
+        cognome || null,
+        mezzo || null,
+        targa || null,
+        rateValue
+      );
+
+      Logger.info('Creato utente', { id: result.lastInsertRowid, username });
+      const created = getByIdStmt.get(result.lastInsertRowid);
+      return res.status(201).json({
+        id: created.id,
+        username: created.username,
+        role: created.role,
+        nome: created.nome,
+        cognome: created.cognome,
+        mezzo: created.mezzo,
+        targa: created.targa,
+        rimborso_km: created.rimborso_km,
+      });
+    } catch (error) {
+      if (String(error?.message || '').includes('UNIQUE')) {
+        return res.status(409).json({ error: 'Username già esistente' });
+      }
+      Logger.error('Errore POST /utenti', error);
+      return res.status(500).json({ error: 'Errore interno del server' });
+    }
+  });
+
+  router.put('/:id', (req, res) => {
+    try {
+      const { id } = req.params;
+      const {
+        username,
+        role = 'user',
+        password,
+        nome,
+        cognome,
+        mezzo,
+        targa,
+        rimborso_km,
+      } = req.body || {};
+
+      const existing = getByIdStmt.get(id);
+      if (!existing) {
+        return res.status(404).json({ error: 'Utente non trovato' });
+      }
+
+      if (!username) {
+        return res.status(400).json({ error: 'Username obbligatorio' });
+      }
+
+      const rateValue = Number(rimborso_km || 0);
+      if (!Number.isFinite(rateValue) || rateValue < 0) {
+        return res.status(400).json({ error: 'Costo km non valido' });
+      }
+
+      const result = updateStmt.run(
+        username,
+        role,
+        nome || null,
+        cognome || null,
+        mezzo || null,
+        targa || null,
+        rateValue,
+        id
+      );
+
+      if (result.changes === 0) {
+        return res.status(404).json({ error: 'Utente non trovato' });
+      }
+
+      if (password) {
+        const { hash, salt } = hashPassword(password);
+        updatePasswordStmt.run(hash, salt, id);
+      }
+
+      const updated = getByIdStmt.get(id);
+      return res.json({
+        id: updated.id,
+        username: updated.username,
+        role: updated.role,
+        nome: updated.nome,
+        cognome: updated.cognome,
+        mezzo: updated.mezzo,
+        targa: updated.targa,
+        rimborso_km: updated.rimborso_km,
+      });
+    } catch (error) {
+      if (String(error?.message || '').includes('UNIQUE')) {
+        return res.status(409).json({ error: 'Username già esistente' });
+      }
+      Logger.error('Errore PUT /utenti', error);
+      return res.status(500).json({ error: 'Errore interno del server' });
+    }
+  });
+
+  router.delete('/:id', (req, res) => {
+    try {
+      const { id } = req.params;
+      if (Number(id) === Number(req.user.id)) {
+        return res.status(400).json({ error: 'Non puoi eliminare il tuo utente' });
+      }
+
+      const result = deleteStmt.run(id);
+      if (result.changes === 0) {
+        return res.status(404).json({ error: 'Utente non trovato' });
+      }
+
+      Logger.info('Utente eliminato', { id });
+      return res.json({ success: true });
+    } catch (error) {
+      Logger.error('Errore DELETE /utenti', error);
+      return res.status(500).json({ error: 'Errore interno del server' });
+    }
+  });
+
+  return router;
+}
+
+module.exports = createRouter;

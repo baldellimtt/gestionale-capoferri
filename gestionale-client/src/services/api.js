@@ -1,8 +1,23 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const TOKEN_STORAGE_KEY = 'gestionale_auth_token';
 
 class ApiService {
   constructor() {
     this.baseURL = API_BASE_URL;
+    this.token = localStorage.getItem(TOKEN_STORAGE_KEY) || null;
+  }
+
+  setToken(token) {
+    this.token = token;
+    if (token) {
+      localStorage.setItem(TOKEN_STORAGE_KEY, token);
+    } else {
+      localStorage.removeItem(TOKEN_STORAGE_KEY);
+    }
+  }
+
+  getToken() {
+    return this.token;
   }
 
   async request(endpoint, options = {}) {
@@ -14,6 +29,10 @@ class ApiService {
       },
       ...options,
     };
+
+    if (this.token) {
+      config.headers.Authorization = `Bearer ${this.token}`;
+    }
 
     if (config.body && typeof config.body === 'object') {
       config.body = JSON.stringify(config.body);
@@ -38,7 +57,9 @@ class ApiService {
       }
 
       if (!response.ok) {
-        throw new Error(data.error || `HTTP error! status: ${response.status}`);
+        const error = new Error(data.error || `HTTP error! status: ${response.status}`);
+        error.status = response.status;
+        throw error;
       }
 
       // Per DELETE, se non c'? data, restituisci success: true
@@ -51,6 +72,64 @@ class ApiService {
       console.error(`API Error [${endpoint}]:`, error);
       throw error;
     }
+  }
+
+  // Auth API
+  async login(credentials) {
+    const data = await this.request('/auth/login', {
+      method: 'POST',
+      body: credentials,
+    });
+
+    if (data.token) {
+      this.setToken(data.token);
+    }
+
+    return data;
+  }
+
+  async logout() {
+    try {
+      await this.request('/auth/logout', { method: 'POST' });
+    } finally {
+      this.setToken(null);
+    }
+  }
+
+  async me() {
+    return this.request('/auth/me');
+  }
+
+  async updateMe(payload) {
+    return this.request('/auth/me', {
+      method: 'PUT',
+      body: payload,
+    });
+  }
+
+  // Utenti API (admin)
+  async getUtenti() {
+    return this.request('/utenti');
+  }
+
+  async createUtente(payload) {
+    return this.request('/utenti', {
+      method: 'POST',
+      body: payload,
+    });
+  }
+
+  async updateUtente(id, payload) {
+    return this.request(`/utenti/${id}`, {
+      method: 'PUT',
+      body: payload,
+    });
+  }
+
+  async deleteUtente(id) {
+    return this.request(`/utenti/${id}`, {
+      method: 'DELETE',
+    });
   }
 
   // Clienti API
@@ -128,4 +207,3 @@ class ApiService {
 }
 
 export default new ApiService();
-

@@ -1,0 +1,396 @@
+import { useEffect, useState } from 'react'
+import api from '../services/api'
+
+function ImpostazioniUtenti({ currentUser, onUserUpdated, onBack }) {
+  const [utenti, setUtenti] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [editingId, setEditingId] = useState(null)
+  const [editData, setEditData] = useState({})
+  const [saving, setSaving] = useState(false)
+  const [createData, setCreateData] = useState({
+    username: '',
+    password: '',
+    role: 'user',
+    nome: '',
+    cognome: '',
+    mezzo: '',
+    targa: '',
+    rimborso_km: ''
+  })
+
+  const loadUtenti = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const data = await api.getUtenti()
+      setUtenti(data)
+    } catch (err) {
+      console.error('Errore caricamento utenti:', err)
+      setError('Errore nel caricamento degli utenti.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadUtenti()
+  }, [])
+
+  const startEdit = (utente) => {
+    setEditingId(utente.id)
+    setEditData({
+      username: utente.username || '',
+      password: '',
+      role: utente.role || 'user',
+      nome: utente.nome || '',
+      cognome: utente.cognome || '',
+      mezzo: utente.mezzo || '',
+      targa: utente.targa || '',
+      rimborso_km: utente.rimborso_km ?? 0
+    })
+  }
+
+  const cancelEdit = () => {
+    setEditingId(null)
+    setEditData({})
+  }
+
+  const handleCreate = async () => {
+    if (!createData.username || !createData.password) {
+      setError('Username e password sono obbligatori.')
+      return
+    }
+
+    const rimborso = Number(String(createData.rimborso_km || 0).replace(',', '.'))
+    if (!Number.isFinite(rimborso) || rimborso < 0) {
+      setError('Costo km non valido.')
+      return
+    }
+
+    try {
+      setSaving(true)
+      setError(null)
+      const created = await api.createUtente({
+        ...createData,
+        rimborso_km: rimborso
+      })
+      setUtenti((prev) => [...prev, created])
+      setCreateData({
+        username: '',
+        password: '',
+        role: 'user',
+        nome: '',
+        cognome: '',
+        mezzo: '',
+        targa: '',
+        rimborso_km: ''
+      })
+    } catch (err) {
+      console.error('Errore creazione utente:', err)
+      setError(err.message || 'Errore nella creazione utente.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleSave = async (id) => {
+    const rimborso = Number(String(editData.rimborso_km || 0).replace(',', '.'))
+    if (!Number.isFinite(rimborso) || rimborso < 0) {
+      setError('Costo km non valido.')
+      return
+    }
+
+    try {
+      setSaving(true)
+      setError(null)
+      const updated = await api.updateUtente(id, {
+        ...editData,
+        rimborso_km: rimborso
+      })
+      setUtenti((prev) => prev.map((u) => (u.id === id ? updated : u)))
+      if (currentUser?.id === updated.id && onUserUpdated) {
+        onUserUpdated(updated)
+      }
+      cancelEdit()
+    } catch (err) {
+      console.error('Errore aggiornamento utente:', err)
+      setError(err.message || 'Errore nel salvataggio utente.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDelete = async (utente) => {
+    if (!window.confirm(`Eliminare l'utente ${utente.username}?`)) {
+      return
+    }
+
+    try {
+      setSaving(true)
+      setError(null)
+      await api.deleteUtente(utente.id)
+      setUtenti((prev) => prev.filter((u) => u.id !== utente.id))
+    } catch (err) {
+      console.error('Errore eliminazione utente:', err)
+      setError(err.message || 'Errore nell\'eliminazione utente.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div>
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <h2 className="section-title mb-0">Impostazioni utenti</h2>
+        <button className="btn btn-secondary" onClick={onBack}>
+          Indietro
+        </button>
+      </div>
+
+      {error && (
+        <div className="alert alert-warning mb-3">
+          {error}
+        </div>
+      )}
+
+      <div className="card mb-4">
+        <div className="card-header">Nuovo utente</div>
+        <div className="card-body">
+          <div className="row g-3">
+            <div className="col-md-4">
+              <label className="form-label">Username</label>
+              <input
+                className="form-control"
+                value={createData.username}
+                onChange={(e) => setCreateData((prev) => ({ ...prev, username: e.target.value }))}
+              />
+            </div>
+            <div className="col-md-4">
+              <label className="form-label">Password</label>
+              <input
+                type="password"
+                className="form-control"
+                value={createData.password}
+                onChange={(e) => setCreateData((prev) => ({ ...prev, password: e.target.value }))}
+              />
+            </div>
+            <div className="col-md-4">
+              <label className="form-label">Ruolo</label>
+              <select
+                className="form-select"
+                value={createData.role}
+                onChange={(e) => setCreateData((prev) => ({ ...prev, role: e.target.value }))}
+              >
+                <option value="user">Utente</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+            <div className="col-md-4">
+              <label className="form-label">Nome</label>
+              <input
+                className="form-control"
+                value={createData.nome}
+                onChange={(e) => setCreateData((prev) => ({ ...prev, nome: e.target.value }))}
+              />
+            </div>
+            <div className="col-md-4">
+              <label className="form-label">Cognome</label>
+              <input
+                className="form-control"
+                value={createData.cognome}
+                onChange={(e) => setCreateData((prev) => ({ ...prev, cognome: e.target.value }))}
+              />
+            </div>
+            <div className="col-md-4">
+              <label className="form-label">Veicolo</label>
+              <input
+                className="form-control"
+                value={createData.mezzo}
+                onChange={(e) => setCreateData((prev) => ({ ...prev, mezzo: e.target.value }))}
+              />
+            </div>
+            <div className="col-md-4">
+              <label className="form-label">Targa</label>
+              <input
+                className="form-control"
+                value={createData.targa}
+                onChange={(e) => setCreateData((prev) => ({ ...prev, targa: e.target.value }))}
+              />
+            </div>
+            <div className="col-md-4">
+              <label className="form-label">Costo km</label>
+              <input
+                className="form-control"
+                value={createData.rimborso_km}
+                onChange={(e) => setCreateData((prev) => ({ ...prev, rimborso_km: e.target.value }))}
+                placeholder="0.00"
+              />
+            </div>
+          </div>
+          <div className="mt-4">
+            <button className="btn btn-primary" onClick={handleCreate} disabled={saving}>
+              {saving ? 'Salvataggio...' : 'Crea utente'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-header">Elenco utenti</div>
+        <div className="card-body">
+          {loading ? (
+            <div className="text-center py-4">
+              <div className="spinner-border" role="status">
+                <span className="visually-hidden">Caricamento...</span>
+              </div>
+            </div>
+          ) : utenti.length === 0 ? (
+            <div className="alert alert-info">Nessun utente presente.</div>
+          ) : (
+            <div className="table-responsive">
+              <table className="table table-striped">
+                <thead>
+                  <tr>
+                    <th>Username</th>
+                    <th>Ruolo</th>
+                    <th>Nome</th>
+                    <th>Veicolo</th>
+                    <th>Targa</th>
+                    <th>Costo km</th>
+                    <th>Azioni</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {utenti.map((utente) => {
+                    const isEditing = editingId === utente.id
+                    return (
+                      <tr key={utente.id}>
+                        <td className="azioni-cell">
+                          {isEditing ? (
+                            <input
+                              className="form-control"
+                              value={editData.username}
+                              onChange={(e) => setEditData((prev) => ({ ...prev, username: e.target.value }))}
+                            />
+                          ) : (
+                            utente.username
+                          )}
+                        </td>
+                        <td>
+                          {isEditing ? (
+                            <select
+                              className="form-select"
+                              value={editData.role}
+                              onChange={(e) => setEditData((prev) => ({ ...prev, role: e.target.value }))}
+                            >
+                              <option value="user">Utente</option>
+                              <option value="admin">Admin</option>
+                            </select>
+                          ) : (
+                            utente.role
+                          )}
+                        </td>
+                        <td>
+                          {isEditing ? (
+                            <>
+                              <input
+                                className="form-control mb-2"
+                                placeholder="Nome"
+                                value={editData.nome}
+                                onChange={(e) => setEditData((prev) => ({ ...prev, nome: e.target.value }))}
+                              />
+                              <input
+                                className="form-control"
+                                placeholder="Cognome"
+                                value={editData.cognome}
+                                onChange={(e) => setEditData((prev) => ({ ...prev, cognome: e.target.value }))}
+                              />
+                            </>
+                          ) : (
+                            `${utente.nome || ''} ${utente.cognome || ''}`.trim()
+                          )}
+                        </td>
+                        <td>
+                          {isEditing ? (
+                            <input
+                              className="form-control"
+                              value={editData.mezzo}
+                              onChange={(e) => setEditData((prev) => ({ ...prev, mezzo: e.target.value }))}
+                            />
+                          ) : (
+                            utente.mezzo || '-'
+                          )}
+                        </td>
+                        <td>
+                          {isEditing ? (
+                            <input
+                              className="form-control"
+                              value={editData.targa}
+                              onChange={(e) => setEditData((prev) => ({ ...prev, targa: e.target.value }))}
+                            />
+                          ) : (
+                            utente.targa || '-'
+                          )}
+                        </td>
+                        <td>
+                          {isEditing ? (
+                            <input
+                              className="form-control"
+                              value={editData.rimborso_km}
+                              onChange={(e) => setEditData((prev) => ({ ...prev, rimborso_km: e.target.value }))}
+                              placeholder="0.00"
+                            />
+                          ) : (
+                            Number(utente.rimborso_km || 0).toFixed(2)
+                          )}
+                        </td>
+                        <td>
+                          {isEditing ? (
+                            <>
+                              <input
+                                type="password"
+                                className="form-control mb-2"
+                                placeholder="Nuova password (opzionale)"
+                                value={editData.password}
+                                onChange={(e) => setEditData((prev) => ({ ...prev, password: e.target.value }))}
+                              />
+                              <div className="d-flex gap-2 justify-content-center">
+                                <button className="btn btn-primary btn-sm" onClick={() => handleSave(utente.id)} disabled={saving}>
+                                  Salva
+                                </button>
+                                <button className="btn btn-secondary btn-sm" onClick={cancelEdit} disabled={saving}>
+                                  Annulla
+                                </button>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="d-flex gap-2 justify-content-center">
+                              <button className="btn btn-secondary btn-sm" onClick={() => startEdit(utente)} disabled={saving}>
+                                Modifica
+                              </button>
+                              <button
+                                className="btn btn-danger btn-sm"
+                                onClick={() => handleDelete(utente)}
+                                disabled={saving || utente.id === currentUser?.id}
+                                title={utente.id === currentUser?.id ? 'Non puoi eliminare il tuo utente' : ''}
+                              >
+                                Elimina
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default ImpostazioniUtenti

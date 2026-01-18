@@ -101,3 +101,4 @@ Il database SQLite viene creato automaticamente al primo avvio. Il file si trova
 **attivita**: id, data, cliente_id, cliente_nome, attivita, km, indennita, created_at, updated_at
 
 
+

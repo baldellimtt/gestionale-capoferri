@@ -6,6 +6,7 @@ require('dotenv').config();
 const DatabaseManager = require('./db/database');
 const Logger = require('./utils/logger');
 const BackupService = require('./services/backup');
+const authMiddleware = require('./utils/authMiddleware');
 
 const PORT = process.env.PORT || 3001;
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'data', 'gestionale.db');
@@ -28,6 +29,14 @@ app.get('/health', (req, res) => {
 });
 
 // Routes
+app.use('/api/auth', require('./routes/auth')(db));
+app.use('/api', authMiddleware(db));
+app.use('/api/utenti', (req, res, next) => {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ error: 'Permesso negato' });
+  }
+  return next();
+}, require('./routes/utenti')(db));
 app.use('/api/clienti', require('./routes/clienti')(db));
 app.use('/api/attivita', require('./routes/attivita')(db));
 
@@ -81,5 +90,6 @@ process.on('SIGTERM', () => {
 });
 
 module.exports = app;
+
 
 
