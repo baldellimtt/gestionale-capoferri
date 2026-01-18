@@ -4,7 +4,7 @@ import autoTable from 'jspdf-autotable'
 import api from '../services/api'
 import ConfirmDeleteModal from './ConfirmDeleteModal'
 import useDebouncedRowSave from '../hooks/useDebouncedRowSave'
-import { formatDateEuropean, getDateGroups, getIsoDate } from '../utils/date'
+import { formatDateEuropean, getDateGroups, getIsoDate, isWorkingDay } from '../utils/date'
 import {
   buildServerFilters,
   calculateTotals,
@@ -24,6 +24,8 @@ function TabellaAttivita({ clienti, user }) {
   const [customEndDate, setCustomEndDate] = useState('')
   const [clienteSearch, setClienteSearch] = useState({})
   const [showAutocomplete, setShowAutocomplete] = useState({})
+  const [portalAutocomplete, setPortalAutocomplete] = useState(null)
+  const [editingRowId, setEditingRowId] = useState(null)
   const [saving, setSaving] = useState({})
   const [deleteConfirm, setDeleteConfirm] = useState({ show: false, id: null, isTemporary: false })
   const [deleting, setDeleting] = useState(false)
@@ -31,6 +33,8 @@ function TabellaAttivita({ clienti, user }) {
   const [hiddenTempDates, setHiddenTempDates] = useState(new Set())
   const [newRowDate, setNewRowDate] = useState(getIsoDate())
   const lastCreatedDateRef = useRef(null)
+  const clearEditingTimeoutRef = useRef(null)
+  const tableScrollRef = useRef(null)
   const [rimborsoKm, setRimborsoKm] = useState(user?.rimborso_km ?? 0)
 
   const ATTIVITA_OPTIONS = ['SOPRALLUOGO', 'TRASFERTA']
@@ -70,8 +74,9 @@ function TabellaAttivita({ clienti, user }) {
 
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (!e.target.closest('.autocomplete-container')) {
+      if (!e.target.closest('.autocomplete-container') && !e.target.closest('.autocomplete-portal')) {
         setShowAutocomplete({})
+        setPortalAutocomplete(null)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
@@ -83,6 +88,10 @@ function TabellaAttivita({ clienti, user }) {
 
     const today = getIsoDate()
     if (lastCreatedDateRef.current === today) return
+    if (!isWorkingDay(today)) {
+      lastCreatedDateRef.current = today
+      return
+    }
 
     const hasTodayRow = attivita.some(
       (row) => row.data === today && row.id && typeof row.id === 'number' && !row.isTemporary
@@ -173,15 +182,6 @@ function TabellaAttivita({ clienti, user }) {
     )
   }, [scheduleSave])
 
-  const reloadWithCurrentFilters = useCallback(async () => {
-    if (expanded) {
-      const filters = buildServerFilters(filterType, customStartDate, customEndDate)
-      await loadAttivita(filters)
-    } else {
-      await loadAttivita()
-    }
-  }, [expanded, filterType, customStartDate, customEndDate, loadAttivita])
-
   const handleDeleteClick = (row) => {
     const id = row?.id
     if (id == null) {
@@ -250,7 +250,7 @@ function TabellaAttivita({ clienti, user }) {
       setError('Errore nell\'eliminazione: ' + (err.message || 'Errore sconosciuto'))
     } finally {
       setDeleting(false)
-      await reloadWithCurrentFilters()
+      await loadAttivita()
     }
   }
 
@@ -292,13 +292,20 @@ function TabellaAttivita({ clienti, user }) {
         return [newRow, ...prev]
       })
     } catch (err) {
-      console.error('Errore creazione attività:', err)
+      console.error('Errore creazione attivitÃ :', err)
       setError('Errore nella creazione: ' + (err.message || 'Errore sconosciuto'))
     }
   }
 
-  const filteredAttivita = useMemo(() => {
-    const visibleRows = attivita.filter((row) => {
+  const todayDate = getIsoDate()
+  const dateGroups = getDateGroups()
+  const recentWorkingDates = dateGroups
+    .map((d) => d.date)
+    .filter((date) => isWorkingDay(date))
+  const recentWorkingSet = useMemo(() => new Set(recentWorkingDates), [recentWorkingDates])
+
+  const visibleRows = useMemo(() => {
+    return attivita.filter((row) => {
       if (!row) return false
       if (row.id) {
         const rowId = typeof row.id === 'string' ? parseInt(row.id, 10) : Number(row.id)
@@ -306,9 +313,33 @@ function TabellaAttivita({ clienti, user }) {
       }
       return true
     })
+  }, [attivita, deletedIds])
 
-    return filterAttivitaByDate(visibleRows, expanded, filterType, customStartDate, customEndDate)
-  }, [attivita, expanded, filterType, customStartDate, customEndDate, deletedIds])
+  const recentRowsAll = useMemo(() => {
+    return visibleRows.filter((row) => recentWorkingSet.has(row.data))
+  }, [visibleRows, recentWorkingSet])
+
+  const filteredAttivita = useMemo(() => {
+    if (expanded) {
+      return filterAttivitaByDate(visibleRows, expanded, filterType, customStartDate, customEndDate)
+    }
+
+    return recentRowsAll.filter((row) => {
+      if (editingRowId != null && String(row.id) === String(editingRowId)) return true
+      return !getRowValidation(row).isComplete
+    })
+  }, [expanded, visibleRows, filterType, customStartDate, customEndDate, recentRowsAll, editingRowId])
+
+  const rowsByDateAll = useMemo(() => {
+    const groups = {}
+    recentRowsAll.forEach((att) => {
+      if (!groups[att.data]) {
+        groups[att.data] = []
+      }
+      groups[att.data].push(att)
+    })
+    return groups
+  }, [recentRowsAll])
 
   const groupedByDate = useMemo(() => {
     const groups = {}
@@ -349,6 +380,75 @@ function TabellaAttivita({ clienti, user }) {
       .filter((cliente) => cliente.denominazione?.toLowerCase().includes(searchTerm.toLowerCase()))
       .slice(0, 10)
   }
+
+  const openAutocompletePortal = (rowId, value, target) => {
+    if (!target) return
+    const items = getFilteredClienti(value)
+    if (items.length === 0) {
+      setPortalAutocomplete(null)
+      return
+    }
+    const rect = target.getBoundingClientRect()
+    setPortalAutocomplete({
+      rowId,
+      items,
+      top: rect.bottom + 6,
+      left: rect.left,
+      width: rect.width,
+      anchorEl: target
+    })
+  }
+
+  const setEditingRow = (rowId) => {
+    if (clearEditingTimeoutRef.current) {
+      clearTimeout(clearEditingTimeoutRef.current)
+      clearEditingTimeoutRef.current = null
+    }
+    setEditingRowId(rowId ?? null)
+  }
+
+  const clearEditingRow = () => {
+    if (clearEditingTimeoutRef.current) {
+      clearTimeout(clearEditingTimeoutRef.current)
+    }
+    clearEditingTimeoutRef.current = setTimeout(() => {
+      setEditingRowId(null)
+    }, 300)
+  }
+
+  useEffect(() => {
+    if (!portalAutocomplete?.anchorEl) return
+
+    const repositionPortal = () => {
+      setPortalAutocomplete((prev) => {
+        if (!prev?.anchorEl) return prev
+        const rect = prev.anchorEl.getBoundingClientRect()
+        return {
+          ...prev,
+          top: rect.bottom + 6,
+          left: rect.left,
+          width: rect.width
+        }
+      })
+    }
+
+    const handleScroll = (e) => {
+      const tableEl = tableScrollRef.current
+      if (tableEl && e?.target && tableEl.contains(e.target)) {
+        repositionPortal()
+        return
+      }
+      setPortalAutocomplete(null)
+      setShowAutocomplete({})
+    }
+
+    window.addEventListener('scroll', handleScroll, true)
+    window.addEventListener('resize', repositionPortal)
+    return () => {
+      window.removeEventListener('scroll', handleScroll, true)
+      window.removeEventListener('resize', repositionPortal)
+    }
+  }, [portalAutocomplete])
 
   const exportPDF = async () => {
     const doc = new jsPDF()
@@ -402,10 +502,12 @@ function TabellaAttivita({ clienti, user }) {
     doc.setTextColor(60, 60, 60)
     doc.setFont('helvetica', 'bold')
     const reportTitleY = headerBottomY + 12
-    doc.text('Report Attività', 14, reportTitleY)
+    doc.text('Report Rimborsi', 14, reportTitleY)
 
     let filterText = 'Periodo: '
-    if (filterType === 'mese') {
+    if (!expanded) {
+      filterText += 'Ultimi giorni lavorativi'
+    } else if (filterType === 'mese') {
       const now = new Date()
       filterText += `Mese corrente (${now.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })})`
     } else if (filterType === 'trimestre') {
@@ -424,6 +526,24 @@ function TabellaAttivita({ clienti, user }) {
     const filterY = reportTitleY + 7
     doc.text(filterText, 14, filterY)
 
+    const dipendenteNome = [user?.nome, user?.cognome].filter(Boolean).join(' ').trim()
+    const dipendenteLabel = dipendenteNome || user?.username || ''
+    const mezzoLabel = user?.mezzo || ''
+    const targaLabel = user?.targa || ''
+    const details = [
+      dipendenteLabel ? `Dipendente: ${dipendenteLabel}` : null,
+      mezzoLabel ? `Autoveicolo: ${mezzoLabel}` : null,
+      targaLabel ? `Targa: ${targaLabel}` : null
+    ].filter(Boolean)
+    if (details.length > 0) {
+      doc.setFontSize(9)
+      doc.setTextColor(90, 90, 90)
+      details.forEach((line, idx) => {
+        doc.text(line, 14, filterY + 6 + (idx * 5))
+      })
+    }
+
+    const tableStartY = filterY + (details.length > 0 ? 6 + details.length * 5 + 3 : 6)
     const tableData = [...filteredAttivita]
       .sort((a, b) => (a?.data || '').localeCompare(b?.data || ''))
       .map((row) => {
@@ -446,9 +566,9 @@ function TabellaAttivita({ clienti, user }) {
     ])
 
     autoTable(doc, {
-      head: [['Data', 'Cliente', 'Attività', 'KM', 'Indennità']],
+      head: [['Data', 'Cliente', 'Rimborso', 'KM', 'Indennita']],
       body: tableData,
-      startY: filterY + 6,
+      startY: tableStartY,
       styles: {
         fontSize: 9,
         textColor: [33, 33, 33],
@@ -495,40 +615,51 @@ function TabellaAttivita({ clienti, user }) {
     doc.setTextColor(150, 150, 150)
     doc.text(`Generato il: ${dataGenerazione}`, 14, doc.internal.pageSize.height - 10)
 
-    doc.save(`report-attivita-${getIsoDate()}.pdf`)
+    doc.save(`report-rimborsi-${getIsoDate()}.pdf`)
   }
-
-  const dateGroups = getDateGroups()
-  const todayDate = getIsoDate()
 
   const visibleDates = expanded
     ? Object.keys(groupedByDate).sort().reverse()
-    : dateGroups.map((d) => d.date)
+    : recentWorkingDates
 
   const getRowsForDate = (date) => {
-    const rows = groupedByDate[date] || []
-    const isLastThreeDays = dateGroups.some((d) => d.date === date)
-
-    if (isLastThreeDays && rows.length === 0) {
-      if (hiddenTempDates.has(date)) {
-        return []
-      }
-      return [
-        {
-          id: `temp-${date}`,
-          data: date,
-          cliente: '',
-          clienteId: null,
-          attivita: '',
-          km: '',
-          indennita: false,
-          isTemporary: true
-        }
-      ]
+    if (expanded) {
+      return groupedByDate[date] || []
     }
 
-    return rows
+    const rows = groupedByDate[date] || []
+    if (rows.length > 0) {
+      return rows
+    }
+
+    if (hiddenTempDates.has(date)) {
+      return []
+    }
+
+    const existingRows = rowsByDateAll[date] || []
+    if (existingRows.length > 0) {
+      return []
+    }
+
+    return [
+      {
+        id: `temp-${date}`,
+        data: date,
+        cliente: '',
+        clienteId: null,
+        attivita: '',
+        km: '',
+        indennita: false,
+        isTemporary: true
+      }
+    ]
   }
+
+  const hasHomeRows = useMemo(() => {
+    if (expanded) return true
+    return visibleDates.some((date) => getRowsForDate(date).length > 0)
+  }, [expanded, visibleDates, groupedByDate, hiddenTempDates, rowsByDateAll])
+
 
   const handleTemporaryRowChange = async (row, field, value) => {
     if (!row.isTemporary) return false
@@ -543,9 +674,9 @@ function TabellaAttivita({ clienti, user }) {
         indennita: field === 'indennita' ? (value ? 1 : 0) : row.indennita ? 1 : 0
       }
 
-      await api.createAttivita(attivitaData)
+      const result = await api.createAttivita(attivitaData)
       await loadAttivita()
-      return true
+      return result?.id || true
     } catch (err) {
       console.error('Errore creazione riga:', err)
       setError('Errore nella creazione della riga: ' + (err.message || 'Errore sconosciuto'))
@@ -555,7 +686,7 @@ function TabellaAttivita({ clienti, user }) {
 
 
   return (
-    <div>
+    <div className="rimborsi-section">
       {error && (
         <div className="alert alert-warning mb-3">
           {error}
@@ -563,7 +694,7 @@ function TabellaAttivita({ clienti, user }) {
       )}
 
       <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2 className="section-title mb-0">Attività</h2>
+        <h2 className="section-title mb-0">Rimborsi</h2>
         <div className="d-flex gap-2">
           {expanded && (
             <button
@@ -577,7 +708,7 @@ function TabellaAttivita({ clienti, user }) {
             className="btn btn-secondary"
             onClick={() => setExpanded(!expanded)}
           >
-            {expanded ? 'Mostra Solo Ultimi 3 Giorni' : 'Mostra tutte'}
+            {expanded ? 'Mostra da compilare' : 'Mostra tutte'}
           </button>
         </div>
       </div>
@@ -641,7 +772,7 @@ function TabellaAttivita({ clienti, user }) {
               onClick={addNewRow}
               disabled={loading}
             >
-              + Aggiungi Attività
+              + Aggiungi Rimborso
             </button>
           </div>
         </>
@@ -655,105 +786,98 @@ function TabellaAttivita({ clienti, user }) {
             </div>
           </div>
         ) : (
-          <table className="table table-dark attivita-table">
-            <thead>
-              <tr>
-                <th>Data</th>
-                <th>Cliente</th>
-                <th>Attività</th>
-                <th>KM</th>
-                <th>Indennità</th>
-                <th>Azioni</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visibleDates.map((date) => {
-                const rows = getRowsForDate(date)
-                if (expanded && rows.length === 0 && date !== todayDate) return null
+          <div className="attivita-table-scroll" ref={tableScrollRef}>
+            <table className="table table-dark attivita-table">
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Cliente</th>
+                  <th>Attività</th>
+                  <th>KM</th>
+                  <th>Indennità</th>
+                  <th>Azioni</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleDates.map((date) => {
+                  const rows = getRowsForDate(date)
+                  if (rows.length === 0) return null
 
-                const dateLabel = dateGroups.find((d) => d.date === date)?.label || ''
+                  return (
+                    <React.Fragment key={date}>
+                      {rows.length > 0 ? rows.map((row) => {
+                        const rowId = row.id ? Number(row.id) : null
+                        if (rowId && deletedIds.has(rowId)) {
+                          return null
+                        }
 
-                return (
-                  <React.Fragment key={date}>
-                    {rows.length > 0 ? rows.map((row) => {
-                      const rowId = row.id ? Number(row.id) : null
-                      if (rowId && deletedIds.has(rowId)) {
-                        return null
-                      }
+                        const isToday = row.data === todayDate
+                        const validation = getRowValidation(row)
+                        const isIncomplete = !validation.isComplete
+                        const isTemporary = row.isTemporary
 
-                      const isToday = row.data === todayDate
-                      const validation = getRowValidation(row)
-                      const isIncomplete = !validation.isComplete
-                      const isTemporary = row.isTemporary
-
-                      return (
-                        <tr key={row.id} className={isIncomplete ? 'row-incomplete' : ''}>
-                          <td className={isIncomplete ? 'row-incomplete-cell' : ''}>
-                            <input
-                              type="date"
-                              className="form-control"
-                              value={row.data}
-                              onChange={(e) => {
-                                if (!isTemporary) {
-                                  updateRow(row.id, 'data', e.target.value)
-                                }
-                              }}
-                              disabled={isToday}
-                            />
-                          </td>
-                          <td className={isIncomplete ? 'row-incomplete-cell' : ''}>
-                            <div className="autocomplete-container">
+                        return (
+                          <tr key={row.id} className={isIncomplete ? 'row-incomplete' : ''}>
+                            <td className={isIncomplete ? 'row-incomplete-cell' : ''}>
                               <input
-                                type="text"
+                                type="date"
                                 className="form-control"
-                                value={row.cliente}
+                                value={row.data}
+                                onChange={(e) => {
+                                  if (!isTemporary) {
+                                    updateRow(row.id, 'data', e.target.value)
+                                  }
+                                }}
+                                onFocus={() => setEditingRow(row.id)}
+                                onBlur={clearEditingRow}
+                                disabled={isToday}
+                              />
+                            </td>
+                            <td className={isIncomplete ? 'row-incomplete-cell' : ''}>
+                              <div className="autocomplete-container">
+                                <input
+                                  type="text"
+                                  className="form-control"
+                                  value={row.cliente}
                                 onChange={async (e) => {
                                   const value = e.target.value
                                   if (isTemporary) {
-                                    await handleTemporaryRowChange(row, 'cliente', value)
+                                    const createdId = await handleTemporaryRowChange(row, 'cliente', value)
+                                    if (createdId) {
+                                      setClienteSearch((prev) => ({ ...prev, [createdId]: value }))
+                                      setShowAutocomplete((prev) => ({ ...prev, [createdId]: true }))
+                                      openAutocompletePortal(createdId, value, e.target)
+                                      setEditingRow(createdId)
+                                    }
                                   } else {
                                     updateRow(row.id, 'cliente', value)
                                     setClienteSearch((prev) => ({ ...prev, [row.id]: value }))
                                     setShowAutocomplete((prev) => ({ ...prev, [row.id]: true }))
+                                    openAutocompletePortal(row.id, value, e.target)
                                   }
                                 }}
-                                onFocus={() => {
+                                onFocus={(e) => {
                                   if (!isTemporary) {
                                     setClienteSearch((prev) => ({ ...prev, [row.id]: row.cliente }))
                                     setShowAutocomplete((prev) => ({ ...prev, [row.id]: true }))
+                                    openAutocompletePortal(row.id, row.cliente, e.target)
                                   }
+                                  setEditingRow(row.id)
                                 }}
                                 onBlur={() => {
                                   if (!isTemporary) {
                                     setTimeout(() => {
                                       setShowAutocomplete((prev) => ({ ...prev, [row.id]: false }))
+                                      setPortalAutocomplete(null)
                                     }, 200)
                                   }
+                                  clearEditingRow()
                                 }}
                                 placeholder="Cerca cliente..."
                               />
-                              {!isTemporary && showAutocomplete[row.id] && getFilteredClienti(clienteSearch[row.id] || row.cliente).length > 0 && (
-                                <div className="autocomplete-list">
-                                  {getFilteredClienti(clienteSearch[row.id] || row.cliente).map((cliente, idx) => (
-                                    <div
-                                      key={idx}
-                                      className="autocomplete-item"
-                                      onMouseDown={(e) => {
-                                        e.preventDefault()
-                                        updateRow(row.id, 'cliente', cliente.denominazione)
-                                        updateRow(row.id, 'clienteId', cliente.id)
-                                        setShowAutocomplete((prev) => ({ ...prev, [row.id]: false }))
-                                        setClienteSearch((prev) => ({ ...prev, [row.id]: '' }))
-                                      }}
-                                    >
-                                      {cliente.denominazione}
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
                             </div>
                           </td>
-                          <td className={isIncomplete ? 'row-incomplete-cell' : ''}>
+                            <td className={isIncomplete ? 'row-incomplete-cell' : ''}>
                             <select
                               className="form-select"
                               value={row.attivita}
@@ -765,14 +889,16 @@ function TabellaAttivita({ clienti, user }) {
                                   updateRow(row.id, 'attivita', value)
                                 }
                               }}
+                              onFocus={() => setEditingRow(row.id)}
+                              onBlur={clearEditingRow}
                             >
-                              <option value="">Seleziona...</option>
-                              {ATTIVITA_OPTIONS.map((opt) => (
-                                <option key={opt} value={opt}>{opt}</option>
-                              ))}
-                            </select>
-                          </td>
-                          <td className={isIncomplete ? 'row-incomplete-cell' : ''}>
+                                <option value="">Seleziona...</option>
+                                {ATTIVITA_OPTIONS.map((opt) => (
+                                  <option key={opt} value={opt}>{opt}</option>
+                                ))}
+                              </select>
+                            </td>
+                            <td className={isIncomplete ? 'row-incomplete-cell' : ''}>
                             <input
                               type="text"
                               className="form-control"
@@ -792,11 +918,13 @@ function TabellaAttivita({ clienti, user }) {
                                   updateRow(row.id, 'km', value)
                                 }
                               }}
+                              onFocus={() => setEditingRow(row.id)}
+                              onBlur={clearEditingRow}
                               placeholder="0"
                               inputMode="decimal"
                             />
-                          </td>
-                          <td className={isIncomplete ? 'row-incomplete-cell' : ''}>
+                            </td>
+                            <td className={isIncomplete ? 'row-incomplete-cell' : ''}>
                             <input
                               type="checkbox"
                               className="form-check-input"
@@ -809,52 +937,55 @@ function TabellaAttivita({ clienti, user }) {
                                   updateRow(row.id, 'indennita', value)
                                 }
                               }}
+                              onFocus={() => setEditingRow(row.id)}
+                              onBlur={clearEditingRow}
                             />
-                          </td>
-                          <td className={isIncomplete ? 'row-incomplete-cell' : ''}>
-                            <div className="d-flex gap-2 justify-content-center">
-                              <button
-                                className="btn btn-sm btn-danger btn-icon"
-                                onClick={() => handleDeleteClick(row)}
-                                title="Elimina riga"
-                              >
-                                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                                  <path d="M4 7h16M9 7V4h6v3M8 7v13h8V7M10 11v6M14 11v6" />
-                                </svg>
-                              </button>
-                              <button
-                                className="btn btn-sm btn-secondary btn-icon"
-                                onClick={() => addRowForDate(row.data)}
-                                title={`Aggiungi riga (${dateLabel || row.data})`}
-                              >
-                                <svg viewBox="0 0 24 24" aria-hidden="true">
-                                  <path
-                                    fill="currentColor"
-                                    d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5Z"
-                                  />
-                                </svg>
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      )
-                    }) : null}
-                  </React.Fragment>
-                )
-              })}
-            </tbody>
-          </table>
+                            </td>
+                            <td className={isIncomplete ? 'row-incomplete-cell' : ''}>
+                              <div className="d-flex gap-2 justify-content-center">
+                                <button
+                                  className="btn btn-sm btn-danger btn-icon"
+                                  onClick={() => handleDeleteClick(row)}
+                                  title="Elimina riga"
+                                >
+                                  <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M4 7h16M9 7V4h6v3M8 7v13h8V7M10 11v6M14 11v6" />
+                                  </svg>
+                                </button>
+                                <button
+                                  className="btn btn-sm btn-secondary btn-icon"
+                                  onClick={() => addRowForDate(row.data)}
+                                  title={`Aggiungi riga (${row.data})`}
+                                >
+                                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                                    <path
+                                      fill="currentColor"
+                                      d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5Z"
+                                    />
+                                  </svg>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      }) : null}
+                    </React.Fragment>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
 
-        {!loading && filteredAttivita.length === 0 && !expanded && (
+        {!loading && !expanded && !hasHomeRows && (
           <div className="alert alert-info mt-3">
-            Le righe per oggi, ieri e l'altro ieri vengono generate automaticamente.
+            Nessuna riga da compilare negli ultimi giorni lavorativi.
           </div>
         )}
 
         {!loading && visibleDates.length === 0 && (
           <div className="alert alert-info mt-3">
-            Nessuna attività presente.
+            Nessun rimborso presente.
           </div>
         )}
       </div>
@@ -901,8 +1032,38 @@ function TabellaAttivita({ clienti, user }) {
         onConfirm={confirmDelete}
         loading={deleting}
       />
+      {portalAutocomplete && (
+        <div
+          className="autocomplete-list autocomplete-portal"
+          style={{
+            position: 'fixed',
+            top: `${portalAutocomplete.top}px`,
+            left: `${portalAutocomplete.left}px`,
+            width: `${portalAutocomplete.width}px`
+          }}
+        >
+          {portalAutocomplete.items.map((cliente, idx) => (
+            <div
+              key={idx}
+              className="autocomplete-item"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                const rowId = portalAutocomplete.rowId
+                updateRow(rowId, 'cliente', cliente.denominazione)
+                updateRow(rowId, 'clienteId', cliente.id)
+                setShowAutocomplete((prev) => ({ ...prev, [rowId]: false }))
+                setClienteSearch((prev) => ({ ...prev, [rowId]: '' }))
+                setPortalAutocomplete(null)
+              }}
+            >
+              {cliente.denominazione}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
 
 export default TabellaAttivita
+

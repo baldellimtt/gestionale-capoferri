@@ -156,7 +156,7 @@ function App() {
                         setActiveView('attivita')
                       }}
                     >
-                      Attività
+                      Rimborsi
                     </a>
                   </li>
                   <li>

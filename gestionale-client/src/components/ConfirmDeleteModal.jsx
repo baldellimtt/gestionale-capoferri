@@ -36,7 +36,7 @@ function ConfirmDeleteModal({ show, onClose, onConfirm, loading = false }) {
               fontWeight: 700,
               fontFamily: 'var(--font-display)'
             }}>
-              Elimina attività
+              Elimina rimborso
             </h5>
             <button
               type="button"
@@ -54,7 +54,7 @@ function ConfirmDeleteModal({ show, onClose, onConfirm, loading = false }) {
               fontSize: '1rem',
               fontFamily: 'var(--font-sans)'
             }}>
-              Sei sicuro di voler eliminare questa attività?
+              Sei sicuro di voler eliminare questo rimborso?
             </p>
             <div className="alert alert-warning" style={{ 
               backgroundColor: 'rgba(245, 158, 11, 0.1)', 
@@ -64,7 +64,7 @@ function ConfirmDeleteModal({ show, onClose, onConfirm, loading = false }) {
               padding: '0.75rem 1rem',
               marginBottom: 0
             }}>
-              <strong>Attenzione:</strong> Questa azione è irreversibile.
+              <strong>Attenzione:</strong> Questa azione e irreversibile.
             </div>
           </div>
 

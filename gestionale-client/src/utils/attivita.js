@@ -108,7 +108,7 @@ export const getRowValidation = (row) => {
   const kmValue = typeof kmRaw === 'string' ? Number(kmRaw.replace(',', '.')) : Number(kmRaw)
 
   if (!cliente) missing.push('Cliente')
-  if (!attivita) missing.push('Attività')
+  if (!attivita) missing.push('Rimborso')
   if (!kmRaw || Number.isNaN(kmValue) || kmValue <= 0) missing.push('KM')
 
   return {
