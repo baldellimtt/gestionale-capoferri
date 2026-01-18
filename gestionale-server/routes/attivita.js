@@ -188,14 +188,21 @@ class AttivitaController {
   delete(req, res) {
     try {
       const { id } = req.params;
-      const result = this.stmt.delete.run(id);
+      // Converti ID a numero per sicurezza
+      const numericId = parseInt(id, 10);
+      
+      if (isNaN(numericId)) {
+        return res.status(400).json({ error: 'ID non valido' });
+      }
+
+      const result = this.stmt.delete.run(numericId);
 
       if (result.changes === 0) {
         return res.status(404).json({ error: 'Attività non trovata' });
       }
 
-      Logger.info(`DELETE /attivita/${id}`);
-      res.json({ success: true });
+      Logger.info(`DELETE /attivita/${numericId} - Riga eliminata con successo`);
+      res.json({ success: true, deletedId: numericId });
     } catch (error) {
       Logger.error(`Errore DELETE /attivita/${req.params.id}`, error);
       res.status(500).json({ error: error.message });

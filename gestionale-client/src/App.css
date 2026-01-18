@@ -593,13 +593,6 @@ input[type="number"]:focus {
 }
 
 /* === ROW INCOMPLETE === */
-.row-incomplete {
-  background: #fff3cd !important;
-}
-
-.row-incomplete td {
-  background: #fff3cd !important;
-}
 
 /* === FILTERS === */
 .filters-section {

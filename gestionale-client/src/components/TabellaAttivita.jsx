@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react'
 import jsPDF from 'jspdf'
-import 'jspdf-autotable'
+import autoTable from 'jspdf-autotable'
 import api from '../services/api'
 import ConfirmDeleteModal from './ConfirmDeleteModal'
 
@@ -15,8 +15,11 @@ function TabellaAttivita({ clienti }) {
   const [clienteSearch, setClienteSearch] = useState({})
   const [showAutocomplete, setShowAutocomplete] = useState({})
   const [saving, setSaving] = useState({})
-  const [deleteConfirm, setDeleteConfirm] = useState({ show: false, id: null })
+  const [deleteConfirm, setDeleteConfirm] = useState({ show: false, id: null, isTemporary: false })
   const [deleting, setDeleting] = useState(false)
+  const [deletedIds, setDeletedIds] = useState(new Set()) // ID eliminati da nascondere in UI
+  const [hiddenTempDates, setHiddenTempDates] = useState(new Set()) // Date con righe temporanee nascoste
+  const [newRowDate, setNewRowDate] = useState(new Date().toISOString().split('T')[0])
 
   const ATTIVITA_OPTIONS = ['SOPRALLUOGO', 'TRASFERTA']
 
@@ -38,14 +41,40 @@ function TabellaAttivita({ clienti }) {
         indennita: a.indennita === 1
       }))
       
-      setAttivita(formatted)
+      // RIMUOVI DUPLICATI per ID (mantieni solo la prima occorrenza)
+      // E FILTRA gli ID appena eliminati (anche se il server li restituisce ancora)
+      const seen = new Set()
+      const unique = formatted.filter(a => {
+        if (!a || !a.id) return false
+        
+        // Converti ID a numero per confronto
+        const rowId = typeof a.id === 'string' ? parseInt(a.id, 10) : Number(a.id)
+        if (isNaN(rowId)) return false
+        
+        // Controlla duplicati
+        if (seen.has(rowId)) {
+          console.log('🚫 Duplicato rimosso:', rowId)
+          return false
+        }
+        
+        // Se questo ID è stato appena eliminato, non includerlo
+        if (deletedIds.has(rowId)) {
+          console.log('🚫 Filtro ID eliminato dal caricamento:', a.id, 'Blacklist:', Array.from(deletedIds))
+          return false
+        }
+        
+        seen.add(rowId)
+        return true
+      })
+      
+      setAttivita(unique)
     } catch (err) {
       console.error('Errore caricamento attività:', err)
       setError('Errore nel caricamento delle attività. Verifica che il server sia avviato.')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [deletedIds]) // Ricarica se cambia la blacklist eliminazioni
 
   // Carica attività iniziale
   useEffect(() => {
@@ -127,47 +156,76 @@ function TabellaAttivita({ clienti }) {
     ]
   }
 
-  // Assicura che le righe per le ultime 3 date esistano sempre
+  // Crea automaticamente la riga per oggi se non esiste - SOLO UNA VOLTA
+  // Usa la data di oggi come chiave per evitare creazioni multiple nello stesso giorno
+  const [lastCreatedDate, setLastCreatedDate] = useState(null)
+  
   useEffect(() => {
-    const dateGroups = getDateGroups()
-    const existingDates = new Set(attivita.map(a => a.data).filter(d => d))
+    if (loading) return // Non fare nulla durante il caricamento
     
-    const createMissingRows = async () => {
-      const toCreate = []
-      dateGroups.forEach(({ date }) => {
-        if (!existingDates.has(date) && !loading) {
-          toCreate.push({
-            data: date,
-            clienteId: null,
-            clienteNome: '',
-            attivita: '',
-            km: 0,
-            indennita: 0
-          })
-        }
+    const today = new Date().toISOString().split('T')[0]
+    
+    // Se abbiamo già creato una riga oggi, non crearla di nuovo
+    if (lastCreatedDate === today) return
+    
+    // Verifica se esiste già una riga per oggi
+    const hasTodayRow = attivita.some(a => a.data === today && a.id && typeof a.id === 'number' && !a.isTemporary)
+    
+    if (!hasTodayRow) {
+      setLastCreatedDate(today) // Imposta il flag PRIMA di creare
+      
+      // Crea la riga per oggi
+      api.createAttivita({
+        data: today,
+        clienteId: null,
+        clienteNome: '',
+        attivita: '',
+        km: 0,
+        indennita: 0
       })
-
-      if (toCreate.length > 0) {
-        try {
-          await Promise.all(toCreate.map(row => api.createAttivita(row)))
-          await loadAttivita()
-        } catch (err) {
-          console.error('Errore creazione righe automatiche:', err)
-        }
-      }
+        .then(result => {
+          const newRow = {
+            id: result.id,
+            data: today,
+            cliente: '',
+            clienteId: null,
+            attivita: '',
+            km: '',
+            indennita: false
+          }
+          // Aggiungi in cima all'array solo se non esiste già
+          setAttivita(prev => {
+            const alreadyExists = prev.some(a => a.id === result.id || (a.data === today && a.id && typeof a.id === 'number' && !a.isTemporary))
+            if (alreadyExists) return prev
+            return [newRow, ...prev]
+          })
+        })
+        .catch(err => {
+          console.error('Errore creazione riga oggi:', err)
+          setLastCreatedDate(null) // Reset flag in caso di errore
+        })
+    } else {
+      // Se esiste già, aggiorna il flag
+      setLastCreatedDate(today)
     }
-
-    // Crea le righe solo se non stiamo caricando
-    if (!loading) {
-      createMissingRows()
-    }
-  }, [attivita.length, loading, loadAttivita])
+  }, [loading, lastCreatedDate]) // Rimosso attivita dalle dipendenze per evitare loop
 
   // Verifica se una riga è compilata
-  const isRowComplete = (row) => {
-    return row.cliente && row.cliente.trim() !== '' && 
-           row.km && parseFloat(row.km) > 0 && 
-           row.attivita && row.attivita.trim() !== ''
+  const getRowValidation = (row) => {
+    const missing = []
+    const cliente = row?.cliente ? row.cliente.trim() : ''
+    const attivita = row?.attivita ? row.attivita.trim() : ''
+    const kmRaw = row?.km ?? ''
+    const kmValue = typeof kmRaw === 'string' ? Number(kmRaw.replace(',', '.')) : Number(kmRaw)
+
+    if (!cliente) missing.push('Cliente')
+    if (!attivita) missing.push('Attivit�')
+    if (!kmRaw || Number.isNaN(kmValue) || kmValue <= 0) missing.push('KM')
+
+    return {
+      isComplete: missing.length === 0,
+      missing
+    }
   }
 
   // Salva riga sul server (con debounce)
@@ -244,95 +302,119 @@ function TabellaAttivita({ clienti }) {
   }, [expanded, filterType, customStartDate, customEndDate, loadAttivita])
 
   // Mostra modal di conferma eliminazione
-  const handleDeleteClick = (id) => {
+  const handleDeleteClick = (row) => {
+    const id = row?.id
+    console.log('🔴 CLICK ELIMINA - ID ricevuto:', id, 'Tipo:', typeof id)
+    
     // Validazione ID
-    if (!id) {
+    if (id == null) {
+      console.error('❌ ID non valido (null/undefined)')
       setError('ID attività non valido')
       return
     }
 
-    // Non eliminare righe temporanee
-    if (typeof id === 'string' && id.startsWith('temp-')) {
+    const isTemporaryRow = !!row?.isTemporary || (typeof id === 'string' && id.startsWith('temp-'))
+    if (isTemporaryRow) {
+      setDeleteConfirm({ show: true, id, isTemporary: true })
       return
     }
 
     // Converti ID a numero se necessario
     const numericId = typeof id === 'string' ? parseInt(id, 10) : id
     if (isNaN(numericId)) {
+      console.error('❌ ID non valido (NaN):', id)
       setError('ID attività non valido')
       return
     }
 
-    setDeleteConfirm({ show: true, id: numericId })
+    console.log('✅ Apertura modal eliminazione per ID:', numericId)
+    setDeleteConfirm({ show: true, id: numericId, isTemporary: false })
   }
 
-  // Conferma eliminazione
+  // Conferma eliminazione - SOLUZIONE SEMPLICE E DIRETTA
   const confirmDelete = async () => {
-    const { id } = deleteConfirm
-    if (!id) {
-      console.error('ID attività mancante per eliminazione')
-      setError('ID attività non valido')
-      setDeleteConfirm({ show: false, id: null })
+    const { id, isTemporary } = deleteConfirm
+    if (id == null) {
+      setDeleteConfirm({ show: false, id: null, isTemporary: false })
       return
     }
 
-    try {
-      setDeleting(true)
-      setError(null)
-      
-      console.log('Eliminazione attività con ID:', id, 'Tipo:', typeof id)
-      
-      // Chiama l'API di eliminazione
-      const response = await api.deleteAttivita(id)
-      
-      console.log('Risposta eliminazione:', response)
-      
-      // Verifica risposta - il backend restituisce { success: true } o un errore
-      if (response && response.error) {
-        throw new Error(response.error)
-      }
-
-      // Chiudi modal immediatamente per feedback visivo
-      setDeleteConfirm({ show: false, id: null })
-      
-      // Rimuovi ottimisticamente dalla lista locale (gestisce sia numeri che stringhe)
-      setAttivita(prev => {
-        const filtered = prev.filter(row => {
-          const rowId = row.id
-          // Confronta in tutti i modi possibili per gestire numeri e stringhe
-          return rowId !== id && 
-                 rowId !== String(id) && 
-                 String(rowId) !== String(id) &&
-                 Number(rowId) !== Number(id)
+    if (isTemporary || (typeof id === 'string' && id.startsWith('temp-'))) {
+      setDeleteConfirm({ show: false, id: null, isTemporary: false })
+      setAttivita(prev => prev.filter(row => row?.id !== id))
+      const tempDate = typeof id === 'string' && id.startsWith('temp-') ? id.slice(5) : null
+      if (tempDate) {
+        setHiddenTempDates(prev => {
+          const next = new Set(prev)
+          next.add(tempDate)
+          return next
         })
-        console.log('Eliminazione: righe prima:', prev.length, 'righe dopo:', filtered.length, 'ID eliminato:', id)
-        return filtered
+      }
+      return
+    }
+
+    const idToDelete = Number(id)
+    if (isNaN(idToDelete)) {
+      setDeleteConfirm({ show: false, id: null, isTemporary: false })
+      return
+    }
+    
+    // Chiudi modal subito
+    setDeleteConfirm({ show: false, id: null, isTemporary: false })
+    setDeleting(true)
+    
+    // Aggiungi alla blacklist
+    setDeletedIds(prev => {
+      if (prev.has(idToDelete)) return prev
+      const next = new Set(prev)
+      next.add(idToDelete)
+      return next
+    })
+    
+    // Rimuovi la riga dallo stato - CONFRONTO DIRETTO E SEMPLICE
+    setAttivita(prev => {
+      const filtered = prev.filter(row => {
+        if (!row || row.id == null || row.id === undefined) return true
+        const rowId = Number(row.id)
+        const toDelete = Number(idToDelete)
+        const keep = rowId !== toDelete
+        if (!keep) {
+          console.log('RIMOSSA RIGA con ID:', rowId, 'confrontato con:', toDelete)
+        }
+        return keep
       })
-      
-      // Ricarica i dati con i filtri correnti per sincronizzare
-      await reloadWithCurrentFilters()
+      console.log('PRIMA:', prev.length, 'righe, DOPO:', filtered.length, 'righe. ID eliminato:', idToDelete)
+      return filtered
+    })
+    
+    // Chiama API e riallinea lo stato con il server
+    try {
+      await api.deleteAttivita(idToDelete)
     } catch (err) {
-      console.error('Errore eliminazione attività:', err)
+      console.error('Errore eliminazione API:', err)
       setError('Errore nell\'eliminazione: ' + (err.message || 'Errore sconosciuto'))
-      // Non chiudere il modal in caso di errore, così l'utente può riprovare
     } finally {
       setDeleting(false)
+      await reloadWithCurrentFilters()
     }
   }
 
   // Annulla eliminazione
   const cancelDelete = () => {
-    setDeleteConfirm({ show: false, id: null })
+    setDeleteConfirm({ show: false, id: null, isTemporary: false })
   }
 
-  // Aggiungi nuova riga manuale
+  // Aggiungi nuova riga manuale (per oggi)
   const addNewRow = async () => {
-    const today = new Date()
-    const todayDate = today.toISOString().split('T')[0]
-    
+    const dateToAdd = newRowDate || new Date().toISOString().split('T')[0]
+    await addRowForDate(dateToAdd)
+  }
+
+  // Aggiungi nuova riga per una data specifica
+  const addRowForDate = async (date) => {
     try {
       const result = await api.createAttivita({
-        data: todayDate,
+        data: date,
         clienteId: null,
         clienteNome: '',
         attivita: '',
@@ -342,7 +424,7 @@ function TabellaAttivita({ clienti }) {
       
       const newRow = {
         id: result.id,
-        data: todayDate,
+        data: date,
         cliente: '',
         clienteId: null,
         attivita: '',
@@ -350,7 +432,22 @@ function TabellaAttivita({ clienti }) {
         indennita: false
       }
       
-      setAttivita([newRow, ...attivita])
+      // Inserisci la nuova riga in cima all'array (così appare subito dopo l'header della data)
+      setAttivita(prev => {
+        // Trova l'indice della prima riga con questa data
+        const dateIndex = prev.findIndex(r => r.data === date)
+        if (dateIndex >= 0) {
+          // Inserisci dopo la prima riga con questa data
+          return [
+            ...prev.slice(0, dateIndex + 1),
+            newRow,
+            ...prev.slice(dateIndex + 1)
+          ]
+        } else {
+          // Se non ci sono righe per questa data, inserisci all'inizio
+          return [newRow, ...prev]
+        }
+      })
     } catch (err) {
       console.error('Errore creazione attività:', err)
       setError('Errore nella creazione: ' + (err.message || 'Errore sconosciuto'))
@@ -358,8 +455,38 @@ function TabellaAttivita({ clienti }) {
   }
 
   // Filtra attività in base ai filtri selezionati (lato client per performance)
+  // RIMUOVE DUPLICATI per data e ID
+  // ESCLUDE gli ID nella blacklist (righe eliminate)
   const filteredAttivita = useMemo(() => {
-    let filtered = [...attivita]
+    // PRIMA: rimuovi duplicati (stesso ID o stessa data+stesso contenuto vuoto)
+    // E ESCLUDI gli ID nella blacklist
+    const seen = new Set()
+    const unique = attivita.filter(a => {
+      if (!a || !a.data) return false
+      
+      // ESCLUDI gli ID nella blacklist (righe eliminate)
+      if (a.id) {
+        const rowId = typeof a.id === 'string' ? parseInt(a.id, 10) : Number(a.id)
+        if (!isNaN(rowId) && deletedIds.has(rowId)) {
+          console.log('🚫 Riga esclusa da filteredAttivita (blacklist):', rowId)
+          return false
+        }
+      }
+      
+      // Per righe con ID, usa l'ID come chiave univoca
+      if (a.id && typeof a.id === 'number') {
+        if (seen.has(`id-${a.id}`)) return false
+        seen.add(`id-${a.id}`)
+        return true
+      }
+      // Per righe temporanee o senza ID, usa data+contenuto
+      const key = `date-${a.data}-${a.cliente || ''}-${a.attivita || ''}-${a.km || ''}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    
+    let filtered = [...unique]
 
     if (!expanded) {
       // In modalità home, mostra solo ultime 3 date
@@ -396,7 +523,7 @@ function TabellaAttivita({ clienti }) {
     }
 
     return filtered
-  }, [attivita, expanded, filterType, customStartDate, customEndDate])
+  }, [attivita, expanded, filterType, customStartDate, customEndDate, deletedIds])
 
   // Raggruppa per data
   const groupedByDate = useMemo(() => {
@@ -446,6 +573,9 @@ function TabellaAttivita({ clienti }) {
   // Export PDF
   const exportPDF = async () => {
     const doc = new jsPDF()
+    const headerTextTopY = 18
+    let headerX = 70
+    let logoBottomY = 10
     
     // Intestazione con logo e ragione sociale
     try {
@@ -456,8 +586,21 @@ function TabellaAttivita({ clienti }) {
       await new Promise((resolve, reject) => {
         logoImg.onload = () => {
           try {
-            // Aggiungi logo (dimensioni: 50x50, posizione: 14, 10)
-            doc.addImage(logoImg, 'PNG', 14, 10, 50, 50)
+            // Aggiungi logo mantenendo il rapporto di aspetto
+            const maxW = 42
+            const maxH = 22
+            const ratio = logoImg.width && logoImg.height ? (logoImg.width / logoImg.height) : 1
+            let w = maxW
+            let h = w / ratio
+            if (h > maxH) {
+              h = maxH
+              w = h * ratio
+            }
+            const logoX = 14
+            const logoY = 12
+            doc.addImage(logoImg, 'PNG', logoX, logoY, w, h)
+            headerX = logoX + w + 8
+            logoBottomY = logoY + h
             resolve()
           } catch (err) {
             console.warn('Errore aggiunta logo al PDF:', err)
@@ -477,23 +620,27 @@ function TabellaAttivita({ clienti }) {
     doc.setFontSize(16)
     doc.setTextColor(42, 63, 84) // Grigio scuro Studio Capoferri
     doc.setFont('helvetica', 'bold')
-    doc.text('Studio Capoferri', 70, 20)
+    doc.text('Studio Capoferri', headerX, headerTextTopY)
     
     doc.setFontSize(11)
     doc.setFont('helvetica', 'normal')
-    doc.text('Ingegneria | Architettura | Urbanistica', 70, 28)
+    doc.text('Ingegneria | Architettura | Urbanistica', headerX, headerTextTopY + 7)
     
     doc.setFontSize(9)
     doc.setTextColor(60, 60, 60)
-    doc.text('Via Piave 35, 25030 Adro (BS)', 70, 36)
-    doc.text('Tel: +39 030 7357263 | Email: info@studiocapoferri.eu', 70, 42)
-    doc.text('P.IVA: 04732710985', 70, 48)
+    doc.text('Via Piave 35, 25030 Adro (BS)', headerX, headerTextTopY + 14)
+    doc.text('Tel: +39 030 7357263 | Email: info@studiocapoferri.eu', headerX, headerTextTopY + 20)
+    doc.text('P.IVA: 04732710985', headerX, headerTextTopY + 26)
+    
+    const headerTextBottomY = headerTextTopY + 26
+    const headerBottomY = Math.max(logoBottomY, headerTextBottomY)
     
     // Titolo report
     doc.setFontSize(14)
     doc.setTextColor(42, 63, 84)
     doc.setFont('helvetica', 'bold')
-    doc.text('Report Attività', 14, 65)
+    const reportTitleY = headerBottomY + 12
+    doc.text('Report Attivita', 14, reportTitleY)
     
     // Filtri applicati
     let filterText = 'Periodo: '
@@ -513,7 +660,8 @@ function TabellaAttivita({ clienti }) {
     doc.setFontSize(10)
     doc.setFont('helvetica', 'normal')
     doc.setTextColor(100, 100, 100)
-    doc.text(filterText, 14, 72)
+    const filterY = reportTitleY + 7
+    doc.text(filterText, 14, filterY)
     
     // Tabella
     const tableData = filteredAttivita.map(a => {
@@ -527,31 +675,31 @@ function TabellaAttivita({ clienti }) {
       ]
     })
     
-    doc.autoTable({
+    autoTable(doc, {
       head: [['Data', 'Cliente', 'Attività', 'KM', 'Indennità']],
       body: tableData,
-      startY: 78,
+      startY: filterY + 6,
       styles: { 
         fontSize: 9,
-        textColor: [255, 255, 255]
+        textColor: [33, 33, 33]
       },
       headStyles: { 
-        fillColor: [42, 63, 84],
-        textColor: [255, 255, 255],
+        fillColor: [255, 255, 255],
+        textColor: [42, 63, 84],
         fontStyle: 'bold'
       },
       alternateRowStyles: {
-        fillColor: [42, 63, 84],
-        textColor: [255, 255, 255]
+        fillColor: [245, 245, 245],
+        textColor: [33, 33, 33]
       },
       bodyStyles: {
-        fillColor: [31, 46, 61],
-        textColor: [255, 255, 255]
+        fillColor: [255, 255, 255],
+        textColor: [33, 33, 33]
       }
     })
     
-    // Totali
-    const finalY = doc.lastAutoTable.finalY + 10
+    // Totali - calcola la posizione Y finale
+    const finalY = (doc.lastAutoTable && doc.lastAutoTable.finalY) ? doc.lastAutoTable.finalY + 10 : (filterY + 6) + (tableData.length * 7) + 20
     doc.setFontSize(12)
     doc.setFont('helvetica', 'bold')
     doc.setTextColor(42, 63, 84)
@@ -594,6 +742,9 @@ function TabellaAttivita({ clienti }) {
     // Se è una delle ultime 3 date e non ci sono righe, mostra una riga temporanea vuota
     // Questa verrà creata sul server quando l'utente modifica qualcosa
     if (isLastThreeDays && rows.length === 0) {
+      if (hiddenTempDates.has(date)) {
+        return []
+      }
       return [{
         id: `temp-${date}`,
         data: date,
@@ -710,6 +861,13 @@ function TabellaAttivita({ clienti }) {
           </div>
           
           <div className="mb-3">
+            <input
+              type="date"
+              className="form-control"
+              value={newRowDate}
+              onChange={(e) => setNewRowDate(e.target.value)}
+              style={{ width: 'auto', display: 'inline-block', marginRight: '0.5rem' }}
+            />
             <button 
               className="btn btn-secondary"
               onClick={addNewRow}
@@ -755,18 +913,38 @@ function TabellaAttivita({ clienti }) {
                   <React.Fragment key={date}>
                     <tr>
                       <td colSpan="6" className="date-group">
-                        <div className="date-group-header">
-                          {dateLabel ? `${dateLabel} - ${dateFormatted}` : dateFormatted}
+                        <div className="date-group-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span>{dateLabel ? `${dateLabel} - ${dateFormatted}` : dateFormatted}</span>
+                          <button
+                            className="btn btn-sm btn-secondary"
+                            onClick={() => addRowForDate(date)}
+                            disabled={loading}
+                            style={{ 
+                              padding: '0.25rem 0.5rem',
+                              fontSize: '0.875rem',
+                              lineHeight: '1.2'
+                            }}
+                            title="Aggiungi riga per questo giorno"
+                          >
+                            + Riga
+                          </button>
                         </div>
                       </td>
                     </tr>
                     {rows.length > 0 ? rows.map((row, rowIndex) => {
+                      // CONTROLLO ESPLICITO: escludi righe eliminate dalla blacklist
+                      const rowId = row.id ? Number(row.id) : null
+                      if (rowId && deletedIds.has(rowId)) {
+                        return null // Non renderizzare righe eliminate
+                      }
+                      
                       const isToday = row.data === todayDate
-                      const isIncomplete = !isRowComplete(row)
+                      const validation = getRowValidation(row)
+                      const isIncomplete = !validation.isComplete
                       const isTemporary = row.isTemporary
                       
                       return (
-                        <tr key={row.id} className={isIncomplete ? 'row-incomplete' : ''}>
+                        <tr key={row.id} >
                           <td>
                             <input
                               type="date"
@@ -895,15 +1073,16 @@ function TabellaAttivita({ clienti }) {
                             />
                           </td>
                           <td>
-                            {!isTemporary && (
-                              <button
-                                className="btn btn-sm btn-danger"
-                                onClick={() => handleDeleteClick(row.id)}
-                                disabled={isToday && rows.length === 1}
-                                title={isToday && rows.length === 1 ? 'La riga di oggi non può essere eliminata' : ''}
-                              >
-                                Elimina
-                              </button>
+                            <button
+                              className="btn btn-sm btn-danger"
+                              onClick={() => handleDeleteClick(row)}
+                              disabled={!isTemporary && isToday && rows.length === 1}
+                              title={!isTemporary && isToday && rows.length === 1 ? 'La riga di oggi non puo essere eliminata' : ''}
+                            >
+                              Elimina
+                            </button>
+                            {isIncomplete && (
+                              <span className="badge bg-warning text-dark ms-2">Incompleta</span>
                             )}
                           </td>
                         </tr>
@@ -970,3 +1149,24 @@ function TabellaAttivita({ clienti }) {
 }
 
 export default TabellaAttivita
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

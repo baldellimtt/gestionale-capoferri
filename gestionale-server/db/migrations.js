@@ -43,3 +43,4 @@ class Migrations {
 
 module.exports = new Migrations();
 
+

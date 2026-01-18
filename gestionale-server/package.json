@@ -10,7 +10,8 @@
     "backup": "node services/backup.js",
     "backup:watch": "node services/backup.js --watch",
     "backup:list": "node services/backup.js --list",
-    "backup:restore": "node services/backup.js --restore"
+    "backup:restore": "node services/backup.js --restore",
+    "reset:attivita": "node scripts/reset-attivita.js"
   },
   "keywords": [],
   "author": "",
