@@ -118,6 +118,10 @@ header .logo {
   display: inline-block;
 }
 
+.section-title.no-title-line::after {
+  content: none;
+}
+
 .sidebar {
   background: var(--bg-1);
   border: 1px solid var(--border-soft);

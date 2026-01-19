@@ -694,7 +694,7 @@ function TabellaAttivita({ clienti, user }) {
       )}
 
       <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2 className="section-title mb-0">Rimborsi</h2>
+        <h2 className="section-title mb-0 no-title-line">Rimborsi</h2>
         <div className="d-flex gap-2">
           {expanded && (
             <button
