@@ -95,11 +95,43 @@ class Migrations {
         created_at TEXT DEFAULT (datetime('now', 'localtime')),
         FOREIGN KEY (commessa_id) REFERENCES commesse(id) ON DELETE CASCADE
       );
+
+      -- Tabella Dati Aziendali (singola riga)
+      CREATE TABLE IF NOT EXISTS dati_aziendali (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        ragione_sociale TEXT,
+        partita_iva TEXT,
+        codice_fiscale TEXT,
+        created_at TEXT DEFAULT (datetime('now', 'localtime')),
+        updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+      );
+
+      -- Tabella Dati Fiscali (singola riga)
+      CREATE TABLE IF NOT EXISTS dati_fiscali (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        codice_destinatario_sdi TEXT,
+        pec TEXT,
+        regime_fiscale TEXT,
+        codice_ateco TEXT,
+        numero_rea TEXT,
+        provincia_rea TEXT,
+        ufficio_iva TEXT,
+        iban TEXT,
+        banca TEXT,
+        tipo_documento_predefinito TEXT,
+        ritenuta_acconto REAL DEFAULT 0,
+        rivalsa_inps REAL DEFAULT 0,
+        cassa_previdenziale TEXT,
+        created_at TEXT DEFAULT (datetime('now', 'localtime')),
+        updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+      );
     `);
 
     this.ensureUserColumns(db);
     this.ensureCommesseColumns(db);
     this.ensureDefaultUser(db);
+    this.ensureDatiAziendaliInitialized(db);
+    this.ensureDatiFiscaliInitialized(db);
 
     console.log('[MIGRATIONS] Schema database creato/verificato');
   }
@@ -162,9 +194,53 @@ class Migrations {
       `).run('lcapoferri', 'admin', hash, salt, 0, 'Luca', 'Capoferri');
     }
   }
+
+  ensureDatiAziendaliInitialized(db) {
+    const existing = db.prepare('SELECT id FROM dati_aziendali WHERE id = 1').get();
+    if (!existing) {
+      db.prepare(`
+        INSERT INTO dati_aziendali (id, ragione_sociale, partita_iva, codice_fiscale)
+        VALUES (1, '', '', '')
+      `).run();
+    }
+  }
+
+  ensureDatiFiscaliInitialized(db) {
+    const existing = db.prepare('SELECT id FROM dati_fiscali WHERE id = 1').get();
+    if (!existing) {
+      db.prepare(`
+        INSERT INTO dati_fiscali (id, codice_destinatario_sdi, pec, regime_fiscale, codice_ateco, numero_rea, provincia_rea, ufficio_iva, iban, banca, tipo_documento_predefinito, ritenuta_acconto, rivalsa_inps, cassa_previdenziale)
+        VALUES (1, '', '', '', '', '', '', '', '', '', '', 0, 0, '')
+      `).run();
+    } else {
+      // Migrazione: aggiungi colonne se non esistono
+      const columns = db.prepare('PRAGMA table_info(dati_fiscali)').all().map((col) => col.name);
+      const addColumn = (name, type, def = null) => {
+        if (!columns.includes(name)) {
+          const defaultClause = def == null ? '' : ` DEFAULT ${def}`;
+          db.exec(`ALTER TABLE dati_fiscali ADD COLUMN ${name} ${type}${defaultClause}`);
+        }
+      };
+      addColumn('codice_destinatario_sdi', 'TEXT');
+      addColumn('pec', 'TEXT');
+      addColumn('regime_fiscale', 'TEXT');
+      addColumn('codice_ateco', 'TEXT');
+      addColumn('numero_rea', 'TEXT');
+      addColumn('provincia_rea', 'TEXT');
+      addColumn('ufficio_iva', 'TEXT');
+      addColumn('iban', 'TEXT');
+      addColumn('banca', 'TEXT');
+      addColumn('tipo_documento_predefinito', 'TEXT');
+      addColumn('ritenuta_acconto', 'REAL', 0);
+      addColumn('rivalsa_inps', 'REAL', 0);
+      addColumn('cassa_previdenziale', 'TEXT');
+    }
+  }
 }
 
 module.exports = new Migrations();
+
+
 
 
 

@@ -38,6 +38,12 @@ app.use('/api/utenti', (req, res, next) => {
   }
   return next();
 }, require('./routes/utenti')(db));
+app.use('/api/impostazioni', (req, res, next) => {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ error: 'Permesso negato' });
+  }
+  return next();
+}, require('./routes/impostazioni')(db));
 app.use('/api/clienti', require('./routes/clienti')(db));
 app.use('/api/attivita', require('./routes/attivita')(db));
 app.use('/api/commesse', require('./routes/commesse')(db));
@@ -92,6 +98,8 @@ process.on('SIGTERM', () => {
 });
 
 module.exports = app;
+
+
 
 
 

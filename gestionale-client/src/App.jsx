@@ -4,11 +4,15 @@ import AnagraficaClienti from './components/AnagraficaClienti'
 import TabellaAttivita from './components/TabellaAttivita'
 import Login from './components/Login'
 import ImpostazioniUtenti from './components/ImpostazioniUtenti'
+import Impostazioni from './components/Impostazioni'
+import DatiAziendali from './components/DatiAziendali'
+import DatiFiscali from './components/DatiFiscali'
 import Commesse from './components/Commesse'
 import api from './services/api'
 
 function App() {
   const [activeView, setActiveView] = useState('attivita')
+  const [impostazioniView, setImpostazioniView] = useState(null)
   const [clienti, setClienti] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -118,9 +122,12 @@ function App() {
         {user && user.role === 'admin' && (
           <button
             className="btn btn-secondary btn-sm ms-auto"
-            onClick={() => setActiveView('utenti')}
+            onClick={() => {
+              setActiveView('impostazioni')
+              setImpostazioniView(null)
+            }}
           >
-            Gestione Utenti
+            Impostazioni
           </button>
         )}
         {user && (
@@ -212,12 +219,32 @@ function App() {
                     onBack={() => setActiveView('attivita')}
                   />
                 )}
-                {activeView === 'utenti' && user?.role === 'admin' && (
-                  <ImpostazioniUtenti
-                    currentUser={user}
-                    onUserUpdated={handleUserUpdated}
-                    onBack={() => setActiveView('attivita')}
-                  />
+                {activeView === 'impostazioni' && user?.role === 'admin' && (
+                  <>
+                    {!impostazioniView && (
+                      <Impostazioni
+                        onNavigate={(view) => setImpostazioniView(view)}
+                        onBack={() => setActiveView('attivita')}
+                      />
+                    )}
+                    {impostazioniView === 'utenti' && (
+                      <ImpostazioniUtenti
+                        currentUser={user}
+                        onUserUpdated={handleUserUpdated}
+                        onBack={() => setImpostazioniView(null)}
+                      />
+                    )}
+                    {impostazioniView === 'dati-aziendali' && (
+                      <DatiAziendali
+                        onBack={() => setImpostazioniView(null)}
+                      />
+                    )}
+                    {impostazioniView === 'dati-fiscali' && (
+                      <DatiFiscali
+                        onBack={() => setImpostazioniView(null)}
+                      />
+                    )}
+                  </>
                 )}
                 </>
               )}

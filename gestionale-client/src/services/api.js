@@ -290,6 +290,29 @@ class ApiService {
       method: 'DELETE',
     });
   }
+
+  // Impostazioni API
+  async getDatiAziendali() {
+    return this.request('/impostazioni/dati-aziendali');
+  }
+
+  async updateDatiAziendali(payload) {
+    return this.request('/impostazioni/dati-aziendali', {
+      method: 'PUT',
+      body: payload,
+    });
+  }
+
+  async getDatiFiscali() {
+    return this.request('/impostazioni/dati-fiscali');
+  }
+
+  async updateDatiFiscali(payload) {
+    return this.request('/impostazioni/dati-fiscali', {
+      method: 'PUT',
+      body: payload,
+    });
+  }
 }
 
 export default new ApiService();
