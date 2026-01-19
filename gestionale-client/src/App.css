@@ -607,6 +607,21 @@ header .logo {
   box-shadow: 0 0 0 3px rgba(234, 179, 8, 0.12);
 }
 
+.stato-pagamenti-select.payments-non-iniziato {
+  border-color: rgba(239, 68, 68, 0.55);
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.14);
+}
+
+.stato-pagamenti-select.payments-parziale {
+  border-color: rgba(245, 158, 11, 0.55);
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.14);
+}
+
+.stato-pagamenti-select.payments-saldo {
+  border-color: rgba(16, 185, 129, 0.55);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.14);
+}
+
 .substatus-piano-di-sicurezza {
   background: rgba(34, 197, 94, 0.18);
   color: #166534;

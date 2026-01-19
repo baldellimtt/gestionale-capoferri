@@ -499,7 +499,7 @@ function Commesse({ clienti }) {
           </select>
           <label>Stato pagamenti:</label>
           <select
-            className="form-select"
+            className={`form-select stato-pagamenti-select ${getStatoPagamentiClass(filters.statoPagamenti)}`}
             value={filters.statoPagamenti}
             onChange={(e) => setFilters((prev) => ({ ...prev, statoPagamenti: e.target.value }))}
             style={{ width: 'auto' }}
@@ -622,7 +622,7 @@ function Commesse({ clienti }) {
               <div className="col-md-3">
                 <label className="form-label">Stato pagamenti</label>
                 <select
-                  className="form-select"
+                  className={`form-select stato-pagamenti-select ${getStatoPagamentiClass(formData.stato_pagamenti)}`}
                   value={formData.stato_pagamenti}
                   onChange={(e) => setFormData((prev) => ({ ...prev, stato_pagamenti: e.target.value }))}
                 >
