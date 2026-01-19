@@ -577,6 +577,21 @@ header .logo {
   color: #1e3a8a;
 }
 
+.status-payments.payments-non-iniziato {
+  background: rgba(239, 68, 68, 0.18);
+  color: #991b1b;
+}
+
+.status-payments.payments-parziale {
+  background: rgba(245, 158, 11, 0.2);
+  color: #92400e;
+}
+
+.status-payments.payments-saldo {
+  background: rgba(16, 185, 129, 0.2);
+  color: #0f766e;
+}
+
 .stato-select.status-open {
   border-color: rgba(58, 100, 200, 0.5);
   box-shadow: 0 0 0 3px rgba(58, 100, 200, 0.12);

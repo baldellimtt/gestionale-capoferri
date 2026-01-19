@@ -359,6 +359,7 @@ function Commesse({ clienti }) {
     .replace(/(^-|-$)/g, '')
   const getStatoClass = (value) => (value === 'Chiusa' ? 'status-closed' : 'status-open')
   const getSottoStatoClass = (value) => (value ? `substatus-${toSlug(value)}` : '')
+  const getStatoPagamentiClass = (value) => (value ? `payments-${toSlug(value)}` : '')
   const normalizeForm = (data) => {
     const normalized = {
       titolo: (data.titolo || '').trim(),
@@ -838,7 +839,7 @@ function Commesse({ clienti }) {
                         )}
                       </td>
                       <td>
-                        <span className="status-badge status-payments">
+                        <span className={`status-badge status-payments ${getStatoPagamentiClass(commessa.stato_pagamenti)}`}>
                           {commessa.stato_pagamenti || 'Non iniziato'}
                         </span>
                       </td>
