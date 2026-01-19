@@ -42,7 +42,7 @@ function Commesse({ clienti }) {
   const [commesse, setCommesse] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [filters, setFilters] = useState({ clienteId: '', stato: '' })
+  const [filters, setFilters] = useState({ clienteId: '', stato: '', sottoStato: '', statoPagamenti: '' })
   const [clienteFilterInput, setClienteFilterInput] = useState('')
   const [showClienteFilterAutocomplete, setShowClienteFilterAutocomplete] = useState(false)
   const [showForm, setShowForm] = useState(false)
@@ -332,6 +332,18 @@ function Commesse({ clienti }) {
     })
   }, [commesse])
 
+  const filteredCommesse = useMemo(() => {
+    return commesseSorted.filter((commessa) => {
+      if (filters.sottoStato && commessa.sotto_stato !== filters.sottoStato) {
+        return false
+      }
+      if (filters.statoPagamenti && commessa.stato_pagamenti !== filters.statoPagamenti) {
+        return false
+      }
+      return true
+    })
+  }, [commesseSorted, filters.sottoStato, filters.statoPagamenti])
+
   const uploadsBase = api.baseURL.replace(/\/api\/?$/, '') + '/uploads'
   const selectedCommessa = commesse.find((item) => String(item.id) === String(selectedCommessaId))
   const selectedAllegati = selectedCommessa ? (allegatiByCommessa[selectedCommessa.id] || []) : []
@@ -469,6 +481,30 @@ function Commesse({ clienti }) {
           >
             <option value="">Tutti</option>
             {STATI_COMMESSA.map((stato) => (
+              <option key={stato} value={stato}>{stato}</option>
+            ))}
+          </select>
+          <label>Sottostato:</label>
+          <select
+            className="form-select"
+            value={filters.sottoStato}
+            onChange={(e) => setFilters((prev) => ({ ...prev, sottoStato: e.target.value }))}
+            style={{ width: 'auto' }}
+          >
+            <option value="">Tutti</option>
+            {SOTTOSTATI_IN_CORSO.filter((stato) => stato !== 'Personalizzato').map((stato) => (
+              <option key={stato} value={stato}>{stato}</option>
+            ))}
+          </select>
+          <label>Stato pagamenti:</label>
+          <select
+            className="form-select"
+            value={filters.statoPagamenti}
+            onChange={(e) => setFilters((prev) => ({ ...prev, statoPagamenti: e.target.value }))}
+            style={{ width: 'auto' }}
+          >
+            <option value="">Tutti</option>
+            {STATI_PAGAMENTI.map((stato) => (
               <option key={stato} value={stato}>{stato}</option>
             ))}
           </select>
@@ -749,7 +785,7 @@ function Commesse({ clienti }) {
               <span className="visually-hidden">Caricamento...</span>
             </div>
           </div>
-        ) : commesseSorted.length === 0 ? (
+        ) : filteredCommesse.length === 0 ? (
           <div className="alert alert-info mt-3">
             Nessuna commessa presente.
           </div>
@@ -761,12 +797,12 @@ function Commesse({ clienti }) {
                   <th>Commessa</th>
                   <th>Cliente</th>
                   <th>Stato</th>
+                  <th>Sottostato</th>
+                  <th>Stato pagamenti</th>
                 </tr>
               </thead>
               <tbody>
-                {commesseSorted.map((commessa) => {
-                  const totale = Number(commessa.importo_totale || 0)
-                  const pagato = Number(commessa.importo_pagato || 0)
+                {filteredCommesse.map((commessa) => {
                   const allegati = allegatiByCommessa[commessa.id] || []
                   return (
                     <tr
@@ -779,9 +815,6 @@ function Commesse({ clienti }) {
                         {commessa.responsabile && (
                           <div className="commessa-meta">Responsabile: {commessa.responsabile}</div>
                         )}
-                        {commessa.stato === 'In corso' && commessa.sotto_stato && (
-                          <div className="commessa-meta">Sotto-stato: {commessa.sotto_stato}</div>
-                        )}
                         {commessa.note && (
                           <div className="commessa-meta">{commessa.note}</div>
                         )}
@@ -793,6 +826,20 @@ function Commesse({ clienti }) {
                       <td>
                         <span className={`status-badge ${getStatoClass(commessa.stato)}`}>
                           {commessa.stato || 'In corso'}
+                        </span>
+                      </td>
+                      <td>
+                        {commessa.sotto_stato ? (
+                          <span className={`status-badge substatus-badge ${getSottoStatoClass(commessa.sotto_stato)}`}>
+                            {commessa.sotto_stato}
+                          </span>
+                        ) : (
+                          '-'
+                        )}
+                      </td>
+                      <td>
+                        <span className="status-badge status-payments">
+                          {commessa.stato_pagamenti || 'Non iniziato'}
                         </span>
                       </td>
                     </tr>
