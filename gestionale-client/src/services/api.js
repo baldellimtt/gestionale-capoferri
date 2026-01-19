@@ -74,6 +74,45 @@ class ApiService {
     }
   }
 
+  async requestForm(endpoint, formData, options = {}) {
+    const url = `${this.baseURL}${endpoint}`;
+    const config = {
+      method: 'POST',
+      ...options,
+      headers: {
+        ...options.headers,
+      },
+      body: formData,
+    };
+
+    if (this.token) {
+      config.headers.Authorization = `Bearer ${this.token}`;
+    }
+
+    try {
+      const response = await fetch(url, config);
+      let data = {};
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const text = await response.text();
+        if (text) {
+          data = JSON.parse(text);
+        }
+      }
+
+      if (!response.ok) {
+        const error = new Error(data.error || `HTTP error! status: ${response.status}`);
+        error.status = response.status;
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error(`API Error [${endpoint}]:`, error);
+      throw error;
+    }
+  }
+
   // Auth API
   async login(credentials) {
     const data = await this.request('/auth/login', {
@@ -128,6 +167,53 @@ class ApiService {
 
   async deleteUtente(id) {
     return this.request(`/utenti/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Commesse API
+  async getCommesse(filters = {}) {
+    const params = new URLSearchParams();
+    if (filters.clienteId) params.append('clienteId', filters.clienteId);
+    if (filters.stato) params.append('stato', filters.stato);
+    if (filters.statoPagamenti) params.append('statoPagamenti', filters.statoPagamenti);
+    const query = params.toString();
+    const endpoint = query ? `/commesse?${query}` : '/commesse';
+    return this.request(endpoint);
+  }
+
+  async createCommessa(payload) {
+    return this.request('/commesse', {
+      method: 'POST',
+      body: payload,
+    });
+  }
+
+  async updateCommessa(id, payload) {
+    return this.request(`/commesse/${id}`, {
+      method: 'PUT',
+      body: payload,
+    });
+  }
+
+  async deleteCommessa(id) {
+    return this.request(`/commesse/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getCommessaAllegati(id) {
+    return this.request(`/commesse/${id}/allegati`);
+  }
+
+  async uploadCommessaAllegato(id, file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.requestForm(`/commesse/${id}/allegati`, formData);
+  }
+
+  async deleteCommessaAllegato(allegatoId) {
+    return this.request(`/commesse/allegati/${allegatoId}`, {
       method: 'DELETE',
     });
   }

@@ -22,6 +22,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Health check
 app.get('/health', (req, res) => {
@@ -39,6 +40,7 @@ app.use('/api/utenti', (req, res, next) => {
 }, require('./routes/utenti')(db));
 app.use('/api/clienti', require('./routes/clienti')(db));
 app.use('/api/attivita', require('./routes/attivita')(db));
+app.use('/api/commesse', require('./routes/commesse')(db));
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -90,6 +92,7 @@ process.on('SIGTERM', () => {
 });
 
 module.exports = app;
+
 
 
 

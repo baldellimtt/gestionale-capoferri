@@ -4,6 +4,7 @@ import AnagraficaClienti from './components/AnagraficaClienti'
 import TabellaAttivita from './components/TabellaAttivita'
 import Login from './components/Login'
 import ImpostazioniUtenti from './components/ImpostazioniUtenti'
+import Commesse from './components/Commesse'
 import api from './services/api'
 
 function App() {
@@ -160,6 +161,18 @@ function App() {
                     </a>
                   </li>
                   <li>
+                    <a
+                      href="#commesse"
+                      className={activeView === 'commesse' ? 'active' : ''}
+                      onClick={(e) => {
+                        e.preventDefault()
+                        setActiveView('commesse')
+                      }}
+                    >
+                      Commesse
+                    </a>
+                  </li>
+                  <li>
                   <a 
                     href="#anagrafica" 
                     className={activeView === 'anagrafica' ? 'active' : ''}
@@ -188,6 +201,9 @@ function App() {
                 <>
                 {activeView === 'attivita' && (
                   <TabellaAttivita clienti={clienti} user={user} />
+                )}
+                {activeView === 'commesse' && (
+                  <Commesse clienti={clienti} />
                 )}
                 {activeView === 'anagrafica' && (
                   <AnagraficaClienti

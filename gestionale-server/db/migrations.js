@@ -58,9 +58,47 @@ class Migrations {
         created_at TEXT DEFAULT (datetime('now', 'localtime')),
         FOREIGN KEY (user_id) REFERENCES utenti(id) ON DELETE CASCADE
       );
+
+      -- Tabella Commesse
+      CREATE TABLE IF NOT EXISTS commesse (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        titolo TEXT NOT NULL,
+        cliente_id INTEGER,
+        cliente_nome TEXT,
+        stato TEXT DEFAULT 'In corso',
+        sotto_stato TEXT,
+        stato_pagamenti TEXT,
+        preventivo INTEGER DEFAULT 0,
+        importo_preventivo REAL DEFAULT 0,
+        importo_totale REAL DEFAULT 0,
+        importo_pagato REAL DEFAULT 0,
+        avanzamento_lavori INTEGER DEFAULT 0,
+        responsabile TEXT,
+        data_inizio TEXT,
+        data_fine TEXT,
+        note TEXT,
+        allegati TEXT,
+        created_at TEXT DEFAULT (datetime('now', 'localtime')),
+        updated_at TEXT DEFAULT (datetime('now', 'localtime')),
+        FOREIGN KEY (cliente_id) REFERENCES clienti(id) ON DELETE SET NULL
+      );
+
+      -- Tabella Allegati Commesse
+      CREATE TABLE IF NOT EXISTS commesse_allegati (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        commessa_id INTEGER NOT NULL,
+        filename TEXT NOT NULL,
+        original_name TEXT NOT NULL,
+        mime_type TEXT,
+        file_size INTEGER DEFAULT 0,
+        file_path TEXT NOT NULL,
+        created_at TEXT DEFAULT (datetime('now', 'localtime')),
+        FOREIGN KEY (commessa_id) REFERENCES commesse(id) ON DELETE CASCADE
+      );
     `);
 
     this.ensureUserColumns(db);
+    this.ensureCommesseColumns(db);
     this.ensureDefaultUser(db);
 
     console.log('[MIGRATIONS] Schema database creato/verificato');
@@ -83,6 +121,33 @@ class Migrations {
     if (!columns.includes('rimborso_km')) {
       db.exec('ALTER TABLE utenti ADD COLUMN rimborso_km REAL DEFAULT 0');
     }
+  }
+
+  ensureCommesseColumns(db) {
+    const columns = db.prepare('PRAGMA table_info(commesse)').all().map((col) => col.name);
+    const addColumn = (name, type, def = null) => {
+      if (!columns.includes(name)) {
+        const defaultClause = def == null ? '' : ` DEFAULT ${def}`;
+        db.exec(`ALTER TABLE commesse ADD COLUMN ${name} ${type}${defaultClause}`);
+      }
+    };
+
+    addColumn('titolo', 'TEXT');
+    addColumn('cliente_id', 'INTEGER');
+    addColumn('cliente_nome', 'TEXT');
+    addColumn('stato', 'TEXT', `'In corso'`);
+    addColumn('sotto_stato', 'TEXT');
+    addColumn('stato_pagamenti', 'TEXT');
+    addColumn('preventivo', 'INTEGER', 0);
+    addColumn('importo_preventivo', 'REAL', 0);
+    addColumn('importo_totale', 'REAL', 0);
+    addColumn('importo_pagato', 'REAL', 0);
+    addColumn('avanzamento_lavori', 'INTEGER', 0);
+    addColumn('responsabile', 'TEXT');
+    addColumn('data_inizio', 'TEXT');
+    addColumn('data_fine', 'TEXT');
+    addColumn('note', 'TEXT');
+    addColumn('allegati', 'TEXT');
   }
 
   ensureDefaultUser(db) {

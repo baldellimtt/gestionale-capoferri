@@ -173,6 +173,10 @@ header .logo {
   margin-top: 0;
 }
 
+.commesse-section {
+  margin-top: 0;
+}
+
 .auth-layout {
   min-height: calc(100vh - 200px);
   display: grid;
@@ -442,6 +446,160 @@ header .logo {
 .attivita-table th:nth-child(6),
 .attivita-table td:nth-child(6) {
   width: 110px;
+}
+
+.commesse-table th:nth-child(1),
+.commesse-table td:nth-child(1) {
+  min-width: 240px;
+  text-align: left;
+}
+
+.commesse-table th:nth-child(2),
+.commesse-table td:nth-child(2) {
+  min-width: 200px;
+}
+
+.commesse-table th:nth-child(5),
+.commesse-table td:nth-child(5) {
+  min-width: 220px;
+}
+
+.commesse-table th:nth-child(6),
+.commesse-table td:nth-child(6) {
+  min-width: 140px;
+}
+
+.commesse-table th:nth-child(7),
+.commesse-table td:nth-child(7) {
+  min-width: 160px;
+}
+
+.commessa-title {
+  font-weight: 700;
+  color: var(--ink-800);
+  margin-bottom: 0.3rem;
+  text-align: left;
+  font-size: 1rem;
+}
+
+.commessa-row {
+  cursor: pointer;
+}
+
+.commessa-row:hover td {
+  background: #dbe9ff;
+}
+
+.commessa-meta {
+  font-size: 0.85rem;
+  color: var(--ink-500);
+  text-align: left;
+}
+
+.commesse-table td,
+.commesse-table th {
+  padding-top: 1.15rem;
+  padding-bottom: 1.15rem;
+  font-size: 0.9rem;
+}
+
+.commessa-attachments {
+  margin-top: 0.5rem;
+  text-align: left;
+}
+
+.commessa-attachment-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+}
+
+.commessa-file-input {
+  display: none;
+}
+
+.commessa-attachments-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.4rem 0 0.6rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.commessa-attachments-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.commessa-attachments-list a {
+  color: var(--brand-700);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.commessa-attachments-list a:hover {
+  text-decoration: underline;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.status-open {
+  background: rgba(58, 100, 200, 0.15);
+  color: var(--brand-700);
+}
+
+.status-closed {
+  background: rgba(16, 185, 129, 0.15);
+  color: #0f766e;
+}
+
+.badge-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(31, 59, 120, 0.12);
+  color: var(--brand-700);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.progress-track {
+  position: relative;
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.12);
+  overflow: hidden;
+  margin-top: 0.4rem;
+}
+
+.progress-bar {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--brand-500), var(--brand-700));
+}
+
+.progress-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--ink-500);
+  margin-top: 0.35rem;
 }
 
 .date-group {
