@@ -13,6 +13,7 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onBack }) {
     username: '',
     password: '',
     role: 'user',
+    email: '',
     nome: '',
     cognome: '',
     mezzo: '',
@@ -44,6 +45,7 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onBack }) {
       username: utente.username || '',
       password: '',
       role: utente.role || 'user',
+      email: utente.email || '',
       nome: utente.nome || '',
       cognome: utente.cognome || '',
       mezzo: utente.mezzo || '',
@@ -81,6 +83,7 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onBack }) {
         username: '',
         password: '',
         role: 'user',
+        email: '',
         nome: '',
         cognome: '',
         mezzo: '',
@@ -201,6 +204,15 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onBack }) {
                 </select>
               </div>
               <div className="col-md-4">
+                <label className="form-label">Email</label>
+                <input
+                  type="email"
+                  className="form-control"
+                  value={createData.email}
+                  onChange={(e) => setCreateData((prev) => ({ ...prev, email: e.target.value }))}
+                />
+              </div>
+              <div className="col-md-4">
                 <label className="form-label">Nome</label>
                 <input
                   className="form-control"
@@ -272,6 +284,7 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onBack }) {
                   <tr>
                     <th>Username</th>
                     <th>Ruolo</th>
+                    <th>Email</th>
                     <th>Nome</th>
                     <th>Veicolo</th>
                     <th>Targa</th>
@@ -307,6 +320,18 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onBack }) {
                             </select>
                           ) : (
                             utente.role
+                          )}
+                        </td>
+                        <td>
+                          {isEditing ? (
+                            <input
+                              type="email"
+                              className="form-control"
+                              value={editData.email}
+                              onChange={(e) => setEditData((prev) => ({ ...prev, email: e.target.value }))}
+                            />
+                          ) : (
+                            utente.email || '-'
                           )}
                         </td>
                         <td>

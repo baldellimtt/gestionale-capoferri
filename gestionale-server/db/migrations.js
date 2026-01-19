@@ -41,6 +41,7 @@ class Migrations {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT NOT NULL UNIQUE,
         role TEXT NOT NULL,
+        email TEXT,
         password_hash TEXT NOT NULL,
         password_salt TEXT NOT NULL,
         rimborso_km REAL DEFAULT 0,
@@ -78,6 +79,7 @@ class Migrations {
     addColumn('cognome', 'TEXT');
     addColumn('mezzo', 'TEXT');
     addColumn('targa', 'TEXT');
+    addColumn('email', 'TEXT');
     if (!columns.includes('rimborso_km')) {
       db.exec('ALTER TABLE utenti ADD COLUMN rimborso_km REAL DEFAULT 0');
     }
@@ -98,6 +100,7 @@ class Migrations {
 }
 
 module.exports = new Migrations();
+
 
 
 
