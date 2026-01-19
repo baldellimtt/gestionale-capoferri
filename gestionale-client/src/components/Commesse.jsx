@@ -45,6 +45,8 @@ function Commesse({ clienti }) {
   const [filters, setFilters] = useState({ clienteId: '', stato: '', sottoStato: '', statoPagamenti: '' })
   const [clienteFilterInput, setClienteFilterInput] = useState('')
   const [showClienteFilterAutocomplete, setShowClienteFilterAutocomplete] = useState(false)
+  const [clienteFormInput, setClienteFormInput] = useState('')
+  const [showClienteFormAutocomplete, setShowClienteFormAutocomplete] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [formData, setFormData] = useState(createEmptyForm())
@@ -152,19 +154,33 @@ function Commesse({ clienti }) {
     setEditingId(null)
     setShowForm(false)
     setSelectedCommessaId('')
+    setClienteFormInput('')
+    setShowClienteFormAutocomplete(false)
   }
 
   const handleClienteChange = (value) => {
     if (!value) {
       setFormData((prev) => ({ ...prev, cliente_id: '', cliente_nome: '' }))
+      setClienteFormInput('')
       return
     }
     const selected = clienti.find((cliente) => String(cliente.id) === String(value))
+    const label = selected?.denominazione || ''
     setFormData((prev) => ({
       ...prev,
       cliente_id: selected?.id || '',
-      cliente_nome: selected?.denominazione || ''
+      cliente_nome: label
     }))
+    setClienteFormInput(label)
+  }
+
+  const handleClienteFormInputChange = (value) => {
+    setClienteFormInput(value)
+    if (!value) {
+      setFormData((prev) => ({ ...prev, cliente_id: '', cliente_nome: '' }))
+      return
+    }
+    setFormData((prev) => ({ ...prev, cliente_id: '', cliente_nome: value }))
   }
 
   const handleClienteFilterChange = (value) => {
@@ -267,6 +283,7 @@ function Commesse({ clienti }) {
     setSelectedCommessaId(String(commessa.id))
     setFormData(nextForm)
     setInitialFormData(nextForm)
+    setClienteFormInput(nextForm.cliente_nome || '')
   }
 
   const handleDelete = (commessa) => {
@@ -395,6 +412,13 @@ function Commesse({ clienti }) {
       .filter((cliente) => cliente.denominazione?.toLowerCase().includes(search))
       .slice(0, 10)
   }, [clienteFilterInput, clienti])
+  const filteredClientiForm = useMemo(() => {
+    if (!clienteFormInput) return []
+    const search = clienteFormInput.toLowerCase()
+    return clienti
+      .filter((cliente) => cliente.denominazione?.toLowerCase().includes(search))
+      .slice(0, 10)
+  }, [clienteFormInput, clienti])
 
   const truncate = (value, max = 80) => {
     if (!value) return ''
@@ -431,6 +455,8 @@ function Commesse({ clienti }) {
                 setEditingId(null)
                 setShowForm(true)
                 setSelectedCommessaId('')
+                setClienteFormInput('')
+                setShowClienteFormAutocomplete(false)
               }}
             >
               + Nuova Commessa
@@ -529,16 +555,38 @@ function Commesse({ clienti }) {
               </div>
               <div className="col-md-3">
                 <label className="form-label">Cliente</label>
-                <select
-                  className="form-select"
-                  value={formData.cliente_id}
-                  onChange={(e) => handleClienteChange(e.target.value)}
-                >
-                  <option value="">Seleziona cliente</option>
-                  {clienti.map((cliente) => (
-                    <option key={cliente.id} value={cliente.id}>{cliente.denominazione}</option>
-                  ))}
-                </select>
+                <div className="autocomplete-container">
+                  <input
+                    className="form-control"
+                    value={clienteFormInput}
+                    onChange={(e) => {
+                      handleClienteFormInputChange(e.target.value)
+                      setShowClienteFormAutocomplete(true)
+                    }}
+                    onFocus={() => setShowClienteFormAutocomplete(true)}
+                    onBlur={() => {
+                      setTimeout(() => setShowClienteFormAutocomplete(false), 200)
+                    }}
+                    placeholder="Cerca cliente..."
+                  />
+                  {showClienteFormAutocomplete && filteredClientiForm.length > 0 && (
+                    <div className="autocomplete-list">
+                      {filteredClientiForm.map((cliente) => (
+                        <div
+                          key={cliente.id}
+                          className="autocomplete-item"
+                          onMouseDown={(e) => {
+                            e.preventDefault()
+                            handleClienteChange(cliente.id)
+                            setShowClienteFormAutocomplete(false)
+                          }}
+                        >
+                          {cliente.denominazione}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="col-md-3">
                 <label className="form-label">Stato</label>
