@@ -511,7 +511,7 @@ function Commesse({ clienti }) {
               <option key={stato} value={stato}>{stato}</option>
             ))}
           </select>
-          <label>Sottostato:</label>
+          <label>Fase di lavoro:</label>
           <select
             className="form-select"
             value={filters.sottoStato}
@@ -602,9 +602,9 @@ function Commesse({ clienti }) {
               </div>
               {formData.stato === 'In corso' && (
                 <div className="col-md-3">
-                  <label className="form-label">Sotto-stato</label>
+                  <label className="form-label">Fase di lavoro</label>
                   <select
-                    className={`form-select sottostato-select ${getSottoStatoClass(formData.sotto_stato === 'Personalizzato' ? formData.sotto_stato_custom : formData.sotto_stato)}`}
+                    className={`form-select fase-di-lavoro-select ${getSottoStatoClass(formData.sotto_stato === 'Personalizzato' ? formData.sotto_stato_custom : formData.sotto_stato)}`}
                     value={formData.sotto_stato}
                     onChange={(e) => setFormData((prev) => ({ ...prev, sotto_stato: e.target.value }))}
                   >
@@ -617,12 +617,12 @@ function Commesse({ clienti }) {
               )}
               {formData.stato === 'In corso' && formData.sotto_stato === 'Personalizzato' && (
                 <div className="col-md-6">
-                  <label className="form-label">Sotto-stato personalizzato</label>
+                  <label className="form-label">Fase di lavoro personalizzata</label>
                   <input
                     className="form-control"
                     value={formData.sotto_stato_custom}
                     onChange={(e) => setFormData((prev) => ({ ...prev, sotto_stato_custom: e.target.value }))}
-                    placeholder="Inserisci sottostato"
+                    placeholder="Inserisci fase di lavoro"
                   />
                 </div>
               )}
@@ -631,7 +631,14 @@ function Commesse({ clienti }) {
                 <select
                   className="form-select"
                   value={formData.preventivo ? 'si' : 'no'}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, preventivo: e.target.value === 'si' }))}
+                  onChange={(e) => {
+                    const isPreventivo = e.target.value === 'si'
+                    setFormData((prev) => ({
+                      ...prev,
+                      preventivo: isPreventivo,
+                      importo_preventivo: isPreventivo ? prev.importo_preventivo : ''
+                    }))
+                  }}
                 >
                   <option value="si">Sì</option>
                   <option value="no">No</option>
@@ -645,6 +652,7 @@ function Commesse({ clienti }) {
                   onChange={(e) => setFormData((prev) => ({ ...prev, importo_preventivo: e.target.value }))}
                   inputMode="decimal"
                   placeholder="0.00"
+                  disabled={!formData.preventivo}
                 />
               </div>
               <div className="col-md-3">
@@ -846,7 +854,7 @@ function Commesse({ clienti }) {
                   <th>Commessa</th>
                   <th>Cliente</th>
                   <th>Stato</th>
-                  <th>Sottostato</th>
+                  <th>Fase di lavoro</th>
                   <th>Stato pagamenti</th>
                 </tr>
               </thead>

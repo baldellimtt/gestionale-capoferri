@@ -142,7 +142,7 @@ class CommesseController {
     }
 
     if (stato === 'Chiusa' && sotto_stato) {
-      return 'Sotto-stato non valido per commessa chiusa';
+      return 'Fase di lavoro non valida per commessa chiusa';
     }
 
     const preventivoValue = preventivo ? 1 : 0;
