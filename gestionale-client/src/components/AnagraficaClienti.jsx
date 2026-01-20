@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import api from '../services/api'
+import ContattiList from './ContattiList'
 
 function AnagraficaClienti({ clienti, onUpdateClienti, onBack }) {
   const [showForm, setShowForm] = useState(false)
@@ -105,6 +106,8 @@ function AnagraficaClienti({ clienti, onUpdateClienti, onBack }) {
     })
     setEditingCliente(cliente)
     setShowForm(true)
+    // Scroll to top quando si apre il form
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const handleDelete = async (cliente) => {
@@ -143,7 +146,7 @@ function AnagraficaClienti({ clienti, onUpdateClienti, onBack }) {
   }
 
   return (
-    <div>
+    <div key={`anagrafica-${showForm}`}>
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h2 className="section-title mb-0 no-title-line">Anagrafica Clienti</h2>
         <div className="d-flex gap-2">
@@ -290,69 +293,98 @@ function AnagraficaClienti({ clienti, onUpdateClienti, onBack }) {
         </div>
       )}
 
-      <div className="clienti-list">
-        {filteredClienti.length === 0 ? (
-          <div className="alert alert-info">
-            {searchTerm ? 'Nessun cliente trovato per la ricerca.' : 'Nessun cliente presente. Clicca su "Aggiungi Cliente" per iniziare.'}
+      {showForm && editingCliente && editingCliente.id && (
+        <div className="card mb-4">
+          <div className="card-body">
+            <ContattiList clienteId={editingCliente.id} />
           </div>
-        ) : (
-          filteredClienti.map((cliente) => (
-            <div key={cliente.id} className="cliente-card">
-              <div className="cliente-card-header">
-                <h3>{cliente.denominazione || 'Cliente senza nome'}</h3>
-                <div className="cliente-actions">
-                  <button
-                    className="btn btn-sm btn-secondary"
-                    onClick={() => handleEdit(cliente)}
-                    disabled={loading}
-                  >
-                    Modifica
-                  </button>
-                  <button
-                    className="btn btn-sm btn-danger"
-                    onClick={() => handleDelete(cliente)}
-                    disabled={loading}
-                  >
-                    Elimina
-                  </button>
+        </div>
+      )}
+
+      {!showForm && (
+        <div className="clienti-list">
+          {filteredClienti.length === 0 ? (
+            <div className="alert alert-info">
+              {searchTerm ? 'Nessun cliente trovato per la ricerca.' : 'Nessun cliente presente. Clicca su "Aggiungi Cliente" per iniziare.'}
+            </div>
+          ) : (
+            filteredClienti.map((cliente) => (
+              <div 
+                key={cliente.id} 
+                className="cliente-card"
+                onClick={(e) => {
+                  // Non aprire se si clicca sui pulsanti
+                  if (e.target.closest('.cliente-actions')) return
+                  e.preventDefault()
+                  e.stopPropagation()
+                  handleEdit(cliente)
+                }}
+                style={{ cursor: 'pointer' }}
+              >
+                <div className="cliente-card-header">
+                  <h3>{cliente.denominazione || 'Cliente senza nome'}</h3>
+                  <div className="cliente-actions">
+                    <button
+                      className="btn btn-sm btn-secondary"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        handleEdit(cliente)
+                      }}
+                      disabled={loading}
+                    >
+                      Modifica
+                    </button>
+                    <button
+                      className="btn btn-sm btn-danger"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        handleDelete(cliente)
+                      }}
+                      disabled={loading}
+                    >
+                      Elimina
+                    </button>
+                  </div>
+                </div>
+                <div className="row g-2">
+                  {cliente.paese && (
+                    <div className="col-md-6">
+                      <strong>Paese:</strong> {cliente.paese}
+                    </div>
+                  )}
+                  {(cliente.codice_destinatario_sdi || cliente.codiceDestinatarioSDI) && (
+                    <div className="col-md-6">
+                      <strong>Codice SDI:</strong> {cliente.codice_destinatario_sdi || cliente.codiceDestinatarioSDI}
+                    </div>
+                  )}
+                  {cliente.indirizzo && (
+                    <div className="col-md-12">
+                      <strong>Indirizzo:</strong> {cliente.indirizzo}
+                    </div>
+                  )}
+                  {(cliente.comune || cliente.cap || cliente.provincia) && (
+                    <div className="col-md-12">
+                      <strong>Località:</strong> {[cliente.comune, cliente.cap, cliente.provincia].filter(Boolean).join(' ')}
+                    </div>
+                  )}
+                  {(cliente.partita_iva || cliente.partitaIva) && (
+                    <div className="col-md-6">
+                      <strong>P.IVA:</strong> {cliente.partita_iva || cliente.partitaIva}
+                    </div>
+                  )}
+                  {(cliente.codice_fiscale || cliente.codiceFiscale) && (
+                    <div className="col-md-6">
+                      <strong>CF:</strong> {cliente.codice_fiscale || cliente.codiceFiscale}
+                    </div>
+                  )}
                 </div>
               </div>
-              <div className="row g-2">
-                {cliente.paese && (
-                  <div className="col-md-6">
-                    <strong>Paese:</strong> {cliente.paese}
-                  </div>
-                )}
-                {(cliente.codice_destinatario_sdi || cliente.codiceDestinatarioSDI) && (
-                  <div className="col-md-6">
-                    <strong>Codice SDI:</strong> {cliente.codice_destinatario_sdi || cliente.codiceDestinatarioSDI}
-                  </div>
-                )}
-                {cliente.indirizzo && (
-                  <div className="col-md-12">
-                    <strong>Indirizzo:</strong> {cliente.indirizzo}
-                  </div>
-                )}
-                {(cliente.comune || cliente.cap || cliente.provincia) && (
-                  <div className="col-md-12">
-                    <strong>Località:</strong> {[cliente.comune, cliente.cap, cliente.provincia].filter(Boolean).join(' ')}
-                  </div>
-                )}
-                {(cliente.partita_iva || cliente.partitaIva) && (
-                  <div className="col-md-6">
-                    <strong>P.IVA:</strong> {cliente.partita_iva || cliente.partitaIva}
-                  </div>
-                )}
-                {(cliente.codice_fiscale || cliente.codiceFiscale) && (
-                  <div className="col-md-6">
-                    <strong>CF:</strong> {cliente.codice_fiscale || cliente.codiceFiscale}
-                  </div>
-                )}
-              </div>
-            </div>
-          ))
-        )}
-      </div>
+            ))
+          )}
+        </div>
+      )}
     </div>
   )
 }

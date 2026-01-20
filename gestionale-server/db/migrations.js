@@ -17,6 +17,19 @@ class Migrations {
         updated_at TEXT DEFAULT (datetime('now', 'localtime'))
       );
 
+      -- Tabella Contatti Clienti
+      CREATE TABLE IF NOT EXISTS clienti_contatti (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cliente_id INTEGER NOT NULL,
+        nome TEXT,
+        ruolo TEXT,
+        telefono TEXT,
+        email TEXT,
+        created_at TEXT DEFAULT (datetime('now', 'localtime')),
+        updated_at TEXT DEFAULT (datetime('now', 'localtime')),
+        FOREIGN KEY (cliente_id) REFERENCES clienti(id) ON DELETE CASCADE
+      );
+
       -- Tabella Attività
       CREATE TABLE IF NOT EXISTS attivita (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -35,6 +48,7 @@ class Migrations {
       CREATE INDEX IF NOT EXISTS idx_attivita_data ON attivita(data);
       CREATE INDEX IF NOT EXISTS idx_attivita_cliente_id ON attivita(cliente_id);
       CREATE INDEX IF NOT EXISTS idx_clienti_denominazione ON clienti(denominazione);
+      CREATE INDEX IF NOT EXISTS idx_clienti_contatti_cliente_id ON clienti_contatti(cliente_id);
 
       -- Tabella Utenti
       CREATE TABLE IF NOT EXISTS utenti (
@@ -129,11 +143,25 @@ class Migrations {
 
     this.ensureUserColumns(db);
     this.ensureCommesseColumns(db);
+    this.ensureContattiColumns(db);
     this.ensureDefaultUser(db);
     this.ensureDatiAziendaliInitialized(db);
     this.ensureDatiFiscaliInitialized(db);
 
     console.log('[MIGRATIONS] Schema database creato/verificato');
+  }
+
+  ensureContattiColumns(db) {
+    try {
+      const columns = db.prepare('PRAGMA table_info(clienti_contatti)').all().map((col) => col.name);
+      if (!columns.includes('ruolo')) {
+        db.exec('ALTER TABLE clienti_contatti ADD COLUMN ruolo TEXT');
+        console.log('[MIGRATIONS] Aggiunta colonna ruolo a clienti_contatti');
+      }
+    } catch (error) {
+      // Tabella non esiste ancora, verrà creata con la migrazione principale
+      console.log('[MIGRATIONS] Tabella clienti_contatti non ancora creata');
+    }
   }
 
   ensureUserColumns(db) {

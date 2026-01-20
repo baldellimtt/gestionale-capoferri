@@ -32,7 +32,21 @@ class ClientiController {
         WHERE denominazione LIKE ? OR paese LIKE ? OR comune LIKE ?
            OR partita_iva LIKE ? OR codice_fiscale LIKE ?
         ORDER BY denominazione ASC
-      `)
+      `),
+      // Contatti
+      getContatti: this.db.prepare('SELECT * FROM clienti_contatti WHERE cliente_id = ? ORDER BY nome ASC'),
+      getContattoById: this.db.prepare('SELECT * FROM clienti_contatti WHERE id = ? AND cliente_id = ?'),
+      createContatto: this.db.prepare(`
+        INSERT INTO clienti_contatti (cliente_id, nome, ruolo, telefono, email)
+        VALUES (?, ?, ?, ?, ?)
+      `),
+      updateContatto: this.db.prepare(`
+        UPDATE clienti_contatti SET
+          nome = ?, ruolo = ?, telefono = ?, email = ?,
+          updated_at = datetime('now', 'localtime')
+        WHERE id = ? AND cliente_id = ?
+      `),
+      deleteContatto: this.db.prepare('DELETE FROM clienti_contatti WHERE id = ? AND cliente_id = ?')
     };
   }
 
@@ -64,6 +78,9 @@ class ClientiController {
       if (!cliente) {
         return res.status(404).json({ error: 'Cliente non trovato' });
       }
+
+      const contatti = this.stmt.getContatti.all(id);
+      cliente.contatti = contatti;
 
       Logger.info(`GET /clienti/${id}`);
       res.json(cliente);
@@ -163,6 +180,105 @@ class ClientiController {
       res.status(500).json({ error: error.message });
     }
   }
+
+  // Contatti API
+  getContatti(req, res) {
+    try {
+      const { id } = req.params;
+      const contatti = this.stmt.getContatti.all(id);
+
+      Logger.info(`GET /clienti/${id}/contatti`);
+      res.json(contatti);
+    } catch (error) {
+      Logger.error(`Errore GET /clienti/${req.params.id}/contatti`, error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  createContatto(req, res) {
+    try {
+      const { id } = req.params;
+      const { nome, ruolo, telefono, email } = req.body;
+
+      // Verifica che il cliente esista
+      const cliente = this.stmt.getById.get(id);
+      if (!cliente) {
+        return res.status(404).json({ error: 'Cliente non trovato' });
+      }
+
+      const result = this.stmt.createContatto.run(
+        id,
+        nome || null,
+        ruolo || null,
+        telefono || null,
+        email || null
+      );
+
+      const contatto = this.stmt.getContattoById.get(result.lastInsertRowid, id);
+      Logger.info(`POST /clienti/${id}/contatti`, { contattoId: result.lastInsertRowid });
+      res.status(201).json(contatto);
+    } catch (error) {
+      Logger.error(`Errore POST /clienti/${req.params.id}/contatti`, error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  updateContatto(req, res) {
+    try {
+      const { id, contattoId } = req.params;
+      const { nome, ruolo, telefono, email } = req.body;
+
+      // Verifica che il cliente esista
+      const cliente = this.stmt.getById.get(id);
+      if (!cliente) {
+        return res.status(404).json({ error: 'Cliente non trovato' });
+      }
+
+      // Verifica che il contatto esista
+      const existing = this.stmt.getContattoById.get(contattoId, id);
+      if (!existing) {
+        return res.status(404).json({ error: 'Contatto non trovato' });
+      }
+
+      const result = this.stmt.updateContatto.run(
+        nome || null,
+        ruolo || null,
+        telefono || null,
+        email || null,
+        contattoId,
+        id
+      );
+
+      if (result.changes === 0) {
+        return res.status(404).json({ error: 'Contatto non trovato' });
+      }
+
+      const updated = this.stmt.getContattoById.get(contattoId, id);
+      Logger.info(`PUT /clienti/${id}/contatti/${contattoId}`);
+      res.json(updated);
+    } catch (error) {
+      Logger.error(`Errore PUT /clienti/${req.params.id}/contatti/${req.params.contattoId}`, error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  deleteContatto(req, res) {
+    try {
+      const { id, contattoId } = req.params;
+
+      const result = this.stmt.deleteContatto.run(contattoId, id);
+
+      if (result.changes === 0) {
+        return res.status(404).json({ error: 'Contatto non trovato' });
+      }
+
+      Logger.info(`DELETE /clienti/${id}/contatti/${contattoId}`);
+      res.json({ success: true });
+    } catch (error) {
+      Logger.error(`Errore DELETE /clienti/${req.params.id}/contatti/${req.params.contattoId}`, error);
+      res.status(500).json({ error: error.message });
+    }
+  }
 }
 
 function createRouter(db) {
@@ -173,6 +289,12 @@ function createRouter(db) {
   router.post('/', (req, res) => controller.create(req, res));
   router.put('/:id', (req, res) => controller.update(req, res));
   router.delete('/:id', (req, res) => controller.delete(req, res));
+
+  // Contatti routes
+  router.get('/:id/contatti', (req, res) => controller.getContatti(req, res));
+  router.post('/:id/contatti', (req, res) => controller.createContatto(req, res));
+  router.put('/:id/contatti/:contattoId', (req, res) => controller.updateContatto(req, res));
+  router.delete('/:id/contatti/:contattoId', (req, res) => controller.deleteContatto(req, res));
 
   return router;
 }

@@ -865,7 +865,12 @@ function Commesse({ clienti }) {
                     <tr
                       key={commessa.id}
                       className="commessa-row"
-                      onClick={() => handleEdit(commessa)}
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        handleEdit(commessa)
+                      }}
+                      style={{ cursor: 'pointer' }}
                     >
                       <td>
                         <div className="commessa-title">{commessa.titolo}</div>

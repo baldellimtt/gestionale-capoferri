@@ -248,6 +248,31 @@ class ApiService {
     });
   }
 
+  // Contatti API
+  async getClienteContatti(clienteId) {
+    return this.request(`/clienti/${clienteId}/contatti`);
+  }
+
+  async createClienteContatto(clienteId, contatto) {
+    return this.request(`/clienti/${clienteId}/contatti`, {
+      method: 'POST',
+      body: contatto,
+    });
+  }
+
+  async updateClienteContatto(clienteId, contattoId, contatto) {
+    return this.request(`/clienti/${clienteId}/contatti/${contattoId}`, {
+      method: 'PUT',
+      body: contatto,
+    });
+  }
+
+  async deleteClienteContatto(clienteId, contattoId) {
+    return this.request(`/clienti/${clienteId}/contatti/${contattoId}`, {
+      method: 'DELETE',
+    });
+  }
+
   // Attività API
   async getAttivita(filters = {}) {
     const params = new URLSearchParams();
