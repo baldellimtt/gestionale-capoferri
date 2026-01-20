@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const Logger = require('../utils/logger');
+const { validateRequest } = require('../utils/validationMiddleware');
+const ValidationSchemas = require('../utils/validationSchemas');
 
 class AttivitaController {
   constructor(db) {
@@ -213,12 +215,12 @@ class AttivitaController {
 function createRouter(db) {
   const controller = new AttivitaController(db);
 
-  router.get('/totals', (req, res) => controller.getTotals(req, res));
-  router.get('/:id', (req, res) => controller.getById(req, res));
-  router.get('/', (req, res) => controller.getAll(req, res));
-  router.post('/', (req, res) => controller.create(req, res));
-  router.put('/:id', (req, res) => controller.update(req, res));
-  router.delete('/:id', (req, res) => controller.delete(req, res));
+  router.get('/totals', validateRequest(ValidationSchemas.dateRange), (req, res) => controller.getTotals(req, res));
+  router.get('/:id', validateRequest(ValidationSchemas.id), (req, res) => controller.getById(req, res));
+  router.get('/', validateRequest(ValidationSchemas.dateRange), (req, res) => controller.getAll(req, res));
+  router.post('/', validateRequest(ValidationSchemas.attivita.create), (req, res) => controller.create(req, res));
+  router.put('/:id', validateRequest(ValidationSchemas.attivita.update), (req, res) => controller.update(req, res));
+  router.delete('/:id', validateRequest(ValidationSchemas.id), (req, res) => controller.delete(req, res));
 
   return router;
 }

@@ -1,6 +1,13 @@
 const express = require('express');
 const router = express.Router();
-const Logger = require('../utils/logger');
+const { param } = require('express-validator');
+const Logger = require('../utils/loggerWinston');
+const Validators = require('../utils/validators');
+const ErrorHandler = require('../utils/errorHandler');
+const { validateRequest } = require('../utils/validationMiddleware');
+const ValidationSchemas = require('../utils/validationSchemas');
+const Pagination = require('../utils/pagination');
+const cache = require('../utils/cache');
 
 class ClientiController {
   constructor(db) {
@@ -92,33 +99,60 @@ class ClientiController {
 
   create(req, res) {
     try {
+      // Sanitizza input
+      const body = Validators.sanitizeObject(req.body);
       const {
         denominazione, paese, 
         codiceDestinatarioSDI, codice_destinatario_sdi,
         indirizzo, comune, cap, provincia, 
         partitaIva, partita_iva,
         codiceFiscale, codice_fiscale
-      } = req.body;
+      } = body;
 
-      if (!denominazione) {
-        return res.status(400).json({ error: 'Denominazione obbligatoria' });
+      // Validazione
+      if (!denominazione || denominazione.trim().length === 0) {
+        throw ErrorHandler.createError('Denominazione obbligatoria', 400);
+      }
+
+      if (denominazione.length > 255) {
+        throw ErrorHandler.createError('Denominazione troppo lunga (max 255 caratteri)', 400);
+      }
+
+      // Valida P.IVA se fornita
+      const piva = partitaIva || partita_iva;
+      if (piva && !Validators.isValidPartitaIva(piva)) {
+        throw ErrorHandler.createError('Partita IVA non valida', 400);
+      }
+
+      // Valida Codice Fiscale se fornito
+      const cf = codiceFiscale || codice_fiscale;
+      if (cf && !Validators.isValidCodiceFiscale(cf)) {
+        throw ErrorHandler.createError('Codice Fiscale non valido', 400);
+      }
+
+      // Valida CAP se fornito
+      if (cap && !Validators.isValidCap(cap)) {
+        throw ErrorHandler.createError('CAP non valido (deve essere di 5 cifre)', 400);
       }
 
       const result = this.stmt.create.run(
-        denominazione, 
-        paese || null, 
-        (codiceDestinatarioSDI || codice_destinatario_sdi) || null,
-        indirizzo || null, 
-        comune || null, 
+        Validators.sanitizeString(denominazione), 
+        paese ? Validators.sanitizeString(paese) : null, 
+        (codiceDestinatarioSDI || codice_destinatario_sdi) ? Validators.sanitizeString(codiceDestinatarioSDI || codice_destinatario_sdi) : null,
+        indirizzo ? Validators.sanitizeString(indirizzo) : null, 
+        comune ? Validators.sanitizeString(comune) : null, 
         cap || null,
-        provincia || null, 
-        (partitaIva || partita_iva) || null, 
-        (codiceFiscale || codice_fiscale) || null
+        provincia ? Validators.sanitizeString(provincia) : null, 
+        piva || null, 
+        cf || null
       );
 
       Logger.info('POST /clienti', { id: result.lastInsertRowid });
-      res.status(201).json({ id: result.lastInsertRowid, ...req.body });
+      res.status(201).json({ id: result.lastInsertRowid, ...body });
     } catch (error) {
+      if (error.statusCode) {
+        return res.status(error.statusCode).json({ error: error.message });
+      }
       Logger.error('Errore POST /clienti', error);
       res.status(500).json({ error: error.message });
     }
@@ -198,18 +232,36 @@ class ClientiController {
   createContatto(req, res) {
     try {
       const { id } = req.params;
-      const { nome, ruolo, telefono, email } = req.body;
+      
+      // Valida ID
+      if (!Validators.isValidId(id)) {
+        throw ErrorHandler.createError('ID cliente non valido', 400);
+      }
+
+      // Sanitizza input
+      const body = Validators.sanitizeObject(req.body);
+      const { nome, ruolo, telefono, email } = body;
 
       // Verifica che il cliente esista
       const cliente = this.stmt.getById.get(id);
       if (!cliente) {
-        return res.status(404).json({ error: 'Cliente non trovato' });
+        throw ErrorHandler.createError('Cliente non trovato', 404);
+      }
+
+      // Valida email se fornita
+      if (email && !Validators.isValidEmail(email)) {
+        throw ErrorHandler.createError('Email non valida', 400);
+      }
+
+      // Valida telefono se fornito
+      if (telefono && !Validators.isValidPhone(telefono)) {
+        throw ErrorHandler.createError('Telefono non valido', 400);
       }
 
       const result = this.stmt.createContatto.run(
         id,
-        nome || null,
-        ruolo || null,
+        nome ? Validators.sanitizeString(nome) : null,
+        ruolo ? Validators.sanitizeString(ruolo) : null,
         telefono || null,
         email || null
       );
@@ -218,6 +270,9 @@ class ClientiController {
       Logger.info(`POST /clienti/${id}/contatti`, { contattoId: result.lastInsertRowid });
       res.status(201).json(contatto);
     } catch (error) {
+      if (error.statusCode) {
+        return res.status(error.statusCode).json({ error: error.message });
+      }
       Logger.error(`Errore POST /clienti/${req.params.id}/contatti`, error);
       res.status(500).json({ error: error.message });
     }
@@ -284,17 +339,18 @@ class ClientiController {
 function createRouter(db) {
   const controller = new ClientiController(db);
 
-  router.get('/', (req, res) => controller.getAll(req, res));
-  router.get('/:id', (req, res) => controller.getById(req, res));
-  router.post('/', (req, res) => controller.create(req, res));
-  router.put('/:id', (req, res) => controller.update(req, res));
-  router.delete('/:id', (req, res) => controller.delete(req, res));
+  // Routes con validazione
+  router.get('/', validateRequest(ValidationSchemas.pagination), (req, res) => controller.getAll(req, res));
+  router.get('/:id', validateRequest(ValidationSchemas.id), (req, res) => controller.getById(req, res));
+  router.post('/', validateRequest(ValidationSchemas.cliente.create), (req, res) => controller.create(req, res));
+  router.put('/:id', validateRequest(ValidationSchemas.cliente.update), (req, res) => controller.update(req, res));
+  router.delete('/:id', validateRequest(ValidationSchemas.id), (req, res) => controller.delete(req, res));
 
-  // Contatti routes
-  router.get('/:id/contatti', (req, res) => controller.getContatti(req, res));
-  router.post('/:id/contatti', (req, res) => controller.createContatto(req, res));
-  router.put('/:id/contatti/:contattoId', (req, res) => controller.updateContatto(req, res));
-  router.delete('/:id/contatti/:contattoId', (req, res) => controller.deleteContatto(req, res));
+  // Contatti routes con validazione
+  router.get('/:id/contatti', validateRequest(ValidationSchemas.id), (req, res) => controller.getContatti(req, res));
+  router.post('/:id/contatti', validateRequest(ValidationSchemas.contatto.create), (req, res) => controller.createContatto(req, res));
+  router.put('/:id/contatti/:contattoId', validateRequest(ValidationSchemas.contatto.update), (req, res) => controller.updateContatto(req, res));
+  router.delete('/:id/contatti/:contattoId', validateRequest([...ValidationSchemas.id, param('contattoId').isInt({ min: 1 })]), (req, res) => controller.deleteContatto(req, res));
 
   return router;
 }

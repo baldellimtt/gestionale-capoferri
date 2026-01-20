@@ -139,16 +139,166 @@ class Migrations {
         created_at TEXT DEFAULT (datetime('now', 'localtime')),
         updated_at TEXT DEFAULT (datetime('now', 'localtime'))
       );
+
+      -- Tabella Colonne Kanban
+      CREATE TABLE IF NOT EXISTS kanban_colonne (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome TEXT NOT NULL,
+        ordine INTEGER NOT NULL,
+        colore TEXT,
+        is_default INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now', 'localtime')),
+        updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+      );
+
+      -- Tabella Card Kanban
+      CREATE TABLE IF NOT EXISTS kanban_card (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        commessa_id INTEGER,
+        titolo TEXT NOT NULL,
+        descrizione TEXT,
+        colonna_id INTEGER NOT NULL,
+        priorita TEXT DEFAULT 'media',
+        responsabile_id INTEGER,
+        cliente_id INTEGER,
+        cliente_nome TEXT,
+        ordine INTEGER DEFAULT 0,
+        avanzamento INTEGER DEFAULT 0,
+        data_inizio TEXT,
+        data_fine_prevista TEXT,
+        data_fine_effettiva TEXT,
+        budget REAL DEFAULT 0,
+        tags TEXT,
+        created_by INTEGER,
+        created_at TEXT DEFAULT (datetime('now', 'localtime')),
+        updated_at TEXT DEFAULT (datetime('now', 'localtime')),
+        FOREIGN KEY (commessa_id) REFERENCES commesse(id) ON DELETE SET NULL,
+        FOREIGN KEY (colonna_id) REFERENCES kanban_colonne(id) ON DELETE RESTRICT,
+        FOREIGN KEY (responsabile_id) REFERENCES utenti(id) ON DELETE SET NULL,
+        FOREIGN KEY (cliente_id) REFERENCES clienti(id) ON DELETE SET NULL,
+        FOREIGN KEY (created_by) REFERENCES utenti(id) ON DELETE SET NULL
+      );
+
+      -- Tabella Scadenze Kanban
+      CREATE TABLE IF NOT EXISTS kanban_scadenze (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        card_id INTEGER NOT NULL,
+        titolo TEXT NOT NULL,
+        descrizione TEXT,
+        data_scadenza TEXT NOT NULL,
+        tipo TEXT,
+        priorita TEXT DEFAULT 'media',
+        completata INTEGER DEFAULT 0,
+        data_completamento TEXT,
+        completata_da INTEGER,
+        created_at TEXT DEFAULT (datetime('now', 'localtime')),
+        updated_at TEXT DEFAULT (datetime('now', 'localtime')),
+        FOREIGN KEY (card_id) REFERENCES kanban_card(id) ON DELETE CASCADE,
+        FOREIGN KEY (completata_da) REFERENCES utenti(id) ON DELETE SET NULL
+      );
+
+      -- Tabella Notifiche Kanban
+      CREATE TABLE IF NOT EXISTS kanban_notifiche (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        tipo TEXT NOT NULL,
+        titolo TEXT NOT NULL,
+        messaggio TEXT,
+        card_id INTEGER,
+        scadenza_id INTEGER,
+        letto INTEGER DEFAULT 0,
+        data_lettura TEXT,
+        link TEXT,
+        created_at TEXT DEFAULT (datetime('now', 'localtime')),
+        FOREIGN KEY (user_id) REFERENCES utenti(id) ON DELETE CASCADE,
+        FOREIGN KEY (card_id) REFERENCES kanban_card(id) ON DELETE CASCADE,
+        FOREIGN KEY (scadenza_id) REFERENCES kanban_scadenze(id) ON DELETE CASCADE
+      );
+
+      -- Tabella Commenti Kanban
+      CREATE TABLE IF NOT EXISTS kanban_card_commenti (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        card_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        commento TEXT NOT NULL,
+        created_at TEXT DEFAULT (datetime('now', 'localtime')),
+        updated_at TEXT DEFAULT (datetime('now', 'localtime')),
+        FOREIGN KEY (card_id) REFERENCES kanban_card(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES utenti(id) ON DELETE CASCADE
+      );
+
+      -- Indici per performance Kanban
+      CREATE INDEX IF NOT EXISTS idx_kanban_card_colonna ON kanban_card(colonna_id);
+      CREATE INDEX IF NOT EXISTS idx_kanban_card_commessa ON kanban_card(commessa_id);
+      CREATE INDEX IF NOT EXISTS idx_kanban_card_responsabile ON kanban_card(responsabile_id);
+      CREATE INDEX IF NOT EXISTS idx_kanban_card_cliente ON kanban_card(cliente_id);
+      CREATE INDEX IF NOT EXISTS idx_kanban_scadenze_card ON kanban_scadenze(card_id);
+      CREATE INDEX IF NOT EXISTS idx_kanban_scadenze_data ON kanban_scadenze(data_scadenza);
+      CREATE INDEX IF NOT EXISTS idx_kanban_notifiche_user ON kanban_notifiche(user_id);
+      CREATE INDEX IF NOT EXISTS idx_kanban_notifiche_letto ON kanban_notifiche(letto);
+      CREATE INDEX IF NOT EXISTS idx_kanban_commenti_card ON kanban_card_commenti(card_id);
+      CREATE INDEX IF NOT EXISTS idx_kanban_commenti_user ON kanban_card_commenti(user_id);
     `);
 
     this.ensureUserColumns(db);
     this.ensureCommesseColumns(db);
     this.ensureContattiColumns(db);
+    this.ensureKanbanColumns(db);
+    this.ensureKanbanCommentiTable(db);
     this.ensureDefaultUser(db);
     this.ensureDatiAziendaliInitialized(db);
     this.ensureDatiFiscaliInitialized(db);
 
     console.log('[MIGRATIONS] Schema database creato/verificato');
+  }
+
+  ensureKanbanColumns(db) {
+    try {
+      // Verifica se esistono già colonne
+      const existing = db.prepare('SELECT COUNT(*) as count FROM kanban_colonne').get();
+      if (existing.count === 0) {
+        // Inserisci colonne predefinite
+        const colonne = [
+          { nome: 'In Attesa', ordine: 1, colore: '#94a3b8', is_default: 1 },
+          { nome: 'Progettazione', ordine: 2, colore: '#3b82f6', is_default: 1 },
+          { nome: 'Calcolo Strutturale', ordine: 3, colore: '#8b5cf6', is_default: 1 },
+          { nome: 'Documentazione', ordine: 4, colore: '#06b6d4', is_default: 1 },
+          { nome: 'Pratiche', ordine: 5, colore: '#10b981', is_default: 1 },
+          { nome: 'Approvazione', ordine: 6, colore: '#f59e0b', is_default: 1 },
+          { nome: 'Esecuzione', ordine: 7, colore: '#ef4444', is_default: 1 },
+          { nome: 'Collaudo', ordine: 8, colore: '#ec4899', is_default: 1 },
+          { nome: 'Chiusura', ordine: 9, colore: '#6b7280', is_default: 1 }
+        ];
+
+        const stmt = db.prepare('INSERT INTO kanban_colonne (nome, ordine, colore, is_default) VALUES (?, ?, ?, ?)');
+        colonne.forEach((colonna) => {
+          stmt.run(colonna.nome, colonna.ordine, colonna.colore, colonna.is_default);
+        });
+        console.log('[MIGRATIONS] Colonne Kanban predefinite create');
+      } else {
+        // Aggiorna il nome "Backlog" a "In Attesa" se esiste
+        const backlogColonna = db.prepare('SELECT id FROM kanban_colonne WHERE nome = ?').get('Backlog');
+        if (backlogColonna) {
+          db.prepare('UPDATE kanban_colonne SET nome = ? WHERE id = ?').run('In Attesa', backlogColonna.id);
+          console.log('[MIGRATIONS] Colonna "Backlog" rinominata in "In Attesa"');
+        }
+      }
+    } catch (error) {
+      console.log('[MIGRATIONS] Errore inizializzazione colonne Kanban:', error.message);
+    }
+  }
+
+  ensureKanbanCommentiTable(db) {
+    try {
+      // Verifica se la tabella esiste già
+      const tableInfo = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='kanban_card_commenti'").get();
+      if (!tableInfo) {
+        // La tabella verrà creata dalla migrazione principale
+        console.log('[MIGRATIONS] Tabella kanban_card_commenti verrà creata dalla migrazione principale');
+      }
+    } catch (error) {
+      console.log('[MIGRATIONS] Errore verifica tabella commenti:', error.message);
+    }
   }
 
   ensureContattiColumns(db) {

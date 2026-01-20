@@ -1,6 +1,9 @@
 const express = require('express');
-const Logger = require('../utils/logger');
+const Logger = require('../utils/loggerWinston');
 const { hashPassword } = require('../utils/auth');
+const { defaultPolicy: passwordPolicy } = require('../utils/passwordPolicy');
+const { validateRequest } = require('../utils/validationMiddleware');
+const ValidationSchemas = require('../utils/validationSchemas');
 
 const router = express.Router();
 
@@ -63,6 +66,16 @@ function createRouter(db) {
 
       if (!username || !password) {
         return res.status(400).json({ error: 'Username e password obbligatori' });
+      }
+
+      // Valida password policy
+      const passwordValidation = passwordPolicy.validate(password);
+      if (!passwordValidation.valid) {
+        return res.status(400).json({
+          error: 'Password non valida',
+          details: passwordValidation.errors,
+          suggestions: passwordPolicy.getSuggestions()
+        });
       }
 
       const rateValue = Number(rimborso_km || 0);
@@ -152,6 +165,15 @@ function createRouter(db) {
       }
 
       if (password) {
+        // Valida password policy
+        const passwordValidation = passwordPolicy.validate(password);
+        if (!passwordValidation.valid) {
+          return res.status(400).json({
+            error: 'Password non valida',
+            details: passwordValidation.errors,
+            suggestions: passwordPolicy.getSuggestions()
+          });
+        }
         const { hash, salt } = hashPassword(password);
         updatePasswordStmt.run(hash, salt, id);
       }

@@ -1,6 +1,13 @@
 import React from 'react'
 
-function ConfirmDeleteModal({ show, onClose, onConfirm, loading = false }) {
+function ConfirmDeleteModal({ 
+  show, 
+  onClose, 
+  onConfirm, 
+  loading = false,
+  title = 'Elimina',
+  message = 'Sei sicuro di voler eliminare questo elemento?'
+}) {
   if (!show) return null
 
   return (
@@ -36,7 +43,7 @@ function ConfirmDeleteModal({ show, onClose, onConfirm, loading = false }) {
               fontWeight: 700,
               fontFamily: 'var(--font-display)'
             }}>
-              Elimina rimborso
+              {title}
             </h5>
             <button
               type="button"
@@ -54,7 +61,7 @@ function ConfirmDeleteModal({ show, onClose, onConfirm, loading = false }) {
               fontSize: '1rem',
               fontFamily: 'var(--font-sans)'
             }}>
-              Sei sicuro di voler eliminare questo rimborso?
+              {message}
             </p>
             <div className="alert alert-warning" style={{ 
               backgroundColor: 'rgba(245, 158, 11, 0.1)', 

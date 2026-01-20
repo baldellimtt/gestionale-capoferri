@@ -4,6 +4,10 @@ const fs = require('fs');
 const multer = require('multer');
 const router = express.Router();
 const Logger = require('../utils/logger');
+const fileValidator = require('../utils/fileValidator');
+const ErrorHandler = require('../utils/errorHandler');
+const { validateRequest } = require('../utils/validationMiddleware');
+const ValidationSchemas = require('../utils/validationSchemas');
 
 const STATI_COMMESSA = ['In corso', 'Chiusa'];
 const STATI_PAGAMENTI = ['Non iniziato', 'Parziale', 'Saldo'];
@@ -275,6 +279,7 @@ class CommesseController {
     try {
       const { id } = req.params;
       const payload = req.body || {};
+      // Validazione aggiuntiva per logica business (stato, avanzamento, etc.)
       const validationError = this.validatePayload(payload);
       if (validationError) {
         return res.status(400).json({ error: validationError });
@@ -383,13 +388,29 @@ class CommesseController {
     try {
       const { id } = req.params;
       if (!req.file) {
-        return res.status(400).json({ error: 'File mancante' });
+        throw ErrorHandler.createError('File mancante', 400);
       }
 
-      const filePath = path.relative(path.join(__dirname, '..'), req.file.path).replace(/\\/g, '/');
+      // Valida file
+      const validation = fileValidator.validate(req.file);
+      if (!validation.valid) {
+        throw ErrorHandler.createError(validation.error, 400);
+      }
+
+      // Genera nome file sicuro
+      const safeFileName = fileValidator.generateSafeFileName(req.file.originalname);
+      const oldPath = req.file.path;
+      const newPath = path.join(path.dirname(oldPath), safeFileName);
+      
+      // Rinomina file con nome sicuro
+      if (fs.existsSync(oldPath)) {
+        fs.renameSync(oldPath, newPath);
+      }
+
+      const filePath = path.relative(path.join(__dirname, '..'), newPath).replace(/\\/g, '/');
       const result = this.stmt.createAllegato.run(
         id,
-        req.file.filename,
+        safeFileName,
         req.file.originalname,
         req.file.mimetype,
         req.file.size,
@@ -397,8 +418,21 @@ class CommesseController {
       );
 
       const created = this.stmt.getAllegatoById.get(result.lastInsertRowid);
+      Logger.info(`POST /commesse/${id}/allegati`, { allegatoId: result.lastInsertRowid });
       res.status(201).json(created);
     } catch (error) {
+      // Elimina file se upload fallisce
+      if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+        try {
+          fs.unlinkSync(req.file.path);
+        } catch (e) {
+          Logger.error('Errore eliminazione file dopo upload fallito', e);
+        }
+      }
+
+      if (error.statusCode) {
+        return res.status(error.statusCode).json({ error: error.message });
+      }
       Logger.error('Errore POST /commesse/allegati', error);
       res.status(500).json({ error: error.message });
     }
@@ -429,14 +463,14 @@ class CommesseController {
 function createRouter(db) {
   const controller = new CommesseController(db);
 
-  router.get('/:id/allegati', (req, res) => controller.getAllegati(req, res));
-  router.post('/:id/allegati', upload.single('file'), (req, res) => controller.uploadAllegato(req, res));
-  router.delete('/allegati/:allegatoId', (req, res) => controller.deleteAllegato(req, res));
-  router.get('/:id', (req, res) => controller.getById(req, res));
+  router.get('/:id/allegati', validateRequest(ValidationSchemas.id), (req, res) => controller.getAllegati(req, res));
+  router.post('/:id/allegati', validateRequest(ValidationSchemas.id), upload.single('file'), (req, res) => controller.uploadAllegato(req, res));
+  router.delete('/allegati/:allegatoId', validateRequest(ValidationSchemas.id), (req, res) => controller.deleteAllegato(req, res));
+  router.get('/:id', validateRequest(ValidationSchemas.id), (req, res) => controller.getById(req, res));
   router.get('/', (req, res) => controller.getAll(req, res));
-  router.post('/', (req, res) => controller.create(req, res));
-  router.put('/:id', (req, res) => controller.update(req, res));
-  router.delete('/:id', (req, res) => controller.delete(req, res));
+  router.post('/', validateRequest(ValidationSchemas.commessa.create), (req, res) => controller.create(req, res));
+  router.put('/:id', validateRequest(ValidationSchemas.commessa.update), (req, res) => controller.update(req, res));
+  router.delete('/:id', validateRequest(ValidationSchemas.id), (req, res) => controller.delete(req, res));
 
   return router;
 }

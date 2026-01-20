@@ -1,23 +1,96 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 const TOKEN_STORAGE_KEY = 'gestionale_auth_token';
+const REFRESH_TOKEN_STORAGE_KEY = 'gestionale_refresh_token';
 
 class ApiService {
   constructor() {
     this.baseURL = API_BASE_URL;
     this.token = localStorage.getItem(TOKEN_STORAGE_KEY) || null;
+    this.refreshToken = localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY) || null;
+    this.refreshing = false;
+    this.refreshPromise = null;
+    // Cache per /auth/me per evitare chiamate eccessive
+    this.meCache = {
+      data: null,
+      timestamp: null,
+      ttl: 5 * 60 * 1000 // 5 minuti di cache
+    };
+    this.mePromise = null; // Evita chiamate simultanee duplicate
   }
 
-  setToken(token) {
+  setToken(token, refreshToken = null) {
     this.token = token;
     if (token) {
       localStorage.setItem(TOKEN_STORAGE_KEY, token);
     } else {
       localStorage.removeItem(TOKEN_STORAGE_KEY);
     }
+
+    if (refreshToken) {
+      this.refreshToken = refreshToken;
+      localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, refreshToken);
+    }
   }
 
   getToken() {
     return this.token;
+  }
+
+  getRefreshToken() {
+    return this.refreshToken || localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
+  }
+
+  clearTokens() {
+    this.token = null;
+    this.refreshToken = null;
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
+    localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+    this.clearMeCache();
+  }
+
+  async refreshAccessToken() {
+    // Evita multiple chiamate simultanee di refresh
+    if (this.refreshing && this.refreshPromise) {
+      return this.refreshPromise;
+    }
+
+    const refreshToken = this.getRefreshToken();
+    if (!refreshToken) {
+      throw new Error('Nessun refresh token disponibile');
+    }
+
+    this.refreshing = true;
+    this.refreshPromise = fetch(`${this.baseURL}/auth/refresh`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ refreshToken }),
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          const error = new Error(data.error || 'Refresh token fallito');
+          if (data.details) {
+            error.details = data.details;
+          }
+          throw error;
+        }
+        return response.json();
+      })
+      .then((data) => {
+        if (data.token) {
+          this.setToken(data.token);
+          return data.token;
+        }
+        throw new Error('Token non ricevuto dal server');
+      })
+      .finally(() => {
+        this.refreshing = false;
+        this.refreshPromise = null;
+      });
+
+    return this.refreshPromise;
   }
 
   async request(endpoint, options = {}) {
@@ -56,13 +129,75 @@ class ApiService {
         }
       }
 
+      // Se il token è scaduto (401), prova a fare refresh
+      if (response.status === 401 && this.getRefreshToken() && !endpoint.includes('/auth/')) {
+        try {
+          const newToken = await this.refreshAccessToken();
+          // Riprova la richiesta con il nuovo token
+          config.headers.Authorization = `Bearer ${newToken}`;
+          const retryResponse = await fetch(url, config);
+          
+          if (!retryResponse.ok) {
+            // Se anche il refresh fallisce, pulisci i token
+            if (retryResponse.status === 401) {
+              this.clearTokens();
+              throw new Error('Sessione scaduta. Effettua nuovamente l\'accesso.');
+            }
+            const retryData = await retryResponse.json().catch(() => ({}));
+            
+            // Gestione speciale per errori 429
+            if (retryResponse.status === 429) {
+              const retryAfter = retryData.retryAfter || 60;
+              const error = new Error(retryData.error || 'Troppe richieste, riprova più tardi');
+              error.status = 429;
+              error.retryAfter = retryAfter;
+              throw error;
+            }
+            
+            const error = new Error(retryData.error || `HTTP error! status: ${retryResponse.status}`);
+            error.status = retryResponse.status;
+            if (retryData.details) {
+              error.details = retryData.details;
+            }
+            throw error;
+          }
+
+          // Parse della risposta di retry
+          const retryContentType = retryResponse.headers.get('content-type');
+          if (retryContentType && retryContentType.includes('application/json')) {
+            const retryText = await retryResponse.text();
+            if (retryText) {
+              try {
+                data = JSON.parse(retryText);
+              } catch (e) {
+                data = {};
+              }
+            }
+          }
+
+          if (options.method === 'DELETE' && Object.keys(data).length === 0) {
+            return { success: true };
+          }
+
+          return data;
+        } catch (refreshError) {
+          // Se il refresh fallisce, pulisci i token e rilancia l'errore
+          this.clearTokens();
+          throw refreshError;
+        }
+      }
+
       if (!response.ok) {
         const error = new Error(data.error || `HTTP error! status: ${response.status}`);
         error.status = response.status;
+        // Passa anche i dettagli di validazione se presenti
+        if (data.details) {
+          error.details = data.details;
+        }
         throw error;
       }
 
-      // Per DELETE, se non c'? data, restituisci success: true
+      // Per DELETE, se non c'è data, restituisci success: true
       if (options.method === 'DELETE' && Object.keys(data).length === 0) {
         return { success: true };
       }
@@ -103,6 +238,10 @@ class ApiService {
       if (!response.ok) {
         const error = new Error(data.error || `HTTP error! status: ${response.status}`);
         error.status = response.status;
+        // Passa anche i dettagli di validazione se presenti
+        if (data.details) {
+          error.details = data.details;
+        }
         throw error;
       }
 
@@ -120,8 +259,9 @@ class ApiService {
       body: credentials,
     });
 
+    // Salva sia access token che refresh token
     if (data.token) {
-      this.setToken(data.token);
+      this.setToken(data.token, data.refreshToken);
     }
 
     return data;
@@ -135,15 +275,55 @@ class ApiService {
     }
   }
 
-  async me() {
-    return this.request('/auth/me');
+  async me(forceRefresh = false) {
+    // Usa cache se disponibile e non è scaduta
+    const now = Date.now();
+    if (!forceRefresh && this.meCache.data && this.meCache.timestamp && 
+        (now - this.meCache.timestamp) < this.meCache.ttl) {
+      return Promise.resolve(this.meCache.data);
+    }
+
+    // Se c'è già una chiamata in corso, aspetta quella
+    if (this.mePromise) {
+      return this.mePromise;
+    }
+
+    // Fai la chiamata e salva in cache
+    this.mePromise = this.request('/auth/me')
+      .then(data => {
+        this.meCache.data = data;
+        this.meCache.timestamp = now;
+        this.mePromise = null;
+        return data;
+      })
+      .catch(err => {
+        this.mePromise = null;
+        // Se errore 401, pulisci cache
+        if (err.status === 401) {
+          this.meCache.data = null;
+          this.meCache.timestamp = null;
+        }
+        throw err;
+      });
+
+    return this.mePromise;
+  }
+
+  clearMeCache() {
+    this.meCache.data = null;
+    this.meCache.timestamp = null;
   }
 
   async updateMe(payload) {
-    return this.request('/auth/me', {
+    const result = await this.request('/auth/me', {
       method: 'PUT',
       body: payload,
     });
+    // Aggiorna cache dopo update
+    if (this.meCache.data) {
+      this.meCache.data = { ...this.meCache.data, ...result };
+    }
+    return result;
   }
 
   // Utenti API (admin)
@@ -336,6 +516,159 @@ class ApiService {
     return this.request('/impostazioni/dati-fiscali', {
       method: 'PUT',
       body: payload,
+    });
+  }
+
+  // Kanban API
+  // Colonne
+  async getKanbanColonne() {
+    return this.request('/kanban/colonne');
+  }
+
+  async createKanbanColonna(colonna) {
+    return this.request('/kanban/colonne', {
+      method: 'POST',
+      body: colonna,
+    });
+  }
+
+  async updateKanbanColonna(id, colonna) {
+    return this.request(`/kanban/colonne/${id}`, {
+      method: 'PUT',
+      body: colonna,
+    });
+  }
+
+  async deleteKanbanColonna(id) {
+    return this.request(`/kanban/colonne/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Card
+  async getKanbanCard(filters = {}) {
+    const params = new URLSearchParams();
+    if (filters.colonna_id) params.append('colonna_id', filters.colonna_id);
+    if (filters.cliente_id) params.append('cliente_id', filters.cliente_id);
+    if (filters.responsabile_id) params.append('responsabile_id', filters.responsabile_id);
+    if (filters.priorita) params.append('priorita', filters.priorita);
+    if (filters.ricerca) params.append('ricerca', filters.ricerca);
+    if (filters.data_inizio_da) params.append('data_inizio_da', filters.data_inizio_da);
+    if (filters.data_inizio_a) params.append('data_inizio_a', filters.data_inizio_a);
+    if (filters.data_fine_da) params.append('data_fine_da', filters.data_fine_da);
+    if (filters.data_fine_a) params.append('data_fine_a', filters.data_fine_a);
+    if (filters.tags) params.append('tags', filters.tags);
+    const query = params.toString();
+    const endpoint = query ? `/kanban/card?${query}` : '/kanban/card';
+    return this.request(endpoint);
+  }
+
+  async getKanbanCardById(id) {
+    return this.request(`/kanban/card/${id}`);
+  }
+
+  async createKanbanCard(card) {
+    return this.request('/kanban/card', {
+      method: 'POST',
+      body: card,
+    });
+  }
+
+  async updateKanbanCard(id, card) {
+    return this.request(`/kanban/card/${id}`, {
+      method: 'PUT',
+      body: card,
+    });
+  }
+
+  async moveKanbanCard(id, colonna_id, ordine) {
+    return this.request(`/kanban/card/${id}/move`, {
+      method: 'PUT',
+      body: { colonna_id, ordine },
+    });
+  }
+
+  async deleteKanbanCard(id) {
+    return this.request(`/kanban/card/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Scadenze
+  async getKanbanScadenze(cardId) {
+    return this.request(`/kanban/card/${cardId}/scadenze`);
+  }
+
+  async createKanbanScadenza(cardId, scadenza) {
+    return this.request(`/kanban/card/${cardId}/scadenze`, {
+      method: 'POST',
+      body: scadenza,
+    });
+  }
+
+  async updateKanbanScadenza(id, scadenza) {
+    return this.request(`/kanban/scadenze/${id}`, {
+      method: 'PUT',
+      body: scadenza,
+    });
+  }
+
+  async completeKanbanScadenza(id) {
+    return this.request(`/kanban/scadenze/${id}/complete`, {
+      method: 'PUT',
+    });
+  }
+
+  async deleteKanbanScadenza(id) {
+    return this.request(`/kanban/scadenze/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Notifiche
+  async getKanbanNotifiche(unread = false) {
+    const endpoint = unread ? '/kanban/notifiche?unread=true' : '/kanban/notifiche';
+    return this.request(endpoint);
+  }
+
+  async getKanbanUnreadCount() {
+    return this.request('/kanban/notifiche/unread-count');
+  }
+
+  async markKanbanNotificaAsRead(id) {
+    return this.request(`/kanban/notifiche/${id}/read`, {
+      method: 'PUT',
+    });
+  }
+
+  async markAllKanbanNotificheAsRead() {
+    return this.request('/kanban/notifiche/read-all', {
+      method: 'PUT',
+    });
+  }
+
+  // Commenti
+  async getKanbanCommenti(cardId) {
+    return this.request(`/kanban/card/${cardId}/commenti`);
+  }
+
+  async createKanbanCommento(cardId, commento) {
+    return this.request(`/kanban/card/${cardId}/commenti`, {
+      method: 'POST',
+      body: { commento },
+    });
+  }
+
+  async updateKanbanCommento(id, commento) {
+    return this.request(`/kanban/commenti/${id}`, {
+      method: 'PUT',
+      body: { commento },
+    });
+  }
+
+  async deleteKanbanCommento(id) {
+    return this.request(`/kanban/commenti/${id}`, {
+      method: 'DELETE',
     });
   }
 }

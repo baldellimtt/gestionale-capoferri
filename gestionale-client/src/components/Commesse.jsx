@@ -241,12 +241,12 @@ function Commesse({ clienti }) {
       setSaving(true)
       setError(null)
       if (editingId) {
-        const updated = await api.updateCommessa(editingId, payload)
-        setCommesse((prev) => prev.map((item) => (item.id === editingId ? updated : item)))
+        await api.updateCommessa(editingId, payload)
       } else {
-        const created = await api.createCommessa(payload)
-        setCommesse((prev) => [created, ...prev])
+        await api.createCommessa(payload)
       }
+      // Ricarica i dati dal server per assicurarsi che tutto sia aggiornato
+      await loadCommesse(filters)
       resetForm()
     } catch (err) {
       console.error('Errore salvataggio commessa:', err)

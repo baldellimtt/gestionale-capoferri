@@ -1,7 +1,11 @@
 const express = require('express');
-const Logger = require('../utils/logger');
+const Logger = require('../utils/loggerWinston');
 const authMiddleware = require('../utils/authMiddleware');
 const { verifyPassword, generateToken, buildSessionExpiry } = require('../utils/auth');
+const { generateAccessToken, generateRefreshToken, verifyRefreshToken, isJWT } = require('../utils/jwt');
+const { defaultPolicy: passwordPolicy } = require('../utils/passwordPolicy');
+const { validateRequest } = require('../utils/validationMiddleware');
+const ValidationSchemas = require('../utils/validationSchemas');
 
 const router = express.Router();
 
@@ -18,13 +22,10 @@ function createRouter(db) {
     WHERE id = ?
   `);
 
-  router.post('/login', (req, res) => {
+  // Login con JWT (backward compatible con token custom)
+  router.post('/login', validateRequest(ValidationSchemas.login), (req, res) => {
     try {
-      const { username, password } = req.body || {};
-
-      if (!username || !password) {
-        return res.status(400).json({ error: 'Username e password obbligatorie' });
-      }
+      const { username, password } = req.body;
 
       const user = getUserStmt.get(username);
       if (!user) {
@@ -36,13 +37,27 @@ function createRouter(db) {
         return res.status(401).json({ error: 'Credenziali non valide' });
       }
 
-      const token = generateToken();
+      // Genera JWT tokens
+      const accessToken = generateAccessToken({
+        id: user.id,
+        username: user.username,
+        role: user.role
+      });
+      const refreshToken = generateRefreshToken({
+        id: user.id,
+        username: user.username
+      });
+
+      // Salva refresh token in sessione (backward compatibility)
+      const customToken = generateToken(); // Token custom per compatibilità
       const expiresAt = buildSessionExpiry();
-      createSessionStmt.run(user.id, token, expiresAt);
+      createSessionStmt.run(user.id, customToken, expiresAt);
 
       Logger.info('Login effettuato', { username: user.username, role: user.role });
       return res.json({
-        token,
+        token: accessToken, // JWT access token
+        refreshToken, // JWT refresh token
+        customToken, // Token custom per backward compatibility
         expiresAt,
         user: {
           id: user.id,
@@ -59,6 +74,39 @@ function createRouter(db) {
     } catch (error) {
       Logger.error('Errore POST /auth/login', error);
       return res.status(500).json({ error: 'Errore interno del server' });
+    }
+  });
+
+  // Refresh token endpoint
+  router.post('/refresh', (req, res) => {
+    try {
+      const { refreshToken } = req.body;
+      if (!refreshToken) {
+        return res.status(400).json({ error: 'Refresh token obbligatorio' });
+      }
+
+      const decoded = verifyRefreshToken(refreshToken);
+      
+      // Verifica che l'utente esista ancora
+      const user = getUserStmt.get(decoded.username);
+      if (!user) {
+        return res.status(401).json({ error: 'Utente non trovato' });
+      }
+
+      // Genera nuovo access token
+      const accessToken = generateAccessToken({
+        id: user.id,
+        username: user.username,
+        role: user.role
+      });
+
+      Logger.info('Token refresh', { username: user.username });
+      return res.json({
+        token: accessToken
+      });
+    } catch (error) {
+      Logger.error('Errore POST /auth/refresh', error);
+      return res.status(401).json({ error: 'Refresh token non valido' });
     }
   });
 

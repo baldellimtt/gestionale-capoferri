@@ -1,0 +1,1027 @@
+import { useState, useEffect, useRef } from 'react'
+import api from '../services/api'
+import KanbanComments from './KanbanComments'
+
+function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, onSave, onDelete, onClose, onRefresh }) {
+  const [formData, setFormData] = useState({
+    titolo: '',
+    descrizione: '',
+    colonna_id: '',
+    priorita: 'media',
+    cliente_id: '',
+    cliente_nome: '',
+    commessa_id: '',
+    data_inizio: '',
+    data_fine_prevista: '',
+    tags: []
+  })
+  const [scadenze, setScadenze] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const [showScadenzaForm, setShowScadenzaForm] = useState(false)
+  const [clienteSearch, setClienteSearch] = useState('')
+  const [showAutocomplete, setShowAutocomplete] = useState(false)
+  const [portalAutocomplete, setPortalAutocomplete] = useState(null)
+  const autocompleteRef = useRef(null)
+  const [commessaSearch, setCommessaSearch] = useState('')
+  const [showCommessaAutocomplete, setShowCommessaAutocomplete] = useState(false)
+  const [portalCommessaAutocomplete, setPortalCommessaAutocomplete] = useState(null)
+  const commessaAutocompleteRef = useRef(null)
+  const [scadenzaForm, setScadenzaForm] = useState({
+    titolo: '',
+    descrizione: '',
+    data_scadenza: '',
+    tipo: '',
+    priorita: 'media'
+  })
+
+  useEffect(() => {
+    if (card) {
+      setFormData({
+        titolo: card.titolo || '',
+        descrizione: card.descrizione || '',
+    colonna_id: card.colonna_id || '',
+    priorita: card.priorita || 'media',
+    cliente_id: card.cliente_id || '',
+        cliente_nome: card.cliente_nome || '',
+        commessa_id: card.commessa_id || '',
+        data_inizio: card.data_inizio || '',
+        data_fine_prevista: card.data_fine_prevista || '',
+        tags: card.tags ? (typeof card.tags === 'string' ? JSON.parse(card.tags) : card.tags) : []
+      })
+      setClienteSearch(card.cliente_nome || '')
+      // Imposta commessa search se esiste commessa_id
+      if (card.commessa_id) {
+        const commessa = commesse.find(c => c.id === card.commessa_id)
+        setCommessaSearch(commessa?.titolo || '')
+      } else {
+        setCommessaSearch('')
+      }
+      loadScadenze()
+    } else {
+      // Nuova card - imposta colonna predefinita (In Attesa)
+      const backlogColonna = colonne.find(c => c.nome === 'In Attesa')
+      setFormData({
+        titolo: '',
+        descrizione: '',
+        colonna_id: backlogColonna?.id || '',
+        priorita: 'media',
+        cliente_id: '',
+        cliente_nome: '',
+        commessa_id: '',
+        data_inizio: '',
+        data_fine_prevista: '',
+        tags: []
+      })
+      setClienteSearch('')
+      setCommessaSearch('')
+      setScadenze([])
+    }
+  }, [card, colonne])
+
+  // Gestione click outside per autocompletamento
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (!e.target.closest('.autocomplete-container') && !e.target.closest('.autocomplete-portal')) {
+        setShowAutocomplete(false)
+        setPortalAutocomplete(null)
+        setShowCommessaAutocomplete(false)
+        setPortalCommessaAutocomplete(null)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  // Reposizionamento portal autocompletamento cliente
+  useEffect(() => {
+    if (!portalAutocomplete?.anchorEl) return
+
+    const repositionPortal = () => {
+      setPortalAutocomplete((prev) => {
+        if (!prev?.anchorEl) return prev
+        const rect = prev.anchorEl.getBoundingClientRect()
+        return {
+          ...prev,
+          top: rect.bottom + 6,
+          left: rect.left,
+          width: rect.width
+        }
+      })
+    }
+
+    window.addEventListener('scroll', repositionPortal, true)
+    window.addEventListener('resize', repositionPortal)
+    return () => {
+      window.removeEventListener('scroll', repositionPortal, true)
+      window.removeEventListener('resize', repositionPortal)
+    }
+  }, [portalAutocomplete])
+
+  // Reposizionamento portal autocompletamento commessa
+  useEffect(() => {
+    if (!portalCommessaAutocomplete?.anchorEl) return
+
+    const repositionPortal = () => {
+      setPortalCommessaAutocomplete((prev) => {
+        if (!prev?.anchorEl) return prev
+        const rect = prev.anchorEl.getBoundingClientRect()
+        return {
+          ...prev,
+          top: rect.bottom + 6,
+          left: rect.left,
+          width: rect.width
+        }
+      })
+    }
+
+    window.addEventListener('scroll', repositionPortal, true)
+    window.addEventListener('resize', repositionPortal)
+    return () => {
+      window.removeEventListener('scroll', repositionPortal, true)
+      window.removeEventListener('resize', repositionPortal)
+    }
+  }, [portalCommessaAutocomplete])
+
+  // Filtra clienti per autocompletamento
+  const getFilteredClienti = (searchTerm) => {
+    if (!searchTerm || searchTerm.trim() === '') {
+      return clienti.slice(0, 10)
+    }
+    return clienti
+      .filter((cliente) => cliente.denominazione?.toLowerCase().includes(searchTerm.toLowerCase()))
+      .slice(0, 10)
+  }
+
+  // Apri portal autocompletamento
+  const openAutocompletePortal = (value, target) => {
+    if (!target) return
+    const items = getFilteredClienti(value)
+    if (items.length === 0 && value.trim() !== '') {
+      setPortalAutocomplete(null)
+      return
+    }
+    const rect = target.getBoundingClientRect()
+    setPortalAutocomplete({
+      items,
+      top: rect.bottom + 6,
+      left: rect.left,
+      width: rect.width,
+      anchorEl: target
+    })
+  }
+
+  // Gestisci selezione cliente
+  const handleClienteSelect = (cliente) => {
+    setFormData(prev => ({
+      ...prev,
+      cliente_id: cliente.id,
+      cliente_nome: cliente.denominazione
+    }))
+    setClienteSearch(cliente.denominazione)
+    setShowAutocomplete(false)
+    setPortalAutocomplete(null)
+  }
+
+  // Filtra commesse per autocompletamento
+  const getFilteredCommesse = (searchTerm) => {
+    if (!searchTerm || searchTerm.trim() === '') {
+      return commesse.slice(0, 10)
+    }
+    return commesse
+      .filter((commessa) => 
+        commessa.titolo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        commessa.cliente_nome?.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+      .slice(0, 10)
+  }
+
+  // Apri portal autocompletamento commessa
+  const openCommessaAutocompletePortal = (value, target) => {
+    if (!target) return
+    const items = getFilteredCommesse(value)
+    if (items.length === 0 && value.trim() !== '') {
+      setPortalCommessaAutocomplete(null)
+      return
+    }
+    const rect = target.getBoundingClientRect()
+    setPortalCommessaAutocomplete({
+      items,
+      top: rect.bottom + 6,
+      left: rect.left,
+      width: rect.width,
+      anchorEl: target
+    })
+  }
+
+  // Gestisci selezione commessa
+  const handleCommessaSelect = (commessa) => {
+    setFormData(prev => ({
+      ...prev,
+      commessa_id: commessa.id
+    }))
+    setCommessaSearch(commessa.titolo)
+    setShowCommessaAutocomplete(false)
+    setPortalCommessaAutocomplete(null)
+  }
+
+  const loadScadenze = async () => {
+    if (!card?.id) return
+    try {
+      const data = await api.getKanbanScadenze(card.id)
+      setScadenze(data)
+    } catch (err) {
+      console.error('Errore caricamento scadenze:', err)
+    }
+  }
+
+  const handleSubmit = async (e) => {
+    if (e && e.preventDefault) {
+      e.preventDefault()
+      e.stopPropagation()
+    }
+    
+    if (!formData.titolo || !formData.titolo.trim()) {
+      setError('Titolo obbligatorio')
+      return
+    }
+    if (!formData.colonna_id) {
+      setError('Colonna obbligatoria')
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+
+    try {
+      // Prepara i dati assicurandosi che i campi numerici siano corretti
+      const cardData = {
+        ...formData,
+        tags: formData.tags && formData.tags.length > 0 ? formData.tags : null,
+        // Assicurati che commessa_id e cliente_id siano numeri o null
+        commessa_id: (() => {
+          if (!formData.commessa_id || formData.commessa_id === '' || formData.commessa_id === 0) return null;
+          const num = typeof formData.commessa_id === 'number' ? formData.commessa_id : parseInt(formData.commessa_id, 10);
+          return !isNaN(num) && num >= 1 ? num : null;
+        })(),
+        cliente_id: (() => {
+          if (!formData.cliente_id || formData.cliente_id === '' || formData.cliente_id === 0) return null;
+          const num = typeof formData.cliente_id === 'number' ? formData.cliente_id : parseInt(formData.cliente_id, 10);
+          return !isNaN(num) && num >= 1 ? num : null;
+        })()
+      }
+
+      console.log('Salvataggio card con dati:', cardData)
+
+      if (card?.id) {
+        await onSave({ ...cardData, id: card.id })
+        // Chiudi la modal dopo il salvataggio riuscito
+        onClose()
+      } else {
+        const created = await api.createKanbanCard(cardData)
+        await onRefresh()
+        onClose()
+      }
+    } catch (err) {
+      console.error('Errore salvataggio card:', err)
+      // Gestione errori più dettagliata
+      if (err.status === 400) {
+        let errorMsg = err.message || 'Errore di validazione. Verifica i dati inseriti.'
+        if (err.details && Array.isArray(err.details)) {
+          errorMsg = err.details.map(d => d.message || `${d.field}: ${d.message}`).join('. ')
+        }
+        setError(errorMsg)
+      } else if (err.status === 401) {
+        setError('Sessione scaduta. Ricarica la pagina e riprova.')
+      } else {
+        setError('Errore nel salvataggio: ' + (err.message || 'Errore sconosciuto'))
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleScadenzaSubmit = async (e) => {
+    e.preventDefault()
+    e.stopPropagation() // Ferma la propagazione al form principale
+    
+    // Validazione client-side completa
+    const errors = []
+    
+    if (!scadenzaForm.titolo || !scadenzaForm.titolo.trim()) {
+      errors.push('Il titolo è obbligatorio')
+    } else if (scadenzaForm.titolo.trim().length > 255) {
+      errors.push('Il titolo è troppo lungo (max 255 caratteri)')
+    }
+    
+    if (!scadenzaForm.data_scadenza) {
+      errors.push('La data scadenza è obbligatoria')
+    } else {
+      // Valida formato data
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/
+      if (!dateRegex.test(scadenzaForm.data_scadenza)) {
+        errors.push('Formato data non valido (atteso: YYYY-MM-DD)')
+      } else {
+        // Verifica che la data sia valida
+        const date = new Date(scadenzaForm.data_scadenza)
+        if (isNaN(date.getTime())) {
+          errors.push('Data non valida')
+        }
+      }
+    }
+    
+    if (scadenzaForm.descrizione && scadenzaForm.descrizione.length > 1000) {
+      errors.push('La descrizione è troppo lunga (max 1000 caratteri)')
+    }
+    
+    if (scadenzaForm.tipo && scadenzaForm.tipo.length > 50) {
+      errors.push('Il tipo è troppo lungo (max 50 caratteri)')
+    }
+    
+    if (scadenzaForm.priorita && !['bassa', 'media', 'alta', 'urgente'].includes(scadenzaForm.priorita)) {
+      errors.push('Priorità non valida')
+    }
+    
+    if (errors.length > 0) {
+      setError(errors.join('. '))
+      return
+    }
+
+    if (!card?.id) {
+      setError('Salva prima la card per aggiungere scadenze')
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+
+    try {
+      // Prepara i dati assicurandosi che siano nel formato corretto
+      const scadenzaData = {
+        titolo: scadenzaForm.titolo.trim(),
+        data_scadenza: scadenzaForm.data_scadenza, // Formato YYYY-MM-DD (ISO8601 date)
+        priorita: scadenzaForm.priorita || 'media'
+      }
+      
+      // Aggiungi campi opzionali solo se hanno un valore
+      if (scadenzaForm.descrizione && scadenzaForm.descrizione.trim()) {
+        scadenzaData.descrizione = scadenzaForm.descrizione.trim()
+      }
+      
+      if (scadenzaForm.tipo && scadenzaForm.tipo.trim()) {
+        scadenzaData.tipo = scadenzaForm.tipo.trim()
+      }
+      
+      const created = await api.createKanbanScadenza(card.id, scadenzaData)
+      console.log('Scadenza creata con successo:', created)
+      
+      // Ricarica scadenze prima di chiudere il form
+      await loadScadenze()
+      
+      // Reset form
+      setScadenzaForm({
+        titolo: '',
+        descrizione: '',
+        data_scadenza: '',
+        tipo: '',
+        priorita: 'media'
+      })
+      setShowScadenzaForm(false)
+      setError(null) // Pulisci eventuali errori precedenti
+    } catch (err) {
+      console.error('Errore creazione scadenza:', err)
+      // Gestione errori più dettagliata
+      if (err.status === 400) {
+        // Errore di validazione - mostra dettagli se disponibili
+        let errorMsg = err.message || 'Errore di validazione. Verifica i dati inseriti.'
+        // Se ci sono dettagli di validazione, usali
+        if (err.details && Array.isArray(err.details)) {
+          errorMsg = err.details.map(d => d.message || `${d.field}: ${d.message}`).join('. ')
+        }
+        setError(errorMsg)
+      } else if (err.status === 401) {
+        // Errore di autenticazione - non dovrebbe succedere se il token è valido
+        // NON reindirizzare automaticamente, mostra solo errore
+        setError('Sessione scaduta. Ricarica la pagina e riprova.')
+      } else {
+        setError('Errore nella creazione della scadenza: ' + (err.message || 'Errore sconosciuto'))
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCompleteScadenza = async (scadenzaId) => {
+    try {
+      await api.completeKanbanScadenza(scadenzaId)
+      await loadScadenze()
+    } catch (err) {
+      console.error('Errore completamento scadenza:', err)
+      setError('Errore nel completamento della scadenza')
+    }
+  }
+
+  const handleDeleteScadenza = async (scadenzaId) => {
+    if (!window.confirm('Sei sicuro di voler eliminare questa scadenza?')) {
+      return
+    }
+    try {
+      await api.deleteKanbanScadenza(scadenzaId)
+      await loadScadenze()
+    } catch (err) {
+      console.error('Errore eliminazione scadenza:', err)
+      setError('Errore nell\'eliminazione della scadenza')
+    }
+  }
+
+  return (
+    <div
+      className="modal"
+      style={{
+        display: 'block',
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'rgba(11, 18, 32, 0.6)',
+        backdropFilter: 'blur(4px)',
+        WebkitBackdropFilter: 'blur(4px)',
+        zIndex: 1050,
+        overflow: 'auto',
+        animation: 'fadeIn 0.2s ease-out'
+      }}
+    >
+      <div
+        className="modal-dialog modal-lg"
+        style={{
+          margin: '2rem auto',
+          maxWidth: '800px',
+          animation: 'slideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div 
+          className="modal-content"
+          style={{
+            borderRadius: 'var(--radius-md)',
+            border: '1px solid var(--border-soft)',
+            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.1)',
+            background: 'var(--bg-1)',
+            overflow: 'hidden'
+          }}
+        >
+          <div 
+            className="modal-header"
+            style={{
+              background: 'linear-gradient(135deg, var(--bg-2) 0%, var(--bg-1) 100%)',
+              borderBottom: '1px solid var(--border-soft)',
+              padding: '1.25rem 1.5rem'
+            }}
+          >
+            <h5 
+              className="modal-title"
+              style={{
+                margin: 0,
+                fontWeight: 700,
+                fontSize: '1.25rem',
+                color: 'var(--ink-800)'
+              }}
+            >
+              {card ? 'Modifica Card' : 'Nuova Card'}
+            </h5>
+            <button
+              type="button"
+              className="btn-close"
+              onClick={onClose}
+              aria-label="Close"
+              style={{
+                transition: 'all 0.2s ease',
+                opacity: 0.6
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.opacity = '1'
+                e.currentTarget.style.transform = 'rotate(90deg)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.opacity = '0.6'
+                e.currentTarget.style.transform = 'rotate(0deg)'
+              }}
+            />
+          </div>
+          <div className="modal-body">
+            {error && (
+              <div className="alert alert-warning mb-3">
+                {error}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} noValidate>
+              <div className="row g-3">
+                <div className="col-md-8">
+                  <label className="form-label">Titolo *</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={formData.titolo}
+                    onChange={(e) => setFormData({ ...formData, titolo: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="col-md-4">
+                  <label className="form-label">Colonna *</label>
+                  <select
+                    className="form-select"
+                    value={formData.colonna_id}
+                    onChange={(e) => setFormData({ ...formData, colonna_id: e.target.value })}
+                    required
+                  >
+                    <option value="">Seleziona colonna</option>
+                    {colonne.map((col) => (
+                      <option key={col.id} value={col.id}>
+                        {col.nome}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="col-md-12">
+                  <label className="form-label">Descrizione</label>
+                  <textarea
+                    className="form-control"
+                    rows="3"
+                    value={formData.descrizione}
+                    onChange={(e) => setFormData({ ...formData, descrizione: e.target.value })}
+                  />
+                </div>
+                <div className="col-md-3">
+                  <label className="form-label">Priorità</label>
+                  <select
+                    className="form-select"
+                    value={formData.priorita}
+                    onChange={(e) => setFormData({ ...formData, priorita: e.target.value })}
+                    style={{
+                      color: formData.priorita === 'urgente' ? '#ef4444' : 
+                             formData.priorita === 'alta' ? '#f59e0b' :
+                             formData.priorita === 'media' ? '#3b82f6' :
+                             formData.priorita === 'bassa' ? '#10b981' : 'inherit',
+                      fontWeight: formData.priorita === 'urgente' ? 600 : 'normal'
+                    }}
+                  >
+                    <option value="bassa" style={{ color: '#10b981', backgroundColor: 'var(--bg-1)' }}>Bassa</option>
+                    <option value="media" style={{ color: '#3b82f6', backgroundColor: 'var(--bg-1)' }}>Media</option>
+                    <option value="alta" style={{ color: '#f59e0b', backgroundColor: 'var(--bg-1)' }}>Alta</option>
+                    <option value="urgente" style={{ color: '#ef4444', backgroundColor: 'var(--bg-1)' }}>Urgente</option>
+                  </select>
+                </div>
+                <div className="col-md-3">
+                  <label className="form-label">Data Inizio</label>
+                  <input
+                    type="date"
+                    className="form-control"
+                    value={formData.data_inizio}
+                    onChange={(e) => setFormData({ ...formData, data_inizio: e.target.value })}
+                  />
+                </div>
+                <div className="col-md-3">
+                  <label className="form-label">Data Fine Prevista</label>
+                  <input
+                    type="date"
+                    className="form-control"
+                    value={formData.data_fine_prevista}
+                    onChange={(e) => setFormData({ ...formData, data_fine_prevista: e.target.value })}
+                  />
+                </div>
+                <div className="col-md-3">
+                  {/* Spacer per mantenere il layout */}
+                </div>
+                <div className="col-md-6">
+                  <label className="form-label">Cliente</label>
+                  <div className="autocomplete-container" style={{ position: 'relative' }} ref={autocompleteRef}>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={clienteSearch}
+                      onChange={(e) => {
+                        const value = e.target.value
+                        setClienteSearch(value)
+                        setShowAutocomplete(true)
+                        openAutocompletePortal(value, e.target)
+                        // Se il valore viene cancellato, resetta anche cliente_id
+                        if (value.trim() === '') {
+                          setFormData(prev => ({
+                            ...prev,
+                            cliente_id: '',
+                            cliente_nome: ''
+                          }))
+                        }
+                      }}
+                      onFocus={(e) => {
+                        setShowAutocomplete(true)
+                        openAutocompletePortal(clienteSearch || formData.cliente_nome, e.target)
+                      }}
+                      onBlur={() => {
+                        setTimeout(() => {
+                          setShowAutocomplete(false)
+                          setPortalAutocomplete(null)
+                        }, 200)
+                      }}
+                      placeholder="Cerca cliente..."
+                    />
+                  </div>
+                </div>
+                <div className="col-md-6">
+                  <label className="form-label">Commessa</label>
+                  <div className="autocomplete-container" style={{ position: 'relative' }} ref={commessaAutocompleteRef}>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={commessaSearch}
+                      onChange={(e) => {
+                        const value = e.target.value
+                        setCommessaSearch(value)
+                        setShowCommessaAutocomplete(true)
+                        openCommessaAutocompletePortal(value, e.target)
+                        // Se il valore viene cancellato, resetta anche commessa_id
+                        if (value.trim() === '') {
+                          setFormData(prev => ({
+                            ...prev,
+                            commessa_id: ''
+                          }))
+                        }
+                      }}
+                      onFocus={(e) => {
+                        setShowCommessaAutocomplete(true)
+                        const currentCommessa = commesse.find(c => c.id === formData.commessa_id)
+                        openCommessaAutocompletePortal(commessaSearch || currentCommessa?.titolo || '', e.target)
+                      }}
+                      onBlur={() => {
+                        setTimeout(() => {
+                          setShowCommessaAutocomplete(false)
+                          setPortalCommessaAutocomplete(null)
+                        }, 200)
+                      }}
+                      placeholder="Cerca commessa..."
+                    />
+                  </div>
+                </div>
+              </div>
+            </form>
+
+            {card?.id && (
+              <div className="mt-4" style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '1.5rem' }}>
+                  <div className="d-flex justify-content-between align-items-center mb-3">
+                    <h6 style={{ margin: 0 }}>Scadenze</h6>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-primary"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        setShowScadenzaForm(true)
+                      }}
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="12" y1="5" x2="12" y2="19" />
+                        <line x1="5" y1="12" x2="19" y2="12" />
+                      </svg>
+                      Aggiungi Scadenza
+                    </button>
+                  </div>
+
+                  {showScadenzaForm && (
+                    <div className="card mb-3">
+                      <div className="card-body">
+                        <form
+                          onSubmit={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            handleScadenzaSubmit(e)
+                            return false
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+                              e.preventDefault()
+                              e.stopPropagation()
+                            }
+                          }}
+                          style={{ position: 'relative', zIndex: 10 }}
+                          noValidate
+                        >
+                          <div className="row g-2">
+                            <div className="col-md-4">
+                              <label className="form-label" style={{ fontSize: '0.85rem' }}>Titolo *</label>
+                              <input
+                                type="text"
+                                className="form-control form-control-sm"
+                                value={scadenzaForm.titolo}
+                                onChange={(e) => setScadenzaForm({ ...scadenzaForm, titolo: e.target.value })}
+                                required
+                              />
+                            </div>
+                            <div className="col-md-3">
+                              <label className="form-label" style={{ fontSize: '0.85rem' }}>Data Scadenza *</label>
+                              <input
+                                type="date"
+                                className="form-control form-control-sm"
+                                value={scadenzaForm.data_scadenza}
+                                onChange={(e) => setScadenzaForm({ ...scadenzaForm, data_scadenza: e.target.value })}
+                                required
+                              />
+                            </div>
+                            <div className="col-md-3">
+                              <label className="form-label" style={{ fontSize: '0.85rem' }}>Tipo</label>
+                              <select
+                                className="form-select form-select-sm"
+                                value={scadenzaForm.tipo}
+                                onChange={(e) => setScadenzaForm({ ...scadenzaForm, tipo: e.target.value })}
+                              >
+                                <option value="">Tipo</option>
+                                <option value="pratica">Pratica</option>
+                                <option value="amministrativa">Amministrativa</option>
+                                <option value="cantiere">Cantiere</option>
+                                <option value="documento">Documento</option>
+                                <option value="altro">Altro</option>
+                              </select>
+                            </div>
+                            <div className="col-md-2">
+                              <label className="form-label" style={{ fontSize: '0.85rem' }}>Priorità</label>
+                              <select
+                                className="form-select form-select-sm"
+                                value={scadenzaForm.priorita}
+                                onChange={(e) => setScadenzaForm({ ...scadenzaForm, priorita: e.target.value })}
+                                style={{
+                                  color: scadenzaForm.priorita === 'urgente' ? '#ef4444' : 
+                                         scadenzaForm.priorita === 'alta' ? '#f59e0b' :
+                                         scadenzaForm.priorita === 'media' ? '#3b82f6' :
+                                         scadenzaForm.priorita === 'bassa' ? '#10b981' : 'inherit',
+                                  fontWeight: scadenzaForm.priorita === 'urgente' ? 600 : 'normal'
+                                }}
+                              >
+                                <option value="bassa" style={{ color: '#10b981', backgroundColor: 'var(--bg-1)' }}>Bassa</option>
+                                <option value="media" style={{ color: '#3b82f6', backgroundColor: 'var(--bg-1)' }}>Media</option>
+                                <option value="alta" style={{ color: '#f59e0b', backgroundColor: 'var(--bg-1)' }}>Alta</option>
+                                <option value="urgente" style={{ color: '#ef4444', backgroundColor: 'var(--bg-1)' }}>Urgente</option>
+                              </select>
+                            </div>
+                            <div className="col-md-12">
+                              <label className="form-label" style={{ fontSize: '0.85rem' }}>Descrizione</label>
+                              <textarea
+                                className="form-control form-control-sm"
+                                rows="2"
+                                value={scadenzaForm.descrizione}
+                                onChange={(e) => setScadenzaForm({ ...scadenzaForm, descrizione: e.target.value })}
+                              />
+                            </div>
+                          </div>
+                          <div className="mt-2 d-flex gap-2">
+                            <button 
+                              type="submit" 
+                              className="btn btn-sm btn-primary" 
+                              disabled={loading}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              Salva
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-secondary"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setShowScadenzaForm(false)
+                                setScadenzaForm({
+                                  titolo: '',
+                                  descrizione: '',
+                                  data_scadenza: '',
+                                  tipo: '',
+                                  priorita: 'media'
+                                })
+                              }}
+                            >
+                              Annulla
+                            </button>
+                          </div>
+                        </form>
+                      </div>
+                    </div>
+                  )}
+
+                  {scadenze.length === 0 ? (
+                    <div className="text-muted" style={{ fontSize: '0.85rem' }}>
+                      Nessuna scadenza presente
+                    </div>
+                  ) : (
+                    <div className="scadenze-list">
+                      {scadenze.map((scadenza) => {
+                        const scadenzaDate = new Date(scadenza.data_scadenza)
+                        const today = new Date()
+                        today.setHours(0, 0, 0, 0)
+                        const isScaduta = scadenzaDate < today
+                        const isProssima = scadenzaDate >= today && scadenzaDate <= new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000)
+
+                        return (
+                          <div
+                            key={scadenza.id}
+                            className="card mb-2"
+                            style={{
+                              background: scadenza.completata ? 'var(--bg-3)' : 'var(--bg-2)',
+                              opacity: scadenza.completata ? 0.7 : 1,
+                              border: isScaduta && !scadenza.completata ? '2px solid #ef4444' : '1px solid var(--border-soft)'
+                            }}
+                          >
+                            <div className="card-body" style={{ padding: '0.75rem' }}>
+                              <div className="d-flex justify-content-between align-items-start">
+                                <div style={{ flex: 1 }}>
+                                  <div className="d-flex align-items-center gap-2 mb-1">
+                                    <h6 style={{ margin: 0, fontSize: '0.9rem', textDecoration: scadenza.completata ? 'line-through' : 'none' }}>
+                                      {scadenza.titolo}
+                                    </h6>
+                                    {scadenza.tipo && (
+                                      <span style={{
+                                        fontSize: '0.7rem',
+                                        padding: '0.15rem 0.4rem',
+                                        background: 'var(--bg-3)',
+                                        borderRadius: '4px',
+                                        color: 'var(--ink-600)'
+                                      }}>
+                                        {scadenza.tipo}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {scadenza.descrizione && (
+                                    <p style={{ fontSize: '0.8rem', color: 'var(--ink-600)', margin: '0.25rem 0' }}>
+                                      {scadenza.descrizione}
+                                    </p>
+                                  )}
+                                  <div style={{ fontSize: '0.8rem', color: isScaduta && !scadenza.completata ? '#ef4444' : (isProssima ? '#f59e0b' : 'var(--ink-600)'), display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <strong>Scadenza:</strong> {new Date(scadenza.data_scadenza).toLocaleDateString('it-IT')}
+                                    {isScaduta && !scadenza.completata && (
+                                      <>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                                          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                                          <line x1="12" y1="9" x2="12" y2="13" />
+                                          <line x1="12" y1="17" x2="12.01" y2="17" />
+                                        </svg>
+                                        <span>SCADUTA</span>
+                                      </>
+                                    )}
+                                    {isProssima && !scadenza.completata && (
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                                        <circle cx="12" cy="12" r="10" />
+                                        <polyline points="12 6 12 12 16 14" />
+                                      </svg>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="d-flex gap-1">
+                                  {!scadenza.completata && (
+                                    <button
+                                      className="btn btn-sm btn-success"
+                                      onClick={() => handleCompleteScadenza(scadenza.id)}
+                                      title="Completa"
+                                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.25rem 0.5rem' }}
+                                    >
+                                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <polyline points="20 6 9 17 4 12" />
+                                      </svg>
+                                    </button>
+                                  )}
+                                  <button
+                                    className="btn btn-sm btn-danger"
+                                    onClick={() => handleDeleteScadenza(scadenza.id)}
+                                    title="Elimina"
+                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.25rem 0.5rem' }}
+                                  >
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <line x1="18" y1="6" x2="6" y2="18" />
+                                      <line x1="6" y1="6" x2="18" y2="18" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+            {card?.id && (
+              <KanbanComments
+                cardId={card.id}
+                currentUser={currentUser}
+                onCommentAdded={() => {
+                  if (onRefresh) onRefresh()
+                }}
+              />
+            )}
+
+            <div className="mt-4 d-flex gap-2">
+              <button 
+                type="button" 
+                className="btn btn-primary" 
+                disabled={loading}
+                onClick={async (e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  // Chiama direttamente handleSubmit
+                  await handleSubmit(e)
+                }}
+              >
+                {loading ? 'Salvataggio...' : (card ? 'Salva Modifiche' : 'Crea Card')}
+              </button>
+              {card && (
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  onClick={async (e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    if (window.confirm('Sei sicuro di voler eliminare questa card?')) {
+                      if (onDelete) {
+                        await onDelete(card.id)
+                      }
+                    }
+                  }}
+                >
+                  Elimina
+                </button>
+              )}
+              <button type="button" className="btn btn-secondary" onClick={onClose} disabled={loading}>
+                Annulla
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Portal autocompletamento cliente */}
+      {portalAutocomplete && (
+        <div
+          className="autocomplete-list autocomplete-portal"
+          style={{
+            position: 'fixed',
+            top: `${portalAutocomplete.top}px`,
+            left: `${portalAutocomplete.left}px`,
+            width: `${portalAutocomplete.width}px`,
+            zIndex: 1060,
+            maxHeight: '200px',
+            overflowY: 'auto'
+          }}
+        >
+          {portalAutocomplete.items.map((cliente, idx) => (
+            <div
+              key={cliente.id}
+              className="autocomplete-item"
+              onClick={() => handleClienteSelect(cliente)}
+              onMouseDown={(e) => e.preventDefault()}
+            >
+              {cliente.denominazione}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Portal autocompletamento commessa */}
+      {portalCommessaAutocomplete && (
+        <div
+          className="autocomplete-list autocomplete-portal"
+          style={{
+            position: 'fixed',
+            top: `${portalCommessaAutocomplete.top}px`,
+            left: `${portalCommessaAutocomplete.left}px`,
+            width: `${portalCommessaAutocomplete.width}px`,
+            zIndex: 1060,
+            maxHeight: '200px',
+            overflowY: 'auto'
+          }}
+        >
+          {portalCommessaAutocomplete.items.map((commessa, idx) => (
+            <div
+              key={commessa.id}
+              className="autocomplete-item"
+              onClick={() => handleCommessaSelect(commessa)}
+              onMouseDown={(e) => e.preventDefault()}
+            >
+              <div>
+                <strong>{commessa.titolo}</strong>
+                {commessa.cliente_nome && (
+                  <div style={{ fontSize: '0.85rem', color: 'var(--ink-600)', marginTop: '0.25rem' }}>
+                    {commessa.cliente_nome}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default KanbanCardDetail
+

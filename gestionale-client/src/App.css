@@ -926,3 +926,366 @@ header .logo {
     align-items: stretch;
   }
 }
+
+/* Kanban Priority Colors */
+.kanban-priority-bassa {
+  color: #10b981 !important;
+}
+
+.kanban-priority-media {
+  color: #3b82f6 !important;
+}
+
+.kanban-priority-alta {
+  color: #f59e0b !important;
+}
+
+.kanban-priority-urgente {
+  color: #ef4444 !important;
+  font-weight: 600 !important;
+}
+
+/* Stili per select con priorità */
+.form-select option[value="bassa"] {
+  color: #10b981 !important;
+  background-color: var(--bg-1) !important;
+}
+
+.form-select option[value="media"] {
+  color: #3b82f6 !important;
+  background-color: var(--bg-1) !important;
+}
+
+.form-select option[value="alta"] {
+  color: #f59e0b !important;
+  background-color: var(--bg-1) !important;
+}
+
+.form-select option[value="urgente"] {
+  color: #ef4444 !important;
+  background-color: var(--bg-1) !important;
+  font-weight: 600 !important;
+}
+
+/* Kanban Styles */
+.kanban-board {
+  width: 100%;
+}
+
+.kanban-board-container {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(58, 100, 200, 0.4) transparent;
+}
+
+.kanban-board-container::-webkit-scrollbar {
+  height: 8px;
+}
+
+.kanban-board-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.kanban-board-container::-webkit-scrollbar-thumb {
+  background: rgba(58, 100, 200, 0.4);
+  border-radius: 999px;
+}
+
+.kanban-column-cards {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(58, 100, 200, 0.3) transparent;
+}
+
+.kanban-column-cards::-webkit-scrollbar {
+  width: 6px;
+}
+
+.kanban-column-cards::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.kanban-column-cards::-webkit-scrollbar-thumb {
+  background: rgba(58, 100, 200, 0.3);
+  border-radius: 999px;
+}
+
+.kanban-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.kanban-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-2);
+}
+
+.kanban-card:active {
+  cursor: grabbing;
+}
+
+/* Drag & Drop animations */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.kanban-card {
+  animation: slideIn 0.3s ease-out;
+}
+
+/* Smooth transitions for column drops */
+.kanban-column {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Enhanced visual feedback */
+.kanban-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, currentColor, transparent);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.kanban-card:hover::before {
+  opacity: 0.3;
+}
+
+/* Improved card styling */
+.kanban-card {
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+/* Loading skeleton for cards */
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+.kanban-card-loading {
+  background: linear-gradient(
+    90deg,
+    var(--bg-2) 0%,
+    var(--bg-3) 50%,
+    var(--bg-2) 100%
+  );
+  background-size: 1000px 100%;
+  animation: shimmer 2s infinite;
+}
+
+/* Slide in animation for notifications dropdown */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Fade in for cards */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Responsive improvements for Kanban */
+@media (max-width: 1200px) {
+  .kanban-column {
+    min-width: 280px !important;
+    width: 280px !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .kanban-board-container {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .kanban-column {
+    min-width: 100% !important;
+    width: 100% !important;
+    margin-bottom: 1rem;
+  }
+
+  .kanban-filters {
+    flex-direction: column;
+  }
+
+  .kanban-filters > div {
+    width: 100%;
+  }
+
+  .kanban-filters .form-select,
+  .kanban-filters .form-control {
+    width: 100% !important;
+    margin-bottom: 0.5rem;
+  }
+}
+
+/* Enhanced hover effects */
+.kanban-card {
+  position: relative;
+}
+
+.kanban-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+  box-shadow: 0 0 0 2px currentColor;
+}
+
+.kanban-card:focus-visible::after {
+  opacity: 0.3;
+}
+
+/* Smooth column transitions */
+.kanban-column {
+  will-change: transform, box-shadow;
+}
+
+/* Improved scrollbar for mobile */
+@media (max-width: 768px) {
+  .kanban-column-cards {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Touch-friendly drag indicators */
+@media (hover: none) and (pointer: coarse) {
+  .kanban-card {
+    cursor: default;
+  }
+
+  .kanban-card:active {
+    transform: scale(0.98);
+    opacity: 0.8;
+  }
+}
+
+/* Calendar Styles */
+.kanban-calendar {
+  width: 100%;
+}
+
+.calendar-month-view,
+.calendar-week-view,
+.calendar-day-view {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.calendar-day {
+  position: relative;
+}
+
+.calendar-day:hover {
+  z-index: 10;
+}
+
+.calendar-day-events {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(58, 100, 200, 0.3) transparent;
+}
+
+.calendar-day-events::-webkit-scrollbar {
+  width: 4px;
+}
+
+.calendar-day-events::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.calendar-day-events::-webkit-scrollbar-thumb {
+  background: rgba(58, 100, 200, 0.3);
+  border-radius: 999px;
+}
+
+/* Calendar event animations */
+@keyframes eventAppear {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.calendar-day-events > div {
+  animation: eventAppear 0.2s ease-out;
+}
+
+/* Responsive calendar */
+@media (max-width: 1200px) {
+  .calendar-week-header,
+  .calendar-week-body {
+    grid-template-columns: 150px repeat(7, 1fr) !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .calendar-grid {
+    grid-template-columns: repeat(7, 1fr) !important;
+    gap: 0.25rem !important;
+  }
+
+  .calendar-day {
+    min-height: 80px !important;
+    padding: 0.25rem !important;
+  }
+
+  .calendar-day-events {
+    max-height: 50px !important;
+  }
+
+  .calendar-week-header,
+  .calendar-week-body {
+    grid-template-columns: 100px repeat(7, 1fr) !important;
+    font-size: 0.75rem;
+  }
+
+  .calendar-day-view {
+    grid-template-columns: 150px 1fr !important;
+  }
+}

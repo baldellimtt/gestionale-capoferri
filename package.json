@@ -1,0 +1,16 @@
+{
+  "name": "gestionale-capoferri",
+  "version": "1.0.0",
+  "description": "Gestionale Studio Capoferri - Root package",
+  "private": true,
+  "scripts": {
+    "dev": "node scripts/start-dev.js",
+    "start": "node scripts/start-dev.js",
+    "restart": "node scripts/restart-dev.js",
+    "install:all": "npm install && cd gestionale-server && npm install && cd ../gestionale-client && npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}
+
