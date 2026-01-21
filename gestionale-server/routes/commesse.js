@@ -125,18 +125,55 @@ class CommesseController {
       `),
       delete: this.db.prepare('DELETE FROM commesse WHERE id = ?'),
       getAllegati: this.db.prepare(`
-        SELECT id, commessa_id, filename, original_name, mime_type, file_size, file_path, created_at
+        SELECT id, commessa_id, filename, original_name, mime_type, file_size, file_path, version, is_latest, previous_id, created_at
         FROM commesse_allegati
         WHERE commessa_id = ?
-        ORDER BY created_at DESC
+        ORDER BY created_at DESC, id DESC
       `),
       getAllegatoById: this.db.prepare('SELECT * FROM commesse_allegati WHERE id = ?'),
+      getLatestAllegatoByName: this.db.prepare(`
+        SELECT * FROM commesse_allegati
+        WHERE commessa_id = ? AND original_name = ? AND is_latest = 1
+        ORDER BY version DESC, id DESC
+        LIMIT 1
+      `),
+      getLatestAllegatoByNameExcluding: this.db.prepare(`
+        SELECT * FROM commesse_allegati
+        WHERE commessa_id = ? AND original_name = ? AND id != ?
+        ORDER BY version DESC, id DESC
+        LIMIT 1
+      `),
       createAllegato: this.db.prepare(`
         INSERT INTO commesse_allegati (
-          commessa_id, filename, original_name, mime_type, file_size, file_path
-        ) VALUES (?, ?, ?, ?, ?, ?)
+          commessa_id, filename, original_name, mime_type, file_size, file_path, version, is_latest, previous_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `),
-      deleteAllegato: this.db.prepare('DELETE FROM commesse_allegati WHERE id = ?')
+      deleteAllegato: this.db.prepare('DELETE FROM commesse_allegati WHERE id = ?'),
+      markAllegatoNotLatest: this.db.prepare(`
+        UPDATE commesse_allegati
+        SET is_latest = 0
+        WHERE id = ?
+      `),
+      markAllegatoLatest: this.db.prepare(`
+        UPDATE commesse_allegati
+        SET is_latest = 1
+        WHERE id = ?
+      `),
+      createAudit: this.db.prepare(`
+        INSERT INTO commesse_audit (commessa_id, user_id, action, changes_json, kanban_card_ids)
+        VALUES (?, ?, ?, ?, ?)
+      `),
+      getAuditByCommessa: this.db.prepare(`
+        SELECT a.id, a.commessa_id, a.user_id, a.action, a.changes_json, a.kanban_card_ids, a.created_at,
+               u.username, u.nome, u.cognome
+        FROM commesse_audit a
+        LEFT JOIN utenti u ON u.id = a.user_id
+        WHERE a.commessa_id = ?
+        ORDER BY a.created_at DESC, a.id DESC
+      `),
+      getKanbanCardsByCommessa: this.db.prepare(`
+        SELECT id FROM kanban_card WHERE commessa_id = ? ORDER BY id ASC
+      `)
     };
   }
 
@@ -150,6 +187,66 @@ class CommesseController {
     if (value == null || value === '') return fallback;
     const parsed = Number.parseInt(value, 10);
     return Number.isFinite(parsed) ? parsed : NaN;
+  }
+
+  normalizeValue(value) {
+    if (value === undefined) return null;
+    if (value === '') return null;
+    return value;
+  }
+
+  getRelatedKanbanCardIds(commessaId) {
+    try {
+      const rows = this.stmt.getKanbanCardsByCommessa.all(commessaId);
+      return rows.map((row) => row.id);
+    } catch (error) {
+      Logger.warn('Errore recupero card kanban per commessa', { commessaId, error: error.message });
+      return [];
+    }
+  }
+
+  createAuditEntry(commessaId, action, changes, userId) {
+    const kanbanCardIds = this.getRelatedKanbanCardIds(commessaId);
+    const changesJson = changes ? JSON.stringify(changes) : null;
+    const kanbanJson = kanbanCardIds.length ? JSON.stringify(kanbanCardIds) : null;
+    this.stmt.createAudit.run(
+      commessaId,
+      userId || null,
+      action,
+      changesJson,
+      kanbanJson
+    );
+  }
+
+  buildChanges(existing, nextValues) {
+    const fields = [
+      'titolo',
+      'cliente_id',
+      'cliente_nome',
+      'stato',
+      'sotto_stato',
+      'stato_pagamenti',
+      'preventivo',
+      'importo_preventivo',
+      'importo_totale',
+      'importo_pagato',
+      'avanzamento_lavori',
+      'responsabile',
+      'data_inizio',
+      'data_fine',
+      'note'
+    ];
+
+    const changes = [];
+    fields.forEach((field) => {
+      const before = existing ? this.normalizeValue(existing[field]) : null;
+      const after = this.normalizeValue(nextValues[field]);
+      if (before !== after) {
+        changes.push({ field, from: before, to: after });
+      }
+    });
+
+    return changes;
   }
 
   validatePayload(payload) {
@@ -337,6 +434,7 @@ class CommesseController {
       const commessaId = transaction();
       Logger.info('POST /commesse', { id: commessaId });
       const created = this.stmt.getById.get(commessaId);
+      this.createAuditEntry(commessaId, 'create', { created }, req.user?.id);
       res.status(201).json(created);
     } catch (error) {
       Logger.error('Errore POST /commesse', error);
@@ -375,23 +473,47 @@ class CommesseController {
         allegati
       } = payload;
 
+      const existing = this.stmt.getById.get(id);
+      if (!existing) {
+        return res.status(404).json({ error: 'Commessa non trovata' });
+      }
+
+      const nextValues = {
+        titolo: titolo.trim(),
+        cliente_id: cliente_id || clienteId || null,
+        cliente_nome: cliente_nome || clienteNome || null,
+        stato: stato || 'In corso',
+        sotto_stato: (stato === 'Chiusa') ? null : (sotto_stato || null),
+        stato_pagamenti: stato_pagamenti || 'Non iniziato',
+        preventivo: preventivo ? 1 : 0,
+        importo_preventivo: this.parseNumber(importo_preventivo, 0),
+        importo_totale: this.parseNumber(importo_totale, 0),
+        importo_pagato: this.parseNumber(importo_pagato, 0),
+        avanzamento_lavori: this.parseIntValue(avanzamento_lavori, 0),
+        responsabile: responsabile || null,
+        data_inizio: data_inizio || null,
+        data_fine: data_fine || null,
+        note: note || null,
+        allegati: allegati || null
+      };
+
       const result = this.stmt.update.run(
-        titolo.trim(),
-        cliente_id || clienteId || null,
-        cliente_nome || clienteNome || null,
-        stato || 'In corso',
-        stato === 'Chiusa' ? null : (sotto_stato || null),
-        stato_pagamenti || 'Non iniziato',
-        preventivo ? 1 : 0,
-        this.parseNumber(importo_preventivo, 0),
-        this.parseNumber(importo_totale, 0),
-        this.parseNumber(importo_pagato, 0),
-        this.parseIntValue(avanzamento_lavori, 0),
-        responsabile || null,
-        data_inizio || null,
-        data_fine || null,
-        note || null,
-        allegati || null,
+        nextValues.titolo,
+        nextValues.cliente_id,
+        nextValues.cliente_nome,
+        nextValues.stato,
+        nextValues.sotto_stato,
+        nextValues.stato_pagamenti,
+        nextValues.preventivo,
+        nextValues.importo_preventivo,
+        nextValues.importo_totale,
+        nextValues.importo_pagato,
+        nextValues.avanzamento_lavori,
+        nextValues.responsabile,
+        nextValues.data_inizio,
+        nextValues.data_fine,
+        nextValues.note,
+        nextValues.allegati,
         id
       );
 
@@ -401,6 +523,10 @@ class CommesseController {
 
       Logger.info(`PUT /commesse/${id}`);
       const updated = this.stmt.getById.get(id);
+      const changes = this.buildChanges(existing, nextValues);
+      if (changes.length > 0) {
+        this.createAuditEntry(id, 'update', { changes }, req.user?.id);
+      }
       res.json(updated);
     } catch (error) {
       Logger.error(`Errore PUT /commesse/${req.params.id}`, error);
@@ -480,6 +606,47 @@ class CommesseController {
     }
   }
 
+  getAudit(req, res) {
+    try {
+      const { id } = req.params;
+      const entries = this.stmt.getAuditByCommessa.all(id).map((entry) => {
+        let changes = null;
+        let kanbanCardIds = null;
+        try {
+          changes = entry.changes_json ? JSON.parse(entry.changes_json) : null;
+        } catch {
+          changes = entry.changes_json;
+        }
+        try {
+          kanbanCardIds = entry.kanban_card_ids ? JSON.parse(entry.kanban_card_ids) : null;
+        } catch {
+          kanbanCardIds = entry.kanban_card_ids;
+        }
+        const user = entry.user_id ? {
+          id: entry.user_id,
+          username: entry.username || null,
+          nome: entry.nome || null,
+          cognome: entry.cognome || null
+        } : null;
+
+        return {
+          id: entry.id,
+          commessa_id: entry.commessa_id,
+          user_id: entry.user_id,
+          user,
+          action: entry.action,
+          changes,
+          kanban_card_ids: kanbanCardIds,
+          created_at: entry.created_at
+        };
+      });
+      res.json(entries);
+    } catch (error) {
+      Logger.error('Errore GET /commesse/audit', error);
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
+    }
+  }
+
   uploadAllegato(req, res) {
     try {
       const { id } = req.params;
@@ -504,17 +671,39 @@ class CommesseController {
       }
 
       const filePath = path.relative(path.join(__dirname, '..'), newPath).replace(/\\/g, '/');
-      const result = this.stmt.createAllegato.run(
-        id,
-        safeFileName,
-        req.file.originalname,
-        req.file.mimetype,
-        req.file.size,
-        filePath
-      );
 
-      const created = this.stmt.getAllegatoById.get(result.lastInsertRowid);
-      Logger.info(`POST /commesse/${id}/allegati`, { allegatoId: result.lastInsertRowid });
+      const transaction = this.db.transaction(() => {
+        const latest = this.stmt.getLatestAllegatoByName.get(id, req.file.originalname);
+        const version = latest ? (Number(latest.version) || 1) + 1 : 1;
+        const previousId = latest ? latest.id : null;
+        if (latest) {
+          this.stmt.markAllegatoNotLatest.run(latest.id);
+        }
+
+        const result = this.stmt.createAllegato.run(
+          id,
+          safeFileName,
+          req.file.originalname,
+          req.file.mimetype,
+          req.file.size,
+          filePath,
+          version,
+          1,
+          previousId
+        );
+        return result.lastInsertRowid;
+      });
+
+      const allegatoId = transaction();
+      const created = this.stmt.getAllegatoById.get(allegatoId);
+      this.createAuditEntry(id, 'attachment_uploaded', {
+        allegato_id: created.id,
+        original_name: created.original_name,
+        version: created.version,
+        previous_id: created.previous_id
+      }, req.user?.id);
+
+      Logger.info(`POST /commesse/${id}/allegati`, { allegatoId });
       res.status(201).json(created);
     } catch (error) {
       // Elimina file se upload fallisce
@@ -542,12 +731,31 @@ class CommesseController {
         return res.status(404).json({ error: 'Allegato non trovato' });
       }
 
+      const transaction = this.db.transaction(() => {
+        if (Number(existing.is_latest) === 1) {
+          const fallback = this.stmt.getLatestAllegatoByNameExcluding.get(
+            existing.commessa_id,
+            existing.original_name,
+            existing.id
+          );
+          if (fallback) {
+            this.stmt.markAllegatoLatest.run(fallback.id);
+          }
+        }
+        this.stmt.deleteAllegato.run(allegatoId);
+      });
+      transaction();
+
       const absolutePath = path.join(__dirname, '..', existing.file_path || '');
       if (fs.existsSync(absolutePath)) {
         fs.unlinkSync(absolutePath);
       }
 
-      this.stmt.deleteAllegato.run(allegatoId);
+      this.createAuditEntry(existing.commessa_id, 'attachment_deleted', {
+        allegato_id: existing.id,
+        original_name: existing.original_name,
+        version: existing.version
+      }, req.user?.id);
       res.json({ success: true });
     } catch (error) {
       Logger.error('Errore DELETE /commesse/allegati', error);
@@ -560,6 +768,7 @@ function createRouter(db) {
   const controller = new CommesseController(db);
 
   router.get('/:id/allegati', validateRequest(ValidationSchemas.id), (req, res) => controller.getAllegati(req, res));
+  router.get('/:id/audit', validateRequest(ValidationSchemas.id), (req, res) => controller.getAudit(req, res));
   router.post('/:id/allegati', validateRequest(ValidationSchemas.id), upload.single('file'), (req, res) => controller.uploadAllegato(req, res));
   router.delete('/allegati/:allegatoId', validateRequest(ValidationSchemas.idParam('allegatoId')), (req, res) => controller.deleteAllegato(req, res));
   router.get('/:id', validateRequest(ValidationSchemas.id), (req, res) => controller.getById(req, res));

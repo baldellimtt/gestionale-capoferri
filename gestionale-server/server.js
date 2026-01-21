@@ -27,6 +27,19 @@ const db = dbManager.getDb();
 // Inizializza Express
 const app = express();
 
+// Trust proxy (per IP reali dietro reverse proxy)
+const trustProxy = process.env.TRUST_PROXY;
+if (trustProxy === 'true') {
+  app.set('trust proxy', true);
+} else if (trustProxy === 'false' || !trustProxy) {
+  app.set('trust proxy', false);
+} else {
+  const trustProxyHops = parseInt(trustProxy, 10);
+  if (!Number.isNaN(trustProxyHops)) {
+    app.set('trust proxy', trustProxyHops);
+  }
+}
+
 // Security Headers (Helmet)
 app.use(helmet({
   contentSecurityPolicy: NODE_ENV === 'production' ? {
@@ -189,7 +202,6 @@ process.on('SIGTERM', () => {
 });
 
 module.exports = app;
-
 
 
 

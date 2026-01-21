@@ -128,6 +128,14 @@ class EnvValidator {
       description: 'Secret per JWT (minimo 32 caratteri, obbligatorio in produzione)'
     })
 
+    // JWT Refresh Secret (obbligatorio in produzione)
+    this.validate('JWT_REFRESH_SECRET', {
+      required: isProduction,
+      default: isProduction ? null : 'dev-refresh-secret-change-in-production',
+      validator: (val) => val && val.length >= 32,
+      description: 'Secret per refresh JWT (minimo 32 caratteri, obbligatorio in produzione)'
+    })
+
     // JWT Expiration
     this.validate('JWT_EXPIRATION', {
       required: false,
@@ -162,6 +170,17 @@ class EnvValidator {
       default: '900000', // 15 minuti
       validator: (val) => !isNaN(parseInt(val, 10)) && parseInt(val, 10) > 0,
       description: 'Finestra temporale rate limiting in millisecondi'
+    })
+
+    this.validate('TRUST_PROXY', {
+      required: false,
+      default: 'false',
+      validator: (val) => {
+        if (val === 'true' || val === 'false') return true
+        const asInt = parseInt(val, 10)
+        return !isNaN(asInt) && asInt >= 0
+      },
+      description: 'Abilita trust proxy (true|false|numero di hop)'
     })
 
     this.validate('RATE_LIMIT_MAX_REQUESTS', {
@@ -224,6 +243,9 @@ class EnvValidator {
     if (isProduction) {
       if (process.env.JWT_SECRET === 'dev-secret-change-in-production') {
         this.warn('JWT_SECRET usa il valore di default. Cambialo in produzione!')
+      }
+      if (process.env.JWT_REFRESH_SECRET === 'dev-refresh-secret-change-in-production') {
+        this.warn('JWT_REFRESH_SECRET usa il valore di default. Cambialo in produzione!')
       }
       if (process.env.CORS_ORIGIN === '*') {
         this.warn('CORS_ORIGIN è impostato su "*". Configura un dominio specifico in produzione!')

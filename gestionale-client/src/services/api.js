@@ -102,7 +102,11 @@ class ApiService {
       })
       .then((data) => {
         if (data.token) {
-          this.setToken(data.token);
+          if (data.refreshToken) {
+            this.setToken(data.token, data.refreshToken);
+          } else {
+            this.setToken(data.token);
+          }
           return data.token;
         }
         throw new Error('Token non ricevuto dal server');
@@ -291,9 +295,10 @@ class ApiService {
 
   async logout() {
     try {
-      await this.request('/auth/logout', { method: 'POST' });
+      const refreshToken = this.getRefreshToken();
+      await this.request('/auth/logout', { method: 'POST', body: { refreshToken } });
     } finally {
-      this.setToken(null);
+      this.clearTokens();
     }
   }
 
@@ -503,6 +508,10 @@ class ApiService {
 
   async getCommessaAllegati(id) {
     return this.request(`/commesse/${id}/allegati`);
+  }
+
+  async getCommessaAudit(id) {
+    return this.request(`/commesse/${id}/audit`);
   }
 
   async uploadCommessaAllegato(id, file) {

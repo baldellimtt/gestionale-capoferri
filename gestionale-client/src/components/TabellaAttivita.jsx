@@ -904,6 +904,18 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
     ]
   }
 
+  const hasIncompleteHomeRows = useMemo(() => {
+    if (expanded) return false
+    return visibleDates.some((date) => {
+      const rows = getRowsForDate(date)
+      return rows.some((row) => {
+        if (!row) return false
+        if (row.isTemporary) return true
+        return !getRowValidation(row).isComplete
+      })
+    })
+  }, [expanded, visibleDates, groupedByDate, hiddenTempDates, rowsByDateAll])
+
   const hasHomeRows = useMemo(() => {
     if (expanded) return true
     return visibleDates.some((date) => getRowsForDate(date).length > 0)
@@ -969,6 +981,11 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
       {hideControls && !expanded && (
         <div className="mb-4">
           <h2 className="section-title mb-0 no-title-line">Rimborsi</h2>
+          {hasIncompleteHomeRows && (
+            <div className="alert alert-warning mt-2 mb-0">
+              Attenzione: sono presenti rimborsi da compilare.
+            </div>
+          )}
         </div>
       )}
 

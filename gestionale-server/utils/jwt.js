@@ -7,8 +7,8 @@
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 
-const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(64).toString('hex');
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || crypto.randomBytes(64).toString('hex');
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production';
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'dev-refresh-secret-change-in-production';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRATION || process.env.JWT_EXPIRES_IN || '15m';
 const JWT_REFRESH_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRATION || process.env.JWT_REFRESH_EXPIRES_IN || '7d';
 
@@ -40,7 +40,8 @@ function generateRefreshToken(payload) {
     {
       id: payload.id,
       username: payload.username,
-      type: 'refresh'
+      type: 'refresh',
+      jti: crypto.randomBytes(16).toString('hex')
     },
     JWT_REFRESH_SECRET,
     {
@@ -109,4 +110,3 @@ module.exports = {
   JWT_SECRET,
   JWT_REFRESH_SECRET
 };
-

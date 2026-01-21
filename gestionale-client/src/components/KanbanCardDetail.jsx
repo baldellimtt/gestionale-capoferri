@@ -25,6 +25,11 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
   const [commessaSearch, setCommessaSearch] = useState('')
   const [portalCommessaAutocomplete, setPortalCommessaAutocomplete] = useState(null)
   const commessaAutocompleteRef = useRef(null)
+  const [commessaAudit, setCommessaAudit] = useState([])
+  const [commessaAuditLoading, setCommessaAuditLoading] = useState(false)
+  const [commessaAuditError, setCommessaAuditError] = useState(null)
+  const [commessaAuditCommessaId, setCommessaAuditCommessaId] = useState(null)
+  const [showCommessaAudit, setShowCommessaAudit] = useState(false)
   const [scadenzaForm, setScadenzaForm] = useState({
     titolo: '',
     descrizione: '',
@@ -55,6 +60,10 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
       } else {
         setCommessaSearch('')
       }
+      setCommessaAudit([])
+      setCommessaAuditError(null)
+      setCommessaAuditCommessaId(null)
+      setShowCommessaAudit(false)
       loadScadenze()
     } else {
       // Nuova card - imposta colonna predefinita (In Attesa)
@@ -74,6 +83,10 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
       setClienteSearch('')
       setCommessaSearch('')
       setScadenze([])
+      setCommessaAudit([])
+      setCommessaAuditError(null)
+      setCommessaAuditCommessaId(null)
+      setShowCommessaAudit(false)
     }
   }, [card, colonne])
 
@@ -245,7 +258,120 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
     }))
     setCommessaSearch(commessa.titolo)
     setPortalCommessaAutocomplete(null)
+    setCommessaAudit([])
+    setCommessaAuditError(null)
+    setCommessaAuditCommessaId(null)
   }
+
+  const auditFieldLabels = {
+    titolo: 'Titolo',
+    cliente_nome: 'Cliente',
+    stato: 'Stato commessa',
+    sotto_stato: 'Fase di lavoro',
+    stato_pagamenti: 'Stato pagamenti',
+    preventivo: 'Preventivo',
+    importo_preventivo: 'Importo preventivo',
+    importo_totale: 'Importo totale',
+    importo_pagato: 'Importo pagato',
+    avanzamento_lavori: 'Avanzamento lavori',
+    responsabile: 'Responsabile',
+    data_inizio: 'Data inizio',
+    data_fine: 'Data fine',
+    note: 'Note'
+  }
+
+  const auditChangeActions = {
+    stato: 'Cambio stato',
+    stato_pagamenti: 'Cambio stato pagamenti',
+    sotto_stato: 'Cambio fase di lavoro',
+    cliente_nome: 'Cambio cliente',
+    responsabile: 'Cambio responsabile',
+    titolo: 'Modifica titolo',
+    importo_preventivo: 'Modifica importo preventivo',
+    importo_totale: 'Modifica importo totale',
+    importo_pagato: 'Modifica importo pagato',
+    avanzamento_lavori: 'Aggiornamento avanzamento lavori',
+    preventivo: 'Cambio preventivo',
+    data_inizio: 'Cambio data inizio',
+    data_fine: 'Cambio data fine',
+    note: 'Modifica note'
+  }
+
+  const formatAuditAction = (entry) => {
+    if (!entry) return 'Evento'
+    if (entry.action === 'update' && Array.isArray(entry.changes)) {
+      const labels = entry.changes.map((change) => {
+        if (!change?.field) return 'Aggiornamento'
+        return auditChangeActions[change.field] || `Modifica ${formatFieldLabel(change.field)}`
+      })
+      const unique = [...new Set(labels)]
+      return unique.length ? unique.join(', ') : 'Aggiornamento'
+    }
+    const mapping = {
+      create: 'Creazione',
+      update: 'Aggiornamento',
+      delete: 'Eliminazione',
+      attachment_uploaded: 'Allegato caricato',
+      attachment_deleted: 'Eliminazione allegato'
+    }
+    return mapping[entry.action] || entry.action || 'Evento'
+  }
+
+  const formatFieldLabel = (field) => {
+    if (!field) return 'Campo'
+    return auditFieldLabels[field] || String(field).replace(/_/g, ' ')
+  }
+
+  const formatChangeValue = (value, field) => {
+    if (value == null || value === '') return '-'
+    if (field === 'preventivo') {
+      return Number(value) === 1 ? 'Sì' : 'No'
+    }
+    if (typeof value === 'boolean') return value ? 'Sì' : 'No'
+    return String(value)
+  }
+
+  const formatAuditDate = (value) => {
+    if (!value) return ''
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return value
+    return date.toLocaleString('it-IT')
+  }
+
+  const formatAuditUser = (entry) => {
+    const user = entry?.user
+    const fullName = [user?.nome, user?.cognome].filter(Boolean).join(' ').trim()
+    return fullName || user?.username || (entry?.user_id ? `Utente #${entry.user_id}` : 'Sistema')
+  }
+
+  const loadCommessaAudit = async (commessaId) => {
+    if (!commessaId) return
+    setCommessaAuditLoading(true)
+    setCommessaAuditError(null)
+    try {
+      const data = await api.getCommessaAudit(commessaId)
+      setCommessaAudit(Array.isArray(data) ? data : [])
+      setCommessaAuditCommessaId(String(commessaId))
+    } catch (err) {
+      console.error('Errore caricamento cronologia commessa:', err)
+      setCommessaAuditError('Errore nel caricamento della cronologia commessa')
+    } finally {
+      setCommessaAuditLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!showCommessaAudit) return
+    const commessaId = formData.commessa_id
+    if (!commessaId) {
+      setCommessaAudit([])
+      setCommessaAuditError(null)
+      setCommessaAuditCommessaId(null)
+      return
+    }
+    if (commessaAuditCommessaId === String(commessaId)) return
+    loadCommessaAudit(commessaId)
+  }, [showCommessaAudit, formData.commessa_id])
 
   const loadScadenze = async () => {
     if (!card?.id) return
@@ -713,6 +839,81 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
                 </div>
               </div>
             </form>
+
+            <div className="mt-4" style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '1.5rem' }}>
+              <div className="d-flex justify-content-between align-items-center mb-3">
+                <h6 style={{ margin: 0 }}>Cronologia commessa</h6>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-primary"
+                  onClick={() => {
+                    if (!formData.commessa_id) return
+                    setShowCommessaAudit(prev => !prev)
+                  }}
+                  disabled={!formData.commessa_id}
+                >
+                  {showCommessaAudit ? 'Nascondi' : 'Mostra'}
+                </button>
+              </div>
+              {!formData.commessa_id && (
+                <div className="text-muted" style={{ fontSize: '0.85rem' }}>
+                  Associa una commessa per vedere la cronologia.
+                </div>
+              )}
+              {formData.commessa_id && showCommessaAudit && (
+                <div className="card" style={{ border: '1px solid var(--border-soft)' }}>
+                  <div className="card-body" style={{ padding: '0.75rem' }}>
+                    {commessaAuditLoading && (
+                      <div className="text-muted" style={{ fontSize: '0.85rem' }}>
+                        Caricamento cronologia...
+                      </div>
+                    )}
+                    {commessaAuditError && (
+                      <div className="alert alert-warning mb-0">
+                        {commessaAuditError}
+                      </div>
+                    )}
+                    {!commessaAuditLoading && !commessaAuditError && commessaAudit.length === 0 && (
+                      <div className="text-muted" style={{ fontSize: '0.85rem' }}>
+                        Nessuna modifica registrata.
+                      </div>
+                    )}
+                    {!commessaAuditLoading && !commessaAuditError && commessaAudit.length > 0 && (
+                      <div className="audit-list">
+                        {commessaAudit.map((entry) => (
+                          <div key={entry.id} className="audit-item">
+                            <div className="audit-header">
+                              <div>
+                                <div className="audit-title">{formatAuditAction(entry)}</div>
+                                <div className="audit-meta">Da: {formatAuditUser(entry)}</div>
+                              </div>
+                              <div className="audit-meta">{formatAuditDate(entry.created_at)}</div>
+                            </div>
+                            {Array.isArray(entry.changes) && entry.changes.length > 0 && (
+                              <div className="audit-changes">
+                                {entry.changes.map((change, idx) => (
+                                  <div key={`${entry.id}-change-${idx}`}>
+                                    {formatFieldLabel(change.field)}: {formatChangeValue(change.from, change.field)} &gt; {formatChangeValue(change.to, change.field)}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {!Array.isArray(entry.changes) && entry.changes && entry.action?.startsWith('attachment') && (
+                              <div className="audit-changes">
+                                <div>Allegato: {entry.changes.original_name || 'N/D'}</div>
+                                {entry.changes.version && (
+                                  <div>Versione: {entry.changes.version}</div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
 
             {card?.id && (
               <div className="mt-4" style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '1.5rem' }}>

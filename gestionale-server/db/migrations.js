@@ -73,6 +73,21 @@ class Migrations {
         FOREIGN KEY (user_id) REFERENCES utenti(id) ON DELETE CASCADE
       );
 
+      -- Tabella Refresh Tokens (JWT)
+      CREATE TABLE IF NOT EXISTS refresh_tokens (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        expires_at TEXT NOT NULL,
+        revoked_at TEXT,
+        replaced_by_token_hash TEXT,
+        created_at TEXT DEFAULT (datetime('now', 'localtime')),
+        FOREIGN KEY (user_id) REFERENCES utenti(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_id ON refresh_tokens(user_id);
+      CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expires_at ON refresh_tokens(expires_at);
+
       -- Tabella Commesse
       CREATE TABLE IF NOT EXISTS commesse (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -106,9 +121,28 @@ class Migrations {
         mime_type TEXT,
         file_size INTEGER DEFAULT 0,
         file_path TEXT NOT NULL,
+        version INTEGER DEFAULT 1,
+        is_latest INTEGER DEFAULT 1,
+        previous_id INTEGER,
         created_at TEXT DEFAULT (datetime('now', 'localtime')),
         FOREIGN KEY (commessa_id) REFERENCES commesse(id) ON DELETE CASCADE
       );
+
+      -- Tabella Audit Commesse
+      CREATE TABLE IF NOT EXISTS commesse_audit (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        commessa_id INTEGER NOT NULL,
+        user_id INTEGER,
+        action TEXT NOT NULL,
+        changes_json TEXT,
+        kanban_card_ids TEXT,
+        created_at TEXT DEFAULT (datetime('now', 'localtime')),
+        FOREIGN KEY (commessa_id) REFERENCES commesse(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES utenti(id) ON DELETE SET NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_commesse_audit_commessa_id ON commesse_audit(commessa_id);
+      CREATE INDEX IF NOT EXISTS idx_commesse_audit_created_at ON commesse_audit(created_at);
 
       -- Tabella Dati Aziendali (singola riga)
       CREATE TABLE IF NOT EXISTS dati_aziendali (
@@ -249,6 +283,8 @@ class Migrations {
 
     this.ensureUserColumns(db);
     this.ensureCommesseColumns(db);
+    this.ensureCommesseAllegatiColumns(db);
+    this.ensureCommesseAuditTable(db);
     this.ensureContattiColumns(db);
     this.ensureKanbanColumns(db);
     this.ensureKanbanCommentiTable(db);
@@ -367,6 +403,50 @@ class Migrations {
     addColumn('allegati', 'TEXT');
   }
 
+  ensureCommesseAllegatiColumns(db) {
+    try {
+      const columns = db.prepare('PRAGMA table_info(commesse_allegati)').all().map((col) => col.name);
+      const addColumn = (name, type, def = null) => {
+        if (!columns.includes(name)) {
+          const defaultClause = def == null ? '' : ` DEFAULT ${def}`;
+          db.exec(`ALTER TABLE commesse_allegati ADD COLUMN ${name} ${type}${defaultClause}`);
+        }
+      };
+
+      addColumn('version', 'INTEGER', 1);
+      addColumn('is_latest', 'INTEGER', 1);
+      addColumn('previous_id', 'INTEGER');
+    } catch (error) {
+      console.log('[MIGRATIONS] Tabella commesse_allegati non ancora creata');
+    }
+  }
+
+  ensureCommesseAuditTable(db) {
+    try {
+      const tableInfo = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='commesse_audit'").get();
+      if (!tableInfo) {
+        db.exec(`
+          CREATE TABLE commesse_audit (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            commessa_id INTEGER NOT NULL,
+            user_id INTEGER,
+            action TEXT NOT NULL,
+            changes_json TEXT,
+            kanban_card_ids TEXT,
+            created_at TEXT DEFAULT (datetime('now', 'localtime')),
+            FOREIGN KEY (commessa_id) REFERENCES commesse(id) ON DELETE CASCADE,
+            FOREIGN KEY (user_id) REFERENCES utenti(id) ON DELETE SET NULL
+          );
+          CREATE INDEX IF NOT EXISTS idx_commesse_audit_commessa_id ON commesse_audit(commessa_id);
+          CREATE INDEX IF NOT EXISTS idx_commesse_audit_created_at ON commesse_audit(created_at);
+        `);
+        console.log('[MIGRATIONS] Tabella commesse_audit creata');
+      }
+    } catch (error) {
+      console.log('[MIGRATIONS] Errore verifica tabella commesse_audit:', error.message);
+    }
+  }
+
   ensureDefaultUser(db) {
     const { hashPassword } = require('../utils/auth');
     const existing = db.prepare('SELECT id FROM utenti WHERE username = ?').get('lcapoferri');
@@ -424,9 +504,6 @@ class Migrations {
 }
 
 module.exports = new Migrations();
-
-
-
 
 
 

@@ -218,65 +218,38 @@ function App() {
         {authChecking ? (
           <LoadingFallback />
         ) : user ? (
-          <div className="row g-3">
-            <div className="col-md-3">
-              <aside className="sidebar">
-                <nav>
-                  <ul className="sidebar-nav">
-                    <li>
-                      <a 
-                        href="#anagrafica" 
-                        className={activeView === 'anagrafica' ? 'active' : ''}
-                        onClick={(e) => {
-                          e.preventDefault()
-                          setActiveView('anagrafica')
-                        }}
-                      >
-                        Anagrafica Clienti
-                      </a>
-                    </li>
-                    <li>
-                      <a
-                        href="#commesse"
-                        className={activeView === 'commesse' ? 'active' : ''}
-                        onClick={(e) => {
-                          e.preventDefault()
-                          setActiveView('commesse')
-                        }}
-                      >
-                        Commesse
-                      </a>
-                    </li>
-                    <li>
-                      <a 
-                        href="#kanban" 
-                        className={activeView === 'kanban' ? 'active' : ''}
-                        onClick={(e) => {
-                          e.preventDefault()
-                          setActiveView('kanban')
-                        }}
-                      >
-                        Kanban
-                      </a>
-                    </li>
-                    <li>
-                      <a
-                        href="#attivita"
-                        className={activeView === 'attivita' ? 'active' : ''}
-                        onClick={(e) => {
-                          e.preventDefault()
-                          setActiveView('attivita')
-                        }}
-                      >
-                        Rimborsi
-                      </a>
-                    </li>
-                  </ul>
-              </nav>
-            </aside>
-            </div>
-
-            <div className="col-md-9">
+          <div className="app-layout">
+            <nav className="topbar-nav">
+              <button
+                className={`topbar-link ${activeView === 'anagrafica' ? 'active' : ''}`}
+                onClick={() => setActiveView('anagrafica')}
+                type="button"
+              >
+                Anagrafica
+              </button>
+              <button
+                className={`topbar-link ${activeView === 'commesse' ? 'active' : ''}`}
+                onClick={() => setActiveView('commesse')}
+                type="button"
+              >
+                Commesse
+              </button>
+              <button
+                className={`topbar-link ${activeView === 'kanban' ? 'active' : ''}`}
+                onClick={() => setActiveView('kanban')}
+                type="button"
+              >
+                Kanban
+              </button>
+              <button
+                className={`topbar-link ${activeView === 'attivita' ? 'active' : ''}`}
+                onClick={() => setActiveView('attivita')}
+                type="button"
+              >
+                Rimborsi
+              </button>
+            </nav>
+            <div className="content-col">
               <main className="content-area">
                 {loading ? (
                   <LoadingFallback />
