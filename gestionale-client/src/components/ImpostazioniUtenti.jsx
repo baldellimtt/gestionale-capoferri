@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import api from '../services/api'
 
-function ImpostazioniUtenti({ currentUser, onUserUpdated, onBack }) {
+function ImpostazioniUtenti({ currentUser, onUserUpdated, onBack, toast }) {
   const [utenti, setUtenti] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -109,6 +109,7 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onBack }) {
     try {
       setSaving(true)
       setError(null)
+      const loadingToastId = toast?.showLoading('Salvataggio in corso...', 'Salvataggio utente')
       const updated = await api.updateUtente(id, {
         ...editData,
         rimborso_km: rimborso
@@ -118,9 +119,16 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onBack }) {
         onUserUpdated(updated)
       }
       cancelEdit()
+      if (loadingToastId) {
+        toast?.updateToast(loadingToastId, { type: 'success', title: 'Completato', message: 'Utente aggiornato con successo', duration: 3000 })
+      } else {
+        toast?.showSuccess('Utente aggiornato con successo')
+      }
     } catch (err) {
       console.error('Errore aggiornamento utente:', err)
-      setError(err.message || 'Errore nel salvataggio utente.')
+      const errorMsg = err.message || 'Errore nel salvataggio utente.'
+      setError(errorMsg)
+      toast?.showError(errorMsg, 'Errore salvataggio')
     } finally {
       setSaving(false)
     }
@@ -134,11 +142,19 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onBack }) {
     try {
       setSaving(true)
       setError(null)
+      const loadingToastId = toast?.showLoading('Eliminazione in corso...', 'Eliminazione utente')
       await api.deleteUtente(utente.id)
       setUtenti((prev) => prev.filter((u) => u.id !== utente.id))
+      if (loadingToastId) {
+        toast?.updateToast(loadingToastId, { type: 'success', title: 'Completato', message: 'Utente eliminato con successo', duration: 3000 })
+      } else {
+        toast?.showSuccess('Utente eliminato con successo')
+      }
     } catch (err) {
       console.error('Errore eliminazione utente:', err)
-      setError(err.message || 'Errore nell\'eliminazione utente.')
+      const errorMsg = err.message || 'Errore nell\'eliminazione utente.'
+      setError(errorMsg)
+      toast?.showError(errorMsg, 'Errore eliminazione')
     } finally {
       setSaving(false)
     }

@@ -60,17 +60,39 @@ class ClientiController {
   getAll(req, res) {
     try {
       const { search } = req.query;
+      const { page, limit, offset } = Pagination.getParams(req, 50, 100);
       
       let clienti;
+      let total;
+      
       if (search) {
         const searchTerm = `%${search}%`;
-        clienti = this.stmt.search.all(searchTerm, searchTerm, searchTerm, searchTerm, searchTerm);
+        // Per la ricerca, otteniamo tutti i risultati e li paginiamo manualmente
+        // perché la query di ricerca è più complessa
+        const allResults = this.stmt.search.all(searchTerm, searchTerm, searchTerm, searchTerm, searchTerm);
+        total = allResults.length;
+        clienti = allResults.slice(offset, offset + limit);
       } else {
-        clienti = this.stmt.getAll.all();
+        // Conta totale senza paginazione
+        const allResults = this.stmt.getAll.all();
+        total = allResults.length;
+        // Applica paginazione manualmente (SQLite non supporta COUNT(*) OVER facilmente)
+        clienti = allResults.slice(offset, offset + limit);
       }
 
-      Logger.info('GET /clienti', { count: clienti.length, search });
-      res.json(clienti);
+      Logger.info('GET /clienti', { count: clienti.length, total, page, limit, search });
+      
+      // Se non c'è ricerca, restituisci dati paginati
+      if (!search && (page > 1 || limit < total)) {
+        res.json(Pagination.createResponse(clienti, total, page, limit));
+      } else {
+        // Per retrocompatibilità, se non ci sono parametri di paginazione o c'è ricerca, restituisci array semplice
+        if (!req.query.page && !req.query.limit) {
+          res.json(clienti);
+        } else {
+          res.json(Pagination.createResponse(clienti, total, page, limit));
+        }
+      }
     } catch (error) {
       Logger.error('Errore GET /clienti', error);
       res.status(500).json({ error: error.message });

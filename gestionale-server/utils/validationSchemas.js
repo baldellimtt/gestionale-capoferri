@@ -88,17 +88,28 @@ const ValidationSchemas = {
         .isLength({ max: 100 })
         .withMessage('Ruolo troppo lungo (max 100 caratteri)'),
       body('telefono')
-        .optional()
-        .trim()
-        .matches(/^(\+39)?[0-9]{8,12}$/)
+        .optional({ nullable: true, checkFalsy: true })
+        .custom((value) => {
+          if (value === null || value === undefined || value === '') return true;
+          // Rimuove spazi, trattini, parentesi e altri caratteri per validare solo i numeri
+          const cleaned = String(value).replace(/[\s\-\(\)\.]/g, '');
+          // Accetta numeri con o senza prefisso +39, da 8 a 15 cifre
+          return /^(\+39)?[0-9]{8,15}$/.test(cleaned);
+        })
         .withMessage('Telefono non valido'),
       body('email')
-        .optional()
-        .trim()
-        .isEmail()
-        .withMessage('Email non valida')
-        .isLength({ max: 255 })
-        .withMessage('Email troppo lunga (max 255 caratteri)')
+        .optional({ nullable: true, checkFalsy: true })
+        .custom((value) => {
+          if (value === null || value === undefined || value === '') return true;
+          const trimmed = String(value).trim();
+          if (trimmed === '') return true;
+          // Valida email solo se non è vuota
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          if (!emailRegex.test(trimmed)) return false;
+          // Verifica lunghezza
+          return trimmed.length <= 255;
+        })
+        .withMessage('Email non valida (max 255 caratteri)')
     ],
     update: [] // Sarà popolato dopo la definizione
   },
@@ -253,17 +264,29 @@ const ValidationSchemas = {
         .isLength({ max: 100 })
         .withMessage('Responsabile troppo lungo'),
       body('data_inizio')
-        .optional()
-        .isISO8601()
+        .optional({ nullable: true, checkFalsy: true })
+        .custom((value) => {
+          if (value === null || value === undefined || value === '') return true;
+          // Accetta formato date ISO8601 (YYYY-MM-DD) o datetime ISO8601
+          return /^\d{4}-\d{2}-\d{2}$/.test(value) || /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value);
+        })
         .withMessage('Data inizio non valida'),
       body('data_fine')
-        .optional()
-        .isISO8601()
+        .optional({ nullable: true, checkFalsy: true })
+        .custom((value) => {
+          if (value === null || value === undefined || value === '') return true;
+          // Accetta formato date ISO8601 (YYYY-MM-DD) o datetime ISO8601
+          return /^\d{4}-\d{2}-\d{2}$/.test(value) || /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value);
+        })
         .withMessage('Data fine non valida'),
       body('note')
-        .optional()
-        .trim()
-        .isLength({ max: 2000 })
+        .optional({ nullable: true, checkFalsy: true })
+        .custom((value) => {
+          if (value === null || value === undefined || value === '') return true;
+          if (typeof value !== 'string') return false;
+          const trimmed = value.trim();
+          return trimmed.length <= 2000;
+        })
         .withMessage('Note troppo lunghe (max 2000 caratteri)')
     ],
     update: [] // Sarà popolato dopo la definizione

@@ -29,7 +29,7 @@ const PROVINCE_ITALIA = [
   'VC', 'VR', 'VV', 'VI', 'VT'
 ]
 
-function DatiFiscali({ onBack }) {
+function DatiFiscali({ onBack, toast }) {
   const [formData, setFormData] = useState({
     codice_destinatario_sdi: '',
     pec: '',
@@ -88,12 +88,20 @@ function DatiFiscali({ onBack }) {
       setSaving(true)
       setError(null)
       setSuccess(false)
+      const loadingToastId = toast?.showLoading('Salvataggio in corso...', 'Salvataggio dati fiscali')
       await api.updateDatiFiscali(formData)
       setSuccess(true)
       setTimeout(() => setSuccess(false), 3000)
+      if (loadingToastId) {
+        toast?.updateToast(loadingToastId, { type: 'success', title: 'Completato', message: 'Dati fiscali aggiornati con successo', duration: 3000 })
+      } else {
+        toast?.showSuccess('Dati fiscali aggiornati con successo')
+      }
     } catch (err) {
       console.error('Errore salvataggio dati fiscali:', err)
-      setError(err.message || 'Errore nel salvataggio dei dati fiscali.')
+      const errorMsg = err.message || 'Errore nel salvataggio dei dati fiscali.'
+      setError(errorMsg)
+      toast?.showError(errorMsg, 'Errore salvataggio')
     } finally {
       setSaving(false)
     }

@@ -14,7 +14,7 @@ import {
   normalizeAttivitaFromApi
 } from '../utils/attivita'
 
-function TabellaAttivita({ clienti, user }) {
+function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
   const [attivita, setAttivita] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -151,13 +151,17 @@ function TabellaAttivita({ clienti, user }) {
 
       if (row.id && typeof row.id === 'number') {
         await api.updateAttivita(row.id, attivitaData)
+        toast?.showSuccess('Rimborso aggiornato con successo')
       } else {
         const result = await api.createAttivita(attivitaData)
         setAttivita((prev) => prev.map((r) => (r === row ? { ...r, id: result.id } : r)))
+        toast?.showSuccess('Rimborso salvato con successo')
       }
     } catch (err) {
       console.error('Errore salvataggio attività:', err)
-      setError('Errore nel salvataggio: ' + (err.message || 'Errore sconosciuto'))
+      const errorMsg = 'Errore nel salvataggio: ' + (err.message || 'Errore sconosciuto')
+      setError(errorMsg)
+      toast?.showError(errorMsg, 'Errore salvataggio')
     } finally {
       setSaving((prev) => {
         const next = { ...prev }
@@ -165,7 +169,7 @@ function TabellaAttivita({ clienti, user }) {
         return next
       })
     }
-  }, [saving])
+  }, [saving, toast])
 
   const { scheduleSave } = useDebouncedRowSave(saveRow, 500)
 
@@ -244,10 +248,18 @@ function TabellaAttivita({ clienti, user }) {
     setAttivita((prev) => prev.filter((row) => Number(row?.id) !== idToDelete))
 
     try {
+      const loadingToastId = toast?.showLoading('Eliminazione in corso...', 'Eliminazione rimborso')
       await api.deleteAttivita(idToDelete)
+      if (loadingToastId) {
+        toast?.updateToast(loadingToastId, { type: 'success', title: 'Completato', message: 'Rimborso eliminato con successo', duration: 3000 })
+      } else {
+        toast?.showSuccess('Rimborso eliminato con successo')
+      }
     } catch (err) {
       console.error('Errore eliminazione API:', err)
-      setError('Errore nell\'eliminazione: ' + (err.message || 'Errore sconosciuto'))
+      const errorMsg = 'Errore nell\'eliminazione: ' + (err.message || 'Errore sconosciuto')
+      setError(errorMsg)
+      toast?.showError(errorMsg, 'Errore eliminazione')
     } finally {
       setDeleting(false)
       await loadAttivita()
@@ -693,25 +705,33 @@ function TabellaAttivita({ clienti, user }) {
         </div>
       )}
 
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2 className="section-title mb-0 no-title-line">Rimborsi</h2>
-        <div className="d-flex gap-2">
-          {expanded && (
+      {!hideControls && (
+        <div className="d-flex justify-content-between align-items-center mb-4">
+          <h2 className="section-title mb-0 no-title-line">Rimborsi</h2>
+          <div className="d-flex gap-2">
+            {expanded && (
+              <button
+                className="btn btn-secondary"
+                onClick={() => setExpanded(false)}
+              >
+                Indietro
+              </button>
+            )}
             <button
               className="btn btn-secondary"
-              onClick={() => setExpanded(false)}
+              onClick={() => setExpanded(!expanded)}
             >
-              Indietro
+              {expanded ? 'Mostra da compilare' : 'Mostra tutte'}
             </button>
-          )}
-          <button
-            className="btn btn-secondary"
-            onClick={() => setExpanded(!expanded)}
-          >
-            {expanded ? 'Mostra da compilare' : 'Mostra tutte'}
-          </button>
+          </div>
         </div>
-      </div>
+      )}
+
+      {hideControls && !expanded && (
+        <div className="mb-4">
+          <h2 className="section-title mb-0 no-title-line">Rimborsi</h2>
+        </div>
+      )}
 
       {expanded && (
         <>

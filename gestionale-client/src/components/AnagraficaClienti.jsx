@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import api from '../services/api'
 import ContattiList from './ContattiList'
 
-function AnagraficaClienti({ clienti, onUpdateClienti, onBack }) {
+function AnagraficaClienti({ clienti, onUpdateClienti, onBack, currentUser, toast }) {
   const [showForm, setShowForm] = useState(false)
   const [editingCliente, setEditingCliente] = useState(null)
   const [searchTerm, setSearchTerm] = useState('')
@@ -20,6 +20,19 @@ function AnagraficaClienti({ clienti, onUpdateClienti, onBack }) {
     partitaIva: '',
     codiceFiscale: ''
   })
+  const [initialFormData, setInitialFormData] = useState({
+    denominazione: '',
+    paese: '',
+    codiceDestinatarioSDI: '',
+    indirizzo: '',
+    comune: '',
+    cap: '',
+    provincia: '',
+    partitaIva: '',
+    codiceFiscale: ''
+  })
+  const [contatti, setContatti] = useState([])
+  const [initialContatti, setInitialContatti] = useState([])
 
   // Filtra clienti localmente o usa ricerca server-side
   useEffect(() => {
@@ -76,24 +89,40 @@ function AnagraficaClienti({ clienti, onUpdateClienti, onBack }) {
         codiceFiscale: clienteData.codiceFiscale
       }
 
+      const loadingToastId = toast?.showLoading('Salvataggio in corso...', 'Salvataggio cliente')
+      
       if (editingCliente !== null) {
         await api.updateCliente(editingCliente.id, apiData)
+        // Sincronizza i contatti iniziali dopo il salvataggio
+        setInitialContatti(JSON.parse(JSON.stringify(contatti)))
+        if (loadingToastId) {
+          toast?.updateToast(loadingToastId, { type: 'success', title: 'Completato', message: 'Cliente aggiornato con successo', duration: 3000 })
+        } else {
+          toast?.showSuccess('Cliente aggiornato con successo')
+        }
       } else {
         await api.createCliente(apiData)
+        if (loadingToastId) {
+          toast?.updateToast(loadingToastId, { type: 'success', title: 'Completato', message: 'Cliente creato con successo', duration: 3000 })
+        } else {
+          toast?.showSuccess('Cliente creato con successo')
+        }
       }
 
       await onUpdateClienti()
       handleCancel()
     } catch (err) {
       console.error('Errore salvataggio cliente:', err)
-      setError('Errore nel salvataggio del cliente: ' + (err.message || 'Errore sconosciuto'))
+      const errorMsg = 'Errore nel salvataggio del cliente: ' + (err.message || 'Errore sconosciuto')
+      setError(errorMsg)
+      toast?.showError(errorMsg, 'Errore salvataggio')
     } finally {
       setLoading(false)
     }
   }
 
-  const handleEdit = (cliente) => {
-    setFormData({
+  const handleEdit = async (cliente) => {
+    const nextFormData = {
       denominazione: cliente.denominazione || '',
       paese: cliente.paese || '',
       codiceDestinatarioSDI: cliente.codice_destinatario_sdi || '',
@@ -103,9 +132,23 @@ function AnagraficaClienti({ clienti, onUpdateClienti, onBack }) {
       provincia: cliente.provincia || '',
       partitaIva: cliente.partita_iva || '',
       codiceFiscale: cliente.codice_fiscale || ''
-    })
+    }
+    setFormData(nextFormData)
+    setInitialFormData(nextFormData)
     setEditingCliente(cliente)
     setShowForm(true)
+    
+    // Carica i contatti iniziali
+    try {
+      const initialContattiData = await api.getClienteContatti(cliente.id)
+      setContatti(initialContattiData)
+      setInitialContatti(JSON.parse(JSON.stringify(initialContattiData)))
+    } catch (err) {
+      console.error('Errore caricamento contatti:', err)
+      setContatti([])
+      setInitialContatti([])
+    }
+    
     // Scroll to top quando si apre il form
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -119,11 +162,19 @@ function AnagraficaClienti({ clienti, onUpdateClienti, onBack }) {
     setLoading(true)
 
     try {
+      const loadingToastId = toast?.showLoading('Eliminazione in corso...', 'Eliminazione cliente')
       await api.deleteCliente(cliente.id)
       await onUpdateClienti()
+      if (loadingToastId) {
+        toast?.updateToast(loadingToastId, { type: 'success', title: 'Completato', message: 'Cliente eliminato con successo', duration: 3000 })
+      } else {
+        toast?.showSuccess('Cliente eliminato con successo')
+      }
     } catch (err) {
       console.error('Errore eliminazione cliente:', err)
-      setError('Errore nell\'eliminazione del cliente: ' + (err.message || 'Errore sconosciuto'))
+      const errorMsg = 'Errore nell\'eliminazione del cliente: ' + (err.message || 'Errore sconosciuto')
+      setError(errorMsg)
+      toast?.showError(errorMsg, 'Errore eliminazione')
     } finally {
       setLoading(false)
     }
@@ -132,7 +183,7 @@ function AnagraficaClienti({ clienti, onUpdateClienti, onBack }) {
   const handleCancel = () => {
     setShowForm(false)
     setEditingCliente(null)
-    setFormData({
+    const emptyForm = {
       denominazione: '',
       paese: '',
       codiceDestinatarioSDI: '',
@@ -142,8 +193,29 @@ function AnagraficaClienti({ clienti, onUpdateClienti, onBack }) {
       provincia: '',
       partitaIva: '',
       codiceFiscale: ''
-    })
+    }
+    setFormData(emptyForm)
+    setInitialFormData(emptyForm)
+    setContatti([])
+    setInitialContatti([])
   }
+  
+  const handleContattiChange = (newContatti) => {
+    setContatti(newContatti || [])
+  }
+  
+  const isDirty = useMemo(() => {
+    // Verifica se il form è cambiato
+    const formChanged = JSON.stringify(formData) !== JSON.stringify(initialFormData)
+    
+    // Verifica se i contatti sono cambiati
+    const contattiChanged = JSON.stringify(contatti.map(c => ({ id: c.id, nome: c.nome, ruolo: c.ruolo, telefono: c.telefono, email: c.email })).sort((a, b) => (a.id || 0) - (b.id || 0))) !== 
+                           JSON.stringify(initialContatti.map(c => ({ id: c.id, nome: c.nome, ruolo: c.ruolo, telefono: c.telefono, email: c.email })).sort((a, b) => (a.id || 0) - (b.id || 0)))
+    
+    return formChanged || contattiChanged
+  }, [formData, initialFormData, contatti, initialContatti])
+  
+  const canSave = isDirty && formData.denominazione.trim() !== '' && !loading
 
   return (
     <div key={`anagrafica-${showForm}`}>
@@ -281,7 +353,7 @@ function AnagraficaClienti({ clienti, onUpdateClienti, onBack }) {
                 </div>
               </div>
               <div className="mt-3 d-flex gap-2">
-                <button type="submit" className="btn btn-primary" disabled={loading}>
+                <button type="submit" className="btn btn-primary" disabled={!canSave}>
                   {loading ? 'Salvataggio...' : (editingCliente !== null ? 'Salva Modifiche' : 'Aggiungi Cliente')}
                 </button>
                 <button type="button" className="btn btn-secondary" onClick={handleCancel} disabled={loading}>
@@ -296,7 +368,12 @@ function AnagraficaClienti({ clienti, onUpdateClienti, onBack }) {
       {showForm && editingCliente && editingCliente.id && (
         <div className="card mb-4">
           <div className="card-body">
-            <ContattiList clienteId={editingCliente.id} />
+            <ContattiList 
+              clienteId={editingCliente.id} 
+              onContattiChange={handleContattiChange}
+              currentUser={currentUser}
+              toast={toast}
+            />
           </div>
         </div>
       )}

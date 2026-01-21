@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import api from '../services/api'
 import KanbanComments from './KanbanComments'
 
-function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, onSave, onDelete, onClose, onRefresh }) {
+function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, onSave, onDelete, onClose, onRefresh, toast }) {
   const [formData, setFormData] = useState({
     titolo: '',
     descrizione: '',
@@ -254,6 +254,8 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
     setError(null)
 
     try {
+      const loadingToastId = toast?.showLoading('Salvataggio in corso...', 'Salvataggio card')
+      
       // Prepara i dati assicurandosi che i campi numerici siano corretti
       const cardData = {
         ...formData,
@@ -275,27 +277,37 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
 
       if (card?.id) {
         await onSave({ ...cardData, id: card.id })
+        if (loadingToastId) {
+          toast?.updateToast(loadingToastId, { type: 'success', title: 'Completato', message: 'Card aggiornata con successo', duration: 3000 })
+        } else {
+          toast?.showSuccess('Card aggiornata con successo')
+        }
         // Chiudi la modal dopo il salvataggio riuscito
         onClose()
       } else {
         const created = await api.createKanbanCard(cardData)
         await onRefresh()
+        if (loadingToastId) {
+          toast?.updateToast(loadingToastId, { type: 'success', title: 'Completato', message: 'Card creata con successo', duration: 3000 })
+        } else {
+          toast?.showSuccess('Card creata con successo')
+        }
         onClose()
       }
     } catch (err) {
       console.error('Errore salvataggio card:', err)
       // Gestione errori più dettagliata
+      let errorMsg = 'Errore nel salvataggio: ' + (err.message || 'Errore sconosciuto')
       if (err.status === 400) {
-        let errorMsg = err.message || 'Errore di validazione. Verifica i dati inseriti.'
+        errorMsg = err.message || 'Errore di validazione. Verifica i dati inseriti.'
         if (err.details && Array.isArray(err.details)) {
           errorMsg = err.details.map(d => d.message || `${d.field}: ${d.message}`).join('. ')
         }
-        setError(errorMsg)
       } else if (err.status === 401) {
-        setError('Sessione scaduta. Ricarica la pagina e riprova.')
-      } else {
-        setError('Errore nel salvataggio: ' + (err.message || 'Errore sconosciuto'))
+        errorMsg = 'Sessione scaduta. Ricarica la pagina e riprova.'
       }
+      setError(errorMsg)
+      toast?.showError(errorMsg, 'Errore salvataggio')
     } finally {
       setLoading(false)
     }
@@ -426,11 +438,19 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
       return
     }
     try {
+      const loadingToastId = toast?.showLoading('Eliminazione in corso...', 'Eliminazione scadenza')
       await api.deleteKanbanScadenza(scadenzaId)
       await loadScadenze()
+      if (loadingToastId) {
+        toast?.updateToast(loadingToastId, { type: 'success', title: 'Completato', message: 'Scadenza eliminata con successo', duration: 3000 })
+      } else {
+        toast?.showSuccess('Scadenza eliminata con successo')
+      }
     } catch (err) {
       console.error('Errore eliminazione scadenza:', err)
-      setError('Errore nell\'eliminazione della scadenza')
+      const errorMsg = 'Errore nell\'eliminazione della scadenza'
+      setError(errorMsg)
+      toast?.showError(errorMsg, 'Errore eliminazione')
     }
   }
 
@@ -917,6 +937,7 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
                 onCommentAdded={() => {
                   if (onRefresh) onRefresh()
                 }}
+                toast={toast}
               />
             )}
 

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import api from '../services/api'
 import ConfirmDeleteModal from './ConfirmDeleteModal'
 
-function KanbanComments({ cardId, currentUser, onCommentAdded }) {
+function KanbanComments({ cardId, currentUser, onCommentAdded, toast }) {
   const [commenti, setCommenti] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -84,12 +84,20 @@ function KanbanComments({ cardId, currentUser, onCommentAdded }) {
     setDeleting(true)
     try {
       setError(null)
+      const loadingToastId = toast?.showLoading('Eliminazione in corso...', 'Eliminazione commento')
       await api.deleteKanbanCommento(id)
       setCommenti(commenti.filter(c => c.id !== id))
       setDeleteConfirm({ show: false, id: null })
+      if (loadingToastId) {
+        toast?.updateToast(loadingToastId, { type: 'success', title: 'Completato', message: 'Commento eliminato con successo', duration: 3000 })
+      } else {
+        toast?.showSuccess('Commento eliminato con successo')
+      }
     } catch (err) {
       console.error('Errore eliminazione commento:', err)
-      setError('Errore nell\'eliminazione del commento')
+      const errorMsg = 'Errore nell\'eliminazione del commento'
+      setError(errorMsg)
+      toast?.showError(errorMsg, 'Errore eliminazione')
     } finally {
       setDeleting(false)
     }

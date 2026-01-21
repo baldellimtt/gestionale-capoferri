@@ -6,7 +6,7 @@ import KanbanNotifications from './KanbanNotifications'
 import KanbanFilters from './KanbanFilters'
 import KanbanCalendar from './KanbanCalendar'
 
-function KanbanBoard({ clienti, user }) {
+function KanbanBoard({ clienti, user, toast, hideControls = false }) {
   const [colonne, setColonne] = useState([])
   const [card, setCard] = useState([])
   const [scadenze, setScadenze] = useState([])
@@ -106,15 +106,23 @@ function KanbanBoard({ clienti, user }) {
       return
     }
     try {
+      const loadingToastId = toast?.showLoading('Eliminazione in corso...', 'Eliminazione card')
       await api.deleteKanbanCard(cardId)
       await loadData()
       if (selectedCard?.id === cardId) {
         setShowCardDetail(false)
         setSelectedCard(null)
       }
+      if (loadingToastId) {
+        toast?.updateToast(loadingToastId, { type: 'success', title: 'Completato', message: 'Card eliminata con successo', duration: 3000 })
+      } else {
+        toast?.showSuccess('Card eliminata con successo')
+      }
     } catch (err) {
       console.error('Errore eliminazione card:', err)
-      setError('Errore nell\'eliminazione della card')
+      const errorMsg = 'Errore nell\'eliminazione della card'
+      setError(errorMsg)
+      toast?.showError(errorMsg, 'Errore eliminazione')
     }
   }
 
@@ -149,67 +157,77 @@ function KanbanBoard({ clienti, user }) {
 
   return (
     <div className="kanban-board">
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2 className="section-title mb-0 no-title-line">Kanban</h2>
-        <div className="d-flex gap-2 align-items-center">
-          <div className="btn-group" role="group">
-            <button
-              className={`btn btn-sm ${viewMode === 'kanban' ? 'btn-primary' : 'btn-outline-secondary'}`}
-              onClick={() => setViewMode('kanban')}
-              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                <line x1="9" y1="3" x2="9" y2="21" />
-                <line x1="3" y1="9" x2="21" y2="9" />
-              </svg>
-              Kanban
-            </button>
-            <button
-              className={`btn btn-sm ${viewMode === 'calendar' ? 'btn-primary' : 'btn-outline-secondary'}`}
-              onClick={() => setViewMode('calendar')}
-              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                <line x1="16" y1="2" x2="16" y2="6" />
-                <line x1="8" y1="2" x2="8" y2="6" />
-                <line x1="3" y1="10" x2="21" y2="10" />
-              </svg>
-              Calendario
-            </button>
+      {!hideControls && (
+        <>
+          <div className="d-flex justify-content-between align-items-center mb-4">
+            <h2 className="section-title mb-0 no-title-line">Kanban</h2>
+            <div className="d-flex gap-2 align-items-center">
+              <div className="btn-group" role="group">
+                <button
+                  className={`btn btn-sm ${viewMode === 'kanban' ? 'btn-primary' : 'btn-outline-secondary'}`}
+                  onClick={() => setViewMode('kanban')}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                    <line x1="9" y1="3" x2="9" y2="21" />
+                    <line x1="3" y1="9" x2="21" y2="9" />
+                  </svg>
+                  Kanban
+                </button>
+                <button
+                  className={`btn btn-sm ${viewMode === 'calendar' ? 'btn-primary' : 'btn-outline-secondary'}`}
+                  onClick={() => setViewMode('calendar')}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                    <line x1="16" y1="2" x2="16" y2="6" />
+                    <line x1="8" y1="2" x2="8" y2="6" />
+                    <line x1="3" y1="10" x2="21" y2="10" />
+                  </svg>
+                  Calendario
+                </button>
+              </div>
+              <KanbanNotifications onNotificationClick={handleNotificationClick} />
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={() => {
+                  setSelectedCard(null)
+                  setShowCardDetail(true)
+                }}
+                style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '0.5rem',
+                  height: '38px'
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                Nuova Card
+              </button>
+            </div>
           </div>
-          <KanbanNotifications onNotificationClick={handleNotificationClick} />
-          <button
-            className="btn btn-primary btn-sm"
-            onClick={() => {
-              setSelectedCard(null)
-              setShowCardDetail(true)
-            }}
-            style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '0.5rem',
-              height: '38px'
-            }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            Nuova Card
-          </button>
-        </div>
-      </div>
 
-      <div className="mb-3">
-        <KanbanFilters
-          colonne={colonne}
-          clienti={clienti}
-          filters={filters}
-          onFiltersChange={setFilters}
-        />
-      </div>
+          <div className="mb-3">
+            <KanbanFilters
+              colonne={colonne}
+              clienti={clienti}
+              filters={filters}
+              onFiltersChange={setFilters}
+            />
+          </div>
+        </>
+      )}
+
+      {hideControls && (
+        <div className="mb-4">
+          <h2 className="section-title mb-0 no-title-line">Kanban</h2>
+        </div>
+      )}
 
       {error && (
         <div className="alert alert-warning mb-3">

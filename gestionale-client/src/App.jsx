@@ -2,6 +2,8 @@ import { useState, useEffect, Suspense, lazy } from 'react'
 import './App.css'
 import ErrorBoundary from './components/ErrorBoundary'
 import api from './services/api'
+import { ToastContainer } from './components/Toast'
+import { useToast } from './hooks/useToast'
 
 // Lazy loading dei componenti principali per code splitting
 const Login = lazy(() => import('./components/Login'))
@@ -9,6 +11,7 @@ const TabellaAttivita = lazy(() => import('./components/TabellaAttivita'))
 const Commesse = lazy(() => import('./components/Commesse'))
 const AnagraficaClienti = lazy(() => import('./components/AnagraficaClienti'))
 const KanbanBoard = lazy(() => import('./components/KanbanBoard'))
+const Home = lazy(() => import('./components/Home'))
 const Impostazioni = lazy(() => import('./components/Impostazioni'))
 const ImpostazioniUtenti = lazy(() => import('./components/ImpostazioniUtenti'))
 const DatiAziendali = lazy(() => import('./components/DatiAziendali'))
@@ -24,7 +27,7 @@ const LoadingFallback = () => (
 )
 
 function App() {
-  const [activeView, setActiveView] = useState('attivita')
+  const [activeView, setActiveView] = useState('home')
   const [impostazioniView, setImpostazioniView] = useState(null)
   const [clienti, setClienti] = useState([])
   const [utenti, setUtenti] = useState([])
@@ -34,6 +37,7 @@ function App() {
   const [authChecking, setAuthChecking] = useState(true)
   const [authLoading, setAuthLoading] = useState(false)
   const [authError, setAuthError] = useState(null)
+  const toast = useToast()
 
   // Verifica autenticazione
   useEffect(() => {
@@ -131,7 +135,7 @@ function App() {
       api.clearTokens()
       setUser(null)
       setClienti([])
-      setActiveView('attivita')
+      setActiveView('home')
     }
   }
 
@@ -150,6 +154,8 @@ function App() {
             src="/logo-studio-ingegneria-removebg-preview.png"
             alt="Studio Capoferri"
             className="logo"
+            onClick={() => setActiveView('home')}
+            style={{ cursor: 'pointer' }}
             onError={(e) => {
               // Fallback se il logo non è disponibile
               e.target.style.display = 'none'
@@ -161,21 +167,26 @@ function App() {
               <span className="header-sub">Benvenuto, {user.username} ({user.role})</span>
             )}
           </div>
-          {user && user.role === 'admin' && (
-            <button
-              className="btn btn-secondary btn-sm ms-auto"
-              onClick={() => {
-                setActiveView('impostazioni')
-                setImpostazioniView(null)
-              }}
-            >
-              Impostazioni
-            </button>
-          )}
           {user && (
-            <button className="btn btn-secondary btn-sm" onClick={handleLogout}>
-              Logout
-            </button>
+            <div style={{ display: 'flex', gap: '0.5rem', marginLeft: 'auto' }}>
+              {user.role === 'admin' && (
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    setActiveView('impostazioni')
+                    setImpostazioniView(null)
+                  }}
+                >
+                  Impostazioni
+                </button>
+              )}
+              <button 
+                className="btn btn-secondary" 
+                onClick={handleLogout}
+              >
+                Logout
+              </button>
+            </div>
           )}
         </header>
 
@@ -194,15 +205,15 @@ function App() {
                 <nav>
                   <ul className="sidebar-nav">
                     <li>
-                      <a
-                        href="#attivita"
-                        className={activeView === 'attivita' ? 'active' : ''}
+                      <a 
+                        href="#anagrafica" 
+                        className={activeView === 'anagrafica' ? 'active' : ''}
                         onClick={(e) => {
                           e.preventDefault()
-                          setActiveView('attivita')
+                          setActiveView('anagrafica')
                         }}
                       >
-                        Rimborsi
+                        Anagrafica Clienti
                       </a>
                     </li>
                     <li>
@@ -219,18 +230,6 @@ function App() {
                     </li>
                     <li>
                       <a 
-                        href="#anagrafica" 
-                        className={activeView === 'anagrafica' ? 'active' : ''}
-                        onClick={(e) => {
-                          e.preventDefault()
-                          setActiveView('anagrafica')
-                        }}
-                      >
-                        Anagrafica Clienti
-                      </a>
-                    </li>
-                    <li>
-                      <a 
                         href="#kanban" 
                         className={activeView === 'kanban' ? 'active' : ''}
                         onClick={(e) => {
@@ -239,6 +238,18 @@ function App() {
                         }}
                       >
                         Kanban
+                      </a>
+                    </li>
+                    <li>
+                      <a
+                        href="#attivita"
+                        className={activeView === 'attivita' ? 'active' : ''}
+                        onClick={(e) => {
+                          e.preventDefault()
+                          setActiveView('attivita')
+                        }}
+                      >
+                        Rimborsi
                       </a>
                     </li>
                   </ul>
@@ -252,28 +263,33 @@ function App() {
                   <LoadingFallback />
                 ) : (
                   <Suspense fallback={<LoadingFallback />}>
+                    {activeView === 'home' && (
+                      <Home clienti={clienti} user={user} toast={toast} />
+                    )}
                     {activeView === 'attivita' && (
-                      <TabellaAttivita clienti={clienti} user={user} />
+                      <TabellaAttivita clienti={clienti} user={user} toast={toast} />
                     )}
                     {activeView === 'commesse' && (
-                      <Commesse clienti={clienti} />
+                      <Commesse clienti={clienti} toast={toast} />
                     )}
                     {activeView === 'anagrafica' && (
                       <AnagraficaClienti
                         clienti={clienti}
                         onUpdateClienti={updateClienti}
-                        onBack={() => setActiveView('attivita')}
+                        onBack={() => setActiveView('home')}
+                        currentUser={user}
+                        toast={toast}
                       />
                     )}
                     {activeView === 'kanban' && (
-                      <KanbanBoard clienti={clienti} user={user} />
+                      <KanbanBoard clienti={clienti} user={user} toast={toast} />
                     )}
                     {activeView === 'impostazioni' && user?.role === 'admin' && (
                       <>
                         {!impostazioniView && (
                           <Impostazioni
                             onNavigate={(view) => setImpostazioniView(view)}
-                            onBack={() => setActiveView('attivita')}
+                            onBack={() => setActiveView('home')}
                           />
                         )}
                         {impostazioniView === 'utenti' && (
@@ -281,16 +297,19 @@ function App() {
                             currentUser={user}
                             onUserUpdated={handleUserUpdated}
                             onBack={() => setImpostazioniView(null)}
+                            toast={toast}
                           />
                         )}
                         {impostazioniView === 'dati-aziendali' && (
                           <DatiAziendali
                             onBack={() => setImpostazioniView(null)}
+                            toast={toast}
                           />
                         )}
                         {impostazioniView === 'dati-fiscali' && (
                           <DatiFiscali
                             onBack={() => setImpostazioniView(null)}
+                            toast={toast}
                           />
                         )}
                       </>
@@ -306,6 +325,7 @@ function App() {
           </Suspense>
         )}
       </div>
+      <ToastContainer toasts={toast.toasts} removeToast={toast.removeToast} />
     </ErrorBoundary>
   )
 }

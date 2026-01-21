@@ -38,7 +38,7 @@ const createEmptyForm = () => ({
   allegati: ''
 })
 
-function Commesse({ clienti }) {
+function Commesse({ clienti, toast }) {
   const [commesse, setCommesse] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -55,6 +55,7 @@ function Commesse({ clienti }) {
   const [deleteConfirm, setDeleteConfirm] = useState({ show: false, id: null })
   const [deleting, setDeleting] = useState(false)
   const [allegatiByCommessa, setAllegatiByCommessa] = useState({})
+  const [initialAllegati, setInitialAllegati] = useState([])
   const [uploading, setUploading] = useState({})
   const [allegatiError, setAllegatiError] = useState(null)
   const [selectedCommessaId, setSelectedCommessaId] = useState('')
@@ -120,6 +121,7 @@ function Commesse({ clienti }) {
           next[id] = allegati
         })
         setAllegatiByCommessa(next)
+        
       } catch (err) {
         console.error('Errore caricamento allegati:', err)
         setAllegatiError('Errore nel caricamento degli allegati.')
@@ -151,6 +153,7 @@ function Commesse({ clienti }) {
     const empty = createEmptyForm()
     setFormData(empty)
     setInitialFormData(empty)
+    setInitialAllegati([])
     setEditingId(null)
     setShowForm(false)
     setSelectedCommessaId('')
@@ -233,30 +236,49 @@ function Commesse({ clienti }) {
       importo_totale: importoTotale,
       importo_pagato: importoPagato,
       avanzamento_lavori: clampPercent(formData.avanzamento_lavori),
-      note: formData.note || null,
+      data_inizio: formData.data_inizio && typeof formData.data_inizio === 'string' && formData.data_inizio.trim() ? formData.data_inizio.trim() : null,
+      data_fine: formData.data_fine && typeof formData.data_fine === 'string' && formData.data_fine.trim() ? formData.data_fine.trim() : null,
+      note: formData.note && typeof formData.note === 'string' && formData.note.trim() ? formData.note.trim() : null,
       allegati: formData.allegati || null
     }
 
     try {
       setSaving(true)
       setError(null)
+      const loadingToastId = toast?.showLoading('Salvataggio in corso...', 'Salvataggio commessa')
+      
       if (editingId) {
         await api.updateCommessa(editingId, payload)
+        // Aggiorna gli allegati iniziali dopo il salvataggio per sincronizzare lo stato
+        const currentAllegati = allegatiByCommessa[editingId] || []
+        setInitialAllegati(JSON.parse(JSON.stringify(currentAllegati)))
+        if (loadingToastId) {
+          toast?.updateToast(loadingToastId, { type: 'success', title: 'Completato', message: 'Commessa aggiornata con successo', duration: 3000 })
+        } else {
+          toast?.showSuccess('Commessa aggiornata con successo')
+        }
       } else {
         await api.createCommessa(payload)
+        if (loadingToastId) {
+          toast?.updateToast(loadingToastId, { type: 'success', title: 'Completato', message: 'Commessa creata con successo', duration: 3000 })
+        } else {
+          toast?.showSuccess('Commessa creata con successo')
+        }
       }
       // Ricarica i dati dal server per assicurarsi che tutto sia aggiornato
       await loadCommesse(filters)
       resetForm()
     } catch (err) {
       console.error('Errore salvataggio commessa:', err)
-      setError(err.message || 'Errore nel salvataggio della commessa.')
+      const errorMsg = err.message || 'Errore nel salvataggio della commessa.'
+      setError(errorMsg)
+      toast?.showError(errorMsg, 'Errore salvataggio')
     } finally {
       setSaving(false)
     }
   }
 
-  const handleEdit = (commessa) => {
+  const handleEdit = async (commessa) => {
     const isCustomSottoStato = commessa.sotto_stato
       && !SOTTOSTATI_IN_CORSO.filter((item) => item !== 'Personalizzato').includes(commessa.sotto_stato)
     const nextForm = {
@@ -283,6 +305,21 @@ function Commesse({ clienti }) {
     setSelectedCommessaId(String(commessa.id))
     setFormData(nextForm)
     setInitialFormData(nextForm)
+    // Carica gli allegati se non sono già stati caricati e salva una snapshot come iniziali
+    let currentAllegati = allegatiByCommessa[commessa.id] || []
+    if (!currentAllegati.length) {
+      try {
+        currentAllegati = await api.getCommessaAllegati(commessa.id)
+        setAllegatiByCommessa((prev) => ({
+          ...prev,
+          [commessa.id]: currentAllegati
+        }))
+      } catch (err) {
+        console.error('Errore caricamento allegati:', err)
+        currentAllegati = []
+      }
+    }
+    setInitialAllegati(JSON.parse(JSON.stringify(currentAllegati)))
     setClienteFormInput(nextForm.cliente_nome || '')
   }
 
@@ -329,11 +366,19 @@ function Commesse({ clienti }) {
 
     try {
       setDeleting(true)
+      const loadingToastId = toast?.showLoading('Eliminazione in corso...', 'Eliminazione commessa')
       await api.deleteCommessa(deleteConfirm.id)
       setCommesse((prev) => prev.filter((item) => item.id !== deleteConfirm.id))
+      if (loadingToastId) {
+        toast?.updateToast(loadingToastId, { type: 'success', title: 'Completato', message: 'Commessa eliminata con successo', duration: 3000 })
+      } else {
+        toast?.showSuccess('Commessa eliminata con successo')
+      }
     } catch (err) {
       console.error('Errore eliminazione commessa:', err)
-      setError(err.message || 'Errore nell\'eliminazione della commessa.')
+      const errorMsg = err.message || 'Errore nell\'eliminazione della commessa.'
+      setError(errorMsg)
+      toast?.showError(errorMsg, 'Errore eliminazione')
     } finally {
       setDeleting(false)
       setDeleteConfirm({ show: false, id: null })
@@ -401,8 +446,14 @@ function Commesse({ clienti }) {
   }
 
   const isDirty = useMemo(() => {
-    return JSON.stringify(normalizeForm(formData)) !== JSON.stringify(normalizeForm(initialFormData))
-  }, [formData, initialFormData])
+    const formChanged = JSON.stringify(normalizeForm(formData)) !== JSON.stringify(normalizeForm(initialFormData))
+    
+    // Verifica se gli allegati sono cambiati
+    const currentAllegati = selectedCommessaId ? (allegatiByCommessa[selectedCommessaId] || []) : []
+    const allegatiChanged = JSON.stringify(currentAllegati.map(a => a.id).sort()) !== JSON.stringify(initialAllegati.map(a => a.id).sort())
+    
+    return formChanged || allegatiChanged
+  }, [formData, initialFormData, allegatiByCommessa, selectedCommessaId, initialAllegati])
 
   const canSave = isDirty && formData.titolo.trim() !== '' && !saving
   const filteredClienti = useMemo(() => {
@@ -452,6 +503,7 @@ function Commesse({ clienti }) {
                 const empty = createEmptyForm()
                 setFormData(empty)
                 setInitialFormData(empty)
+                setInitialAllegati([])
                 setEditingId(null)
                 setShowForm(true)
                 setSelectedCommessaId('')

@@ -16,6 +16,28 @@ class ApiService {
       ttl: 5 * 60 * 1000 // 5 minuti di cache
     };
     this.mePromise = null; // Evita chiamate simultanee duplicate
+    
+    // Cache per dati statici (clienti, utenti, commesse)
+    this.clientiCache = {
+      data: null,
+      timestamp: null,
+      search: null,
+      ttl: 10 * 60 * 1000 // 10 minuti di cache
+    };
+    this.utentiCache = {
+      data: null,
+      timestamp: null,
+      ttl: 10 * 60 * 1000 // 10 minuti di cache
+    };
+    this.commesseCache = {
+      data: null,
+      timestamp: null,
+      filters: null,
+      ttl: 5 * 60 * 1000 // 5 minuti di cache
+    };
+    this.clientiPromise = null;
+    this.utentiPromise = null;
+    this.commessePromise = null;
   }
 
   setToken(token, refreshToken = null) {
@@ -314,6 +336,30 @@ class ApiService {
     this.meCache.timestamp = null;
   }
 
+  clearClientiCache() {
+    this.clientiCache.data = null;
+    this.clientiCache.timestamp = null;
+    this.clientiCache.search = null;
+  }
+
+  clearUtentiCache() {
+    this.utentiCache.data = null;
+    this.utentiCache.timestamp = null;
+  }
+
+  clearCommesseCache() {
+    this.commesseCache.data = null;
+    this.commesseCache.timestamp = null;
+    this.commesseCache.filters = null;
+  }
+
+  clearAllCaches() {
+    this.clearMeCache();
+    this.clearClientiCache();
+    this.clearUtentiCache();
+    this.clearCommesseCache();
+  }
+
   async updateMe(payload) {
     const result = await this.request('/auth/me', {
       method: 'PUT',
@@ -327,8 +373,33 @@ class ApiService {
   }
 
   // Utenti API (admin)
-  async getUtenti() {
-    return this.request('/utenti');
+  async getUtenti(forceRefresh = false) {
+    // Usa cache se disponibile e non è scaduta
+    const now = Date.now();
+    if (!forceRefresh && this.utentiCache.data && this.utentiCache.timestamp && 
+        (now - this.utentiCache.timestamp) < this.utentiCache.ttl) {
+      return Promise.resolve(this.utentiCache.data);
+    }
+
+    // Se c'è già una chiamata in corso, aspetta quella
+    if (this.utentiPromise) {
+      return this.utentiPromise;
+    }
+
+    // Fai la chiamata e salva in cache
+    this.utentiPromise = this.request('/utenti')
+      .then(data => {
+        this.utentiCache.data = data;
+        this.utentiCache.timestamp = now;
+        this.utentiPromise = null;
+        return data;
+      })
+      .catch(err => {
+        this.utentiPromise = null;
+        throw err;
+      });
+
+    return this.utentiPromise;
   }
 
   async createUtente(payload) {
@@ -339,47 +410,95 @@ class ApiService {
   }
 
   async updateUtente(id, payload) {
-    return this.request(`/utenti/${id}`, {
+    const result = await this.request(`/utenti/${id}`, {
       method: 'PUT',
       body: payload,
     });
+    // Invalida cache utenti dopo aggiornamento
+    this.clearUtentiCache();
+    return result;
   }
 
   async deleteUtente(id) {
-    return this.request(`/utenti/${id}`, {
+    const result = await this.request(`/utenti/${id}`, {
       method: 'DELETE',
     });
+    // Invalida cache utenti dopo eliminazione
+    this.clearUtentiCache();
+    return result;
   }
 
   // Commesse API
-  async getCommesse(filters = {}) {
+  async getCommesse(filters = {}, forceRefresh = false) {
     const params = new URLSearchParams();
     if (filters.clienteId) params.append('clienteId', filters.clienteId);
     if (filters.stato) params.append('stato', filters.stato);
     if (filters.statoPagamenti) params.append('statoPagamenti', filters.statoPagamenti);
     const query = params.toString();
     const endpoint = query ? `/commesse?${query}` : '/commesse';
-    return this.request(endpoint);
+    
+    // Crea una chiave cache basata sui filtri
+    const filtersKey = JSON.stringify(filters);
+    
+    // Usa cache se disponibile, non scaduta e con gli stessi filtri
+    const now = Date.now();
+    if (!forceRefresh && this.commesseCache.data && this.commesseCache.timestamp && 
+        this.commesseCache.filters === filtersKey &&
+        (now - this.commesseCache.timestamp) < this.commesseCache.ttl) {
+      return Promise.resolve(this.commesseCache.data);
+    }
+
+    // Se c'è già una chiamata in corso per questi filtri, aspetta quella
+    if (this.commessePromise) {
+      return this.commessePromise;
+    }
+
+    // Fai la chiamata e salva in cache
+    this.commessePromise = this.request(endpoint)
+      .then(data => {
+        // Gestisci sia array che oggetto paginato
+        const result = Array.isArray(data) ? data : (data.data || data);
+        this.commesseCache.data = result;
+        this.commesseCache.timestamp = now;
+        this.commesseCache.filters = filtersKey;
+        this.commessePromise = null;
+        return result;
+      })
+      .catch(err => {
+        this.commessePromise = null;
+        throw err;
+      });
+
+    return this.commessePromise;
   }
 
   async createCommessa(payload) {
-    return this.request('/commesse', {
+    const result = await this.request('/commesse', {
       method: 'POST',
       body: payload,
     });
+    // Invalida cache commesse dopo creazione
+    this.clearCommesseCache();
+    return result;
   }
 
   async updateCommessa(id, payload) {
-    return this.request(`/commesse/${id}`, {
+    const result = await this.request(`/commesse/${id}`, {
       method: 'PUT',
       body: payload,
     });
+    // Invalida cache commesse dopo aggiornamento
+    this.clearCommesseCache();
+    return result;
   }
 
   async deleteCommessa(id) {
-    return this.request(`/commesse/${id}`, {
+    const result = await this.request(`/commesse/${id}`, {
       method: 'DELETE',
     });
+    // Invalida cache commesse dopo eliminazione
+    this.clearCommesseCache();
+    return result;
   }
 
   async getCommessaAllegati(id) {
@@ -399,9 +518,39 @@ class ApiService {
   }
 
   // Clienti API
-  async getClienti(search = '') {
+  async getClienti(search = '', forceRefresh = false) {
     const endpoint = search ? `/clienti?search=${encodeURIComponent(search)}` : '/clienti';
-    return this.request(endpoint);
+    
+    // Usa cache se disponibile, non scaduta e con la stessa ricerca
+    const now = Date.now();
+    if (!forceRefresh && this.clientiCache.data && this.clientiCache.timestamp && 
+        this.clientiCache.search === search &&
+        (now - this.clientiCache.timestamp) < this.clientiCache.ttl) {
+      return Promise.resolve(this.clientiCache.data);
+    }
+
+    // Se c'è già una chiamata in corso per questa ricerca, aspetta quella
+    if (this.clientiPromise) {
+      return this.clientiPromise;
+    }
+
+    // Fai la chiamata e salva in cache
+    this.clientiPromise = this.request(endpoint)
+      .then(data => {
+        // Gestisci sia array che oggetto paginato
+        const result = Array.isArray(data) ? data : (data.data || data);
+        this.clientiCache.data = result;
+        this.clientiCache.timestamp = now;
+        this.clientiCache.search = search;
+        this.clientiPromise = null;
+        return result;
+      })
+      .catch(err => {
+        this.clientiPromise = null;
+        throw err;
+      });
+
+    return this.clientiPromise;
   }
 
   async getCliente(id) {
@@ -409,23 +558,32 @@ class ApiService {
   }
 
   async createCliente(cliente) {
-    return this.request('/clienti', {
+    const result = await this.request('/clienti', {
       method: 'POST',
       body: cliente,
     });
+    // Invalida cache clienti dopo creazione
+    this.clearClientiCache();
+    return result;
   }
 
   async updateCliente(id, cliente) {
-    return this.request(`/clienti/${id}`, {
+    const result = await this.request(`/clienti/${id}`, {
       method: 'PUT',
       body: cliente,
     });
+    // Invalida cache clienti dopo aggiornamento
+    this.clearClientiCache();
+    return result;
   }
 
   async deleteCliente(id) {
-    return this.request(`/clienti/${id}`, {
+    const result = await this.request(`/clienti/${id}`, {
       method: 'DELETE',
     });
+    // Invalida cache clienti dopo eliminazione
+    this.clearClientiCache();
+    return result;
   }
 
   // Contatti API

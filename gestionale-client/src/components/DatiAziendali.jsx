@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import api from '../services/api'
 
-function DatiAziendali({ onBack }) {
+function DatiAziendali({ onBack, toast }) {
   const [formData, setFormData] = useState({
     ragione_sociale: '',
     partita_iva: '',
@@ -41,12 +41,20 @@ function DatiAziendali({ onBack }) {
       setSaving(true)
       setError(null)
       setSuccess(false)
+      const loadingToastId = toast?.showLoading('Salvataggio in corso...', 'Salvataggio dati aziendali')
       await api.updateDatiAziendali(formData)
       setSuccess(true)
       setTimeout(() => setSuccess(false), 3000)
+      if (loadingToastId) {
+        toast?.updateToast(loadingToastId, { type: 'success', title: 'Completato', message: 'Dati aziendali aggiornati con successo', duration: 3000 })
+      } else {
+        toast?.showSuccess('Dati aziendali aggiornati con successo')
+      }
     } catch (err) {
       console.error('Errore salvataggio dati aziendali:', err)
-      setError(err.message || 'Errore nel salvataggio dei dati aziendali.')
+      const errorMsg = err.message || 'Errore nel salvataggio dei dati aziendali.'
+      setError(errorMsg)
+      toast?.showError(errorMsg, 'Errore salvataggio')
     } finally {
       setSaving(false)
     }

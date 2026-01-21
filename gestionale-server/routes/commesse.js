@@ -8,6 +8,7 @@ const fileValidator = require('../utils/fileValidator');
 const ErrorHandler = require('../utils/errorHandler');
 const { validateRequest } = require('../utils/validationMiddleware');
 const ValidationSchemas = require('../utils/validationSchemas');
+const Pagination = require('../utils/pagination');
 
 const STATI_COMMESSA = ['In corso', 'Chiusa'];
 const STATI_PAGAMENTI = ['Non iniziato', 'Parziale', 'Saldo'];
@@ -177,8 +178,12 @@ class CommesseController {
   getAll(req, res) {
     try {
       const { clienteId, stato, statoPagamenti } = req.query;
+      const { page, limit, offset } = Pagination.getParams(req, 50, 100);
+      
       let commesse;
+      let total;
 
+      // Ottieni tutti i risultati filtrati
       if (clienteId && statoPagamenti) {
         commesse = this.stmt.getByClienteStatoPagamenti.all(clienteId, statoPagamenti);
       } else if (clienteId && stato) {
@@ -193,8 +198,19 @@ class CommesseController {
         commesse = this.stmt.getAll.all();
       }
 
-      Logger.info('GET /commesse', { count: commesse.length, clienteId, stato, statoPagamenti });
-      res.json(commesse);
+      total = commesse.length;
+      // Applica paginazione manualmente
+      const paginatedCommesse = commesse.slice(offset, offset + limit);
+
+      Logger.info('GET /commesse', { count: paginatedCommesse.length, total, page, limit, clienteId, stato, statoPagamenti });
+      
+      // Se ci sono parametri di paginazione, restituisci risposta paginata
+      if (req.query.page || req.query.limit) {
+        res.json(Pagination.createResponse(paginatedCommesse, total, page, limit));
+      } else {
+        // Per retrocompatibilità, restituisci array semplice
+        res.json(commesse);
+      }
     } catch (error) {
       Logger.error('Errore GET /commesse', error);
       res.status(500).json({ error: error.message });
@@ -467,7 +483,7 @@ function createRouter(db) {
   router.post('/:id/allegati', validateRequest(ValidationSchemas.id), upload.single('file'), (req, res) => controller.uploadAllegato(req, res));
   router.delete('/allegati/:allegatoId', validateRequest(ValidationSchemas.id), (req, res) => controller.deleteAllegato(req, res));
   router.get('/:id', validateRequest(ValidationSchemas.id), (req, res) => controller.getById(req, res));
-  router.get('/', (req, res) => controller.getAll(req, res));
+  router.get('/', validateRequest(ValidationSchemas.pagination), (req, res) => controller.getAll(req, res));
   router.post('/', validateRequest(ValidationSchemas.commessa.create), (req, res) => controller.create(req, res));
   router.put('/:id', validateRequest(ValidationSchemas.commessa.update), (req, res) => controller.update(req, res));
   router.delete('/:id', validateRequest(ValidationSchemas.id), (req, res) => controller.delete(req, res));

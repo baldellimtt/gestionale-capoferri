@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import api from '../services/api'
 
-function ContattiList({ clienteId, onUpdate }) {
+function ContattiList({ clienteId, onUpdate, onContattiChange, currentUser, toast }) {
   const [contatti, setContatti] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -25,10 +25,17 @@ function ContattiList({ clienteId, onUpdate }) {
       setError(null)
       const data = await api.getClienteContatti(clienteId)
       setContatti(data)
+      // Notifica il componente padre che i contatti sono cambiati
+      if (onContattiChange) {
+        onContattiChange(data)
+      }
     } catch (err) {
       console.error('Errore caricamento contatti:', err)
       setError('Errore nel caricamento dei contatti')
       setContatti([])
+      if (onContattiChange) {
+        onContattiChange([])
+      }
     } finally {
       setLoading(false)
     }
@@ -41,14 +48,30 @@ function ContattiList({ clienteId, onUpdate }) {
     setLoading(true)
 
     try {
-      await api.createClienteContatto(clienteId, formData)
+      // Pulisce i campi vuoti e li converte in null
+      const payload = {
+        nome: formData.nome && typeof formData.nome === 'string' && formData.nome.trim() ? formData.nome.trim() : null,
+        ruolo: formData.ruolo && typeof formData.ruolo === 'string' && formData.ruolo.trim() ? formData.ruolo.trim() : null,
+        telefono: formData.telefono && typeof formData.telefono === 'string' && formData.telefono.trim() ? formData.telefono.trim() : null,
+        email: formData.email && typeof formData.email === 'string' && formData.email.trim() ? formData.email.trim() : null
+      }
+      
+      const loadingToastId = toast?.showLoading('Salvataggio in corso...', 'Salvataggio contatto')
+      await api.createClienteContatto(clienteId, payload)
       await loadContatti()
       setFormData({ nome: '', ruolo: '', telefono: '', email: '' })
       setShowAddForm(false)
+      if (loadingToastId) {
+        toast?.updateToast(loadingToastId, { type: 'success', title: 'Completato', message: 'Contatto creato con successo', duration: 3000 })
+      } else {
+        toast?.showSuccess('Contatto creato con successo')
+      }
       // Non chiamiamo onUpdate qui per evitare refresh che chiude il form
     } catch (err) {
       console.error('Errore salvataggio contatto:', err)
-      setError('Errore nel salvataggio del contatto: ' + (err.message || 'Errore sconosciuto'))
+      const errorMsg = 'Errore nel salvataggio del contatto: ' + (err.message || 'Errore sconosciuto')
+      setError(errorMsg)
+      toast?.showError(errorMsg, 'Errore salvataggio')
     } finally {
       setLoading(false)
     }
@@ -63,12 +86,20 @@ function ContattiList({ clienteId, onUpdate }) {
     setLoading(true)
 
     try {
+      const loadingToastId = toast?.showLoading('Eliminazione in corso...', 'Eliminazione contatto')
       await api.deleteClienteContatto(clienteId, contattoId)
       await loadContatti()
+      if (loadingToastId) {
+        toast?.updateToast(loadingToastId, { type: 'success', title: 'Completato', message: 'Contatto eliminato con successo', duration: 3000 })
+      } else {
+        toast?.showSuccess('Contatto eliminato con successo')
+      }
       // Non chiamiamo onUpdate qui per evitare refresh che chiude il form
     } catch (err) {
       console.error('Errore eliminazione contatto:', err)
-      setError('Errore nell\'eliminazione del contatto: ' + (err.message || 'Errore sconosciuto'))
+      const errorMsg = 'Errore nell\'eliminazione del contatto: ' + (err.message || 'Errore sconosciuto')
+      setError(errorMsg)
+      toast?.showError(errorMsg, 'Errore eliminazione')
     } finally {
       setLoading(false)
     }
@@ -76,7 +107,23 @@ function ContattiList({ clienteId, onUpdate }) {
 
   const handleEmailClick = (email) => {
     if (email) {
-      window.location.href = `mailto:${email}`
+      // Costruisce il link mailto con il mittente dall'utente loggato
+      // Nota: mailto non può impostare direttamente il mittente,
+      // ma possiamo includere informazioni nell'oggetto o nel corpo
+      const userEmail = currentUser?.email || ''
+      const userName = currentUser?.nome || currentUser?.username || ''
+      const userFullName = currentUser?.nome && currentUser?.cognome 
+        ? `${currentUser.nome} ${currentUser.cognome}`
+        : userName
+      
+      // Se l'utente ha un'email, la includiamo come riferimento nel corpo
+      const body = userEmail 
+        ? `Cordiali saluti,\n${userFullName}\n${userEmail}`
+        : `Cordiali saluti,\n${userFullName}`
+      
+      // Crea il link mailto con oggetto e corpo precompilati
+      const mailtoLink = `mailto:${email}?subject=&body=${encodeURIComponent(body)}`
+      window.location.href = mailtoLink
     }
   }
 
