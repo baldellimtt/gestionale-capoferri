@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import api from '../services/api'
 
-function DatiAziendali({ onBack, toast }) {
+function DatiAziendali({ onBack, toast, showHeader = true }) {
   const [formData, setFormData] = useState({
     ragione_sociale: '',
     partita_iva: '',
@@ -74,12 +74,16 @@ function DatiAziendali({ onBack, toast }) {
   if (loading) {
     return (
       <div>
-        <div className="d-flex justify-content-between align-items-center mb-4">
-          <h2 className="section-title mb-0">Dati Aziendali</h2>
-          <button className="btn btn-secondary" onClick={onBack}>
-            Indietro
-          </button>
-        </div>
+        {showHeader && (
+          <div className="d-flex justify-content-between align-items-center mb-4">
+            <h2 className="section-title mb-0">Dati Aziendali</h2>
+            {onBack && (
+              <button className="btn btn-secondary" onClick={onBack}>
+                Indietro
+              </button>
+            )}
+          </div>
+        )}
         <div className="text-center py-5">
           <div className="spinner-border" role="status">
             <span className="visually-hidden">Caricamento...</span>
@@ -91,12 +95,16 @@ function DatiAziendali({ onBack, toast }) {
 
   return (
     <div>
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2 className="section-title mb-0">Dati Aziendali</h2>
-        <button className="btn btn-secondary" onClick={onBack}>
-          Indietro
-        </button>
-      </div>
+      {showHeader && (
+        <div className="d-flex justify-content-between align-items-center mb-4">
+          <h2 className="section-title mb-0">Dati Aziendali</h2>
+          {onBack && (
+            <button className="btn btn-secondary" onClick={onBack}>
+              Indietro
+            </button>
+          )}
+        </div>
+      )}
 
       {error && (
         <div className="alert alert-warning mb-3">

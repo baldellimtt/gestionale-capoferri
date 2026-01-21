@@ -262,7 +262,7 @@ function AnagraficaClienti({ clienti, onUpdateClienti, onBack, currentUser, toas
   return (
     <div key={`anagrafica-${showForm}`}>
       <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2 className="section-title mb-0 no-title-line">Anagrafica Clienti</h2>
+        <h2 className="section-title mb-0 no-title-line">Clienti</h2>
         <div className="d-flex gap-2">
           {onBack && (
             <button 
@@ -509,5 +509,4 @@ function AnagraficaClienti({ clienti, onUpdateClienti, onBack, currentUser, toas
 }
 
 export default AnagraficaClienti
-
 

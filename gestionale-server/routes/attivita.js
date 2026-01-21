@@ -31,15 +31,36 @@ class AttivitaController {
               CAST(strftime('%m', data) AS INTEGER) BETWEEN ? AND ?
         ORDER BY data DESC, id DESC
       `),
+      getByUser: this.db.prepare(`
+        SELECT * FROM attivita
+        WHERE user_id = ?
+        ORDER BY data DESC, id DESC
+      `),
+      getByUserDateRange: this.db.prepare(`
+        SELECT * FROM attivita
+        WHERE user_id = ? AND data >= ? AND data <= ?
+        ORDER BY data DESC, id DESC
+      `),
+      getByUserMonth: this.db.prepare(`
+        SELECT * FROM attivita
+        WHERE user_id = ? AND strftime('%Y-%m', data) = ?
+        ORDER BY data DESC, id DESC
+      `),
+      getByUserQuarter: this.db.prepare(`
+        SELECT * FROM attivita
+        WHERE user_id = ? AND strftime('%Y', data) = ? AND
+              CAST(strftime('%m', data) AS INTEGER) BETWEEN ? AND ?
+        ORDER BY data DESC, id DESC
+      `),
       create: this.db.prepare(`
         INSERT INTO attivita (
-          data, cliente_id, cliente_nome, attivita, km, indennita
-        ) VALUES (?, ?, ?, ?, ?, ?)
+          data, user_id, cliente_id, cliente_nome, attivita, km, indennita, note
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `),
       update: this.db.prepare(`
         UPDATE attivita SET
-          data = ?, cliente_id = ?, cliente_nome = ?,
-          attivita = ?, km = ?, indennita = ?,
+          data = ?, user_id = ?, cliente_id = ?, cliente_nome = ?,
+          attivita = ?, km = ?, indennita = ?, note = ?,
           updated_at = datetime('now', 'localtime')
         WHERE id = ?
       `),
@@ -54,29 +75,60 @@ class AttivitaController {
         FROM attivita
         WHERE data >= ? AND data <= ?
         GROUP BY attivita
+      `),
+      getTotalsByUser: this.db.prepare(`
+        SELECT
+          COUNT(*) as totale_attivita,
+          SUM(km) as totale_km,
+          SUM(indennita) as totale_indennita,
+          attivita,
+          COUNT(*) as count_per_tipo
+        FROM attivita
+        WHERE user_id = ? AND data >= ? AND data <= ?
+        GROUP BY attivita
       `)
     };
   }
 
   getAll(req, res) {
     try {
-      const { filter, startDate, endDate, month, quarter, year } = req.query;
-      
+      const { filter, startDate, endDate, month, quarter, year, userId } = req.query;
+      const isAdmin = req.user?.role === 'admin';
+      let effectiveUserId = null;
+
+      if (isAdmin && userId) {
+        const parsed = parseInt(userId, 10);
+        if (!Number.isFinite(parsed)) {
+          return res.status(400).json({ error: 'userId non valido' });
+        }
+        effectiveUserId = parsed;
+      } else if (!isAdmin && req.user?.id) {
+        effectiveUserId = req.user.id;
+      }
+
       let attivita;
-      
+
       if (filter === 'month' && month) {
-        attivita = this.stmt.getByMonth.all(month);
+        attivita = effectiveUserId
+          ? this.stmt.getByUserMonth.all(effectiveUserId, month)
+          : this.stmt.getByMonth.all(month);
       } else if (filter === 'quarter' && quarter && year) {
         const startMonth = (parseInt(quarter) - 1) * 3 + 1;
         const endMonth = startMonth + 2;
-        attivita = this.stmt.getByQuarter.all(year, startMonth, endMonth);
+        attivita = effectiveUserId
+          ? this.stmt.getByUserQuarter.all(effectiveUserId, year, startMonth, endMonth)
+          : this.stmt.getByQuarter.all(year, startMonth, endMonth);
       } else if (startDate && endDate) {
-        attivita = this.stmt.getByDateRange.all(startDate, endDate);
+        attivita = effectiveUserId
+          ? this.stmt.getByUserDateRange.all(effectiveUserId, startDate, endDate)
+          : this.stmt.getByDateRange.all(startDate, endDate);
+      } else if (effectiveUserId) {
+        attivita = this.stmt.getByUser.all(effectiveUserId);
       } else {
         attivita = this.stmt.getAll.all();
       }
 
-      Logger.info('GET /attivita', { count: attivita.length, filter });
+      Logger.info('GET /attivita', { count: attivita.length, filter, userId: effectiveUserId });
       res.json(attivita);
     } catch (error) {
       Logger.error('Errore GET /attivita', error);
@@ -93,6 +145,10 @@ class AttivitaController {
         return res.status(404).json({ error: 'Attività non trovata' });
       }
 
+      if (req.user?.role !== 'admin' && attivita.user_id !== req.user?.id) {
+        return res.status(403).json({ error: 'Permesso negato' });
+      }
+
       Logger.info(`GET /attivita/${id}`);
       res.json(attivita);
     } catch (error) {
@@ -103,14 +159,28 @@ class AttivitaController {
 
   getTotals(req, res) {
     try {
-      const { startDate, endDate } = req.query;
-      
+      const { startDate, endDate, userId } = req.query;
+      const isAdmin = req.user?.role === 'admin';
+      let effectiveUserId = null;
+
+      if (isAdmin && userId) {
+        const parsed = parseInt(userId, 10);
+        if (!Number.isFinite(parsed)) {
+          return res.status(400).json({ error: 'userId non valido' });
+        }
+        effectiveUserId = parsed;
+      } else if (!isAdmin && req.user?.id) {
+        effectiveUserId = req.user.id;
+      }
+
       if (!startDate || !endDate) {
         return res.status(400).json({ error: 'startDate e endDate obbligatori' });
       }
 
-      const totals = this.stmt.getTotals.all(startDate, endDate);
-      
+      const totals = effectiveUserId
+        ? this.stmt.getTotalsByUser.all(effectiveUserId, startDate, endDate)
+        : this.stmt.getTotals.all(startDate, endDate);
+
       const result = {
         totale_km: totals.reduce((sum, t) => sum + (t.totale_km || 0), 0),
         totale_indennita: totals.reduce((sum, t) => sum + (t.totale_indennita || 0), 0),
@@ -124,7 +194,7 @@ class AttivitaController {
         }
       });
 
-      Logger.info('GET /attivita/totals', { startDate, endDate });
+      Logger.info('GET /attivita/totals', { startDate, endDate, userId: effectiveUserId });
       res.json(result);
     } catch (error) {
       Logger.error('Errore GET /attivita/totals', error);
@@ -134,23 +204,34 @@ class AttivitaController {
 
   create(req, res) {
     try {
-      const { data, clienteId, clienteNome, attivita, km, indennita } = req.body;
+      const { data, clienteId, clienteNome, attivita, km, indennita, note, userId } = req.body;
 
       if (!data) {
         return res.status(400).json({ error: 'Data obbligatoria' });
       }
 
+      let ownerId = req.user?.id || null;
+      if (req.user?.role === 'admin' && userId) {
+        const parsed = parseInt(userId, 10);
+        if (!Number.isFinite(parsed)) {
+          return res.status(400).json({ error: 'userId non valido' });
+        }
+        ownerId = parsed;
+      }
+
       const result = this.stmt.create.run(
         data,
+        ownerId,
         clienteId || null,
         clienteNome || null,
         attivita || null,
         km || 0,
-        indennita ? 1 : 0
+        indennita ? 1 : 0,
+        note || null
       );
 
       Logger.info('POST /attivita', { id: result.lastInsertRowid });
-      res.status(201).json({ id: result.lastInsertRowid, ...req.body });
+      res.status(201).json({ id: result.lastInsertRowid, ...req.body, userId: ownerId });
     } catch (error) {
       Logger.error('Errore POST /attivita', error);
       res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
@@ -160,19 +241,40 @@ class AttivitaController {
   update(req, res) {
     try {
       const { id } = req.params;
-      const { data, clienteId, clienteNome, attivita, km, indennita } = req.body;
+      const { data, clienteId, clienteNome, attivita, km, indennita, note, userId } = req.body;
 
       if (!data) {
         return res.status(400).json({ error: 'Data obbligatoria' });
       }
 
+      const existing = this.stmt.getById.get(id);
+      if (!existing) {
+        return res.status(404).json({ error: 'AttivitÃ  non trovata' });
+      }
+      if (req.user?.role !== 'admin' && existing.user_id !== req.user?.id) {
+        return res.status(403).json({ error: 'Permesso negato' });
+      }
+
+      let nextUserId = existing.user_id || null;
+      if (req.user?.role === 'admin' && userId) {
+        const parsed = parseInt(userId, 10);
+        if (!Number.isFinite(parsed)) {
+          return res.status(400).json({ error: 'userId non valido' });
+        }
+        nextUserId = parsed;
+      } else if (!nextUserId && req.user?.id) {
+        nextUserId = req.user.id;
+      }
+
       const result = this.stmt.update.run(
         data,
+        nextUserId,
         clienteId || null,
         clienteNome || null,
         attivita || null,
         km || 0,
         indennita ? 1 : 0,
+        note || null,
         id
       );
 
@@ -181,7 +283,7 @@ class AttivitaController {
       }
 
       Logger.info(`PUT /attivita/${id}`);
-      res.json({ id: parseInt(id), ...req.body });
+      res.json({ id: parseInt(id, 10), ...req.body, userId: nextUserId });
     } catch (error) {
       Logger.error(`Errore PUT /attivita/${req.params.id}`, error);
       res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
@@ -196,6 +298,14 @@ class AttivitaController {
       
       if (isNaN(numericId)) {
         return res.status(400).json({ error: 'ID non valido' });
+      }
+
+      const existing = this.stmt.getById.get(numericId);
+      if (!existing) {
+        return res.status(404).json({ error: 'AttivitÃ  non trovata' });
+      }
+      if (req.user?.role !== 'admin' && existing.user_id !== req.user?.id) {
+        return res.status(403).json({ error: 'Permesso negato' });
       }
 
       const result = this.stmt.delete.run(numericId);
@@ -227,4 +337,3 @@ function createRouter(db) {
 }
 
 module.exports = createRouter;
-

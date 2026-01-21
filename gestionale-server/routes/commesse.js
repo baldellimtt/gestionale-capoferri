@@ -10,8 +10,8 @@ const { validateRequest } = require('../utils/validationMiddleware');
 const ValidationSchemas = require('../utils/validationSchemas');
 const Pagination = require('../utils/pagination');
 
-const STATI_COMMESSA = ['In corso', 'Chiusa'];
-const STATI_PAGAMENTI = ['Non iniziato', 'Parziale', 'Saldo'];
+const STATI_COMMESSA = ['In corso', 'In attesa di approvazione', 'Richieste integrazioni', 'Personalizzato', 'Conclusa'];
+const STATI_PAGAMENTI = ['Non iniziato', 'Parziale', 'Consuntivo con altre commesse', 'Saldo'];
 
 const uploadsRoot = path.join(__dirname, '..', 'uploads', 'commesse');
 
@@ -163,6 +163,10 @@ class CommesseController {
         INSERT INTO commesse_audit (commessa_id, user_id, action, changes_json, kanban_card_ids)
         VALUES (?, ?, ?, ?, ?)
       `),
+      createAuditWithDate: this.db.prepare(`
+        INSERT INTO commesse_audit (commessa_id, user_id, action, changes_json, kanban_card_ids, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `),
       getAuditByCommessa: this.db.prepare(`
         SELECT a.id, a.commessa_id, a.user_id, a.action, a.changes_json, a.kanban_card_ids, a.created_at,
                u.username, u.nome, u.cognome
@@ -215,6 +219,20 @@ class CommesseController {
       action,
       changesJson,
       kanbanJson
+    );
+  }
+
+  createAuditEntryWithDate(commessaId, action, changes, userId, createdAt) {
+    const kanbanCardIds = this.getRelatedKanbanCardIds(commessaId);
+    const changesJson = changes ? JSON.stringify(changes) : null;
+    const kanbanJson = kanbanCardIds.length ? JSON.stringify(kanbanCardIds) : null;
+    this.stmt.createAuditWithDate.run(
+      commessaId,
+      userId || null,
+      action,
+      changesJson,
+      kanbanJson,
+      createdAt
     );
   }
 
@@ -274,7 +292,7 @@ class CommesseController {
       return 'Stato pagamenti non valido';
     }
 
-    if (stato === 'Chiusa' && sotto_stato) {
+    if (stato === 'Conclusa' && sotto_stato) {
       return 'Fase di lavoro non valida per commessa chiusa';
     }
 
@@ -483,7 +501,7 @@ class CommesseController {
         cliente_id: cliente_id || clienteId || null,
         cliente_nome: cliente_nome || clienteNome || null,
         stato: stato || 'In corso',
-        sotto_stato: (stato === 'Chiusa') ? null : (sotto_stato || null),
+        sotto_stato: (stato === 'Conclusa') ? null : (sotto_stato || null),
         stato_pagamenti: stato_pagamenti || 'Non iniziato',
         preventivo: preventivo ? 1 : 0,
         importo_preventivo: this.parseNumber(importo_preventivo, 0),
@@ -647,6 +665,39 @@ class CommesseController {
     }
   }
 
+  addAuditNote(req, res) {
+    try {
+      const { id } = req.params;
+      const payload = req.body || {};
+      const note = typeof payload.note === 'string' ? payload.note.trim() : '';
+      if (!note) {
+        return res.status(400).json({ error: 'Nota obbligatoria' });
+      }
+
+      const existing = this.stmt.getById.get(id);
+      if (!existing) {
+        return res.status(404).json({ error: 'Commessa non trovata' });
+      }
+
+      const noteDate = typeof payload.data === 'string' && payload.data.trim() ? payload.data.trim() : null;
+      const changes = { note, date: noteDate };
+
+      if (noteDate) {
+        const normalizedDate = /^\d{4}-\d{2}-\d{2}$/.test(noteDate)
+          ? `${noteDate} 00:00:00`
+          : noteDate;
+        this.createAuditEntryWithDate(id, 'note', changes, req.user?.id, normalizedDate);
+      } else {
+        this.createAuditEntry(id, 'note', changes, req.user?.id);
+      }
+
+      res.status(201).json({ success: true });
+    } catch (error) {
+      Logger.error('Errore POST /commesse/audit', error);
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
+    }
+  }
+
   uploadAllegato(req, res) {
     try {
       const { id } = req.params;
@@ -769,6 +820,7 @@ function createRouter(db) {
 
   router.get('/:id/allegati', validateRequest(ValidationSchemas.id), (req, res) => controller.getAllegati(req, res));
   router.get('/:id/audit', validateRequest(ValidationSchemas.id), (req, res) => controller.getAudit(req, res));
+  router.post('/:id/audit', validateRequest(ValidationSchemas.commessaAuditNote), (req, res) => controller.addAuditNote(req, res));
   router.post('/:id/allegati', validateRequest(ValidationSchemas.id), upload.single('file'), (req, res) => controller.uploadAllegato(req, res));
   router.delete('/allegati/:allegatoId', validateRequest(ValidationSchemas.idParam('allegatoId')), (req, res) => controller.deleteAllegato(req, res));
   router.get('/:id', validateRequest(ValidationSchemas.id), (req, res) => controller.getById(req, res));

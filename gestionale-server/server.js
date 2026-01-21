@@ -87,30 +87,20 @@ const uploadMaxSize = process.env.UPLOAD_MAX_SIZE_MB
 app.use(express.json({ limit: uploadMaxSize }));
 app.use(express.urlencoded({ extended: true, limit: uploadMaxSize }));
 
-// Rate Limiting (applicato a tutte le route API)
+// Rate Limiting (applicato a tutte le route API, tranne auth)
 const rateLimitWindowMs = parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10);
 const rateLimitMax = parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || (NODE_ENV === 'production' ? '100' : '1000'), 10);
-app.use('/api', rateLimiter.createLimiter({
+const apiLimiter = rateLimiter.createLimiter({
   windowMs: rateLimitWindowMs,
   max: rateLimitMax,
-  message: 'Troppe richieste, riprova più tardi'
-}));
-
-// Rate limiting più restrittivo solo per login/refresh (non per /me che è solo verifica)
-// Nota: in development, limite più alto per facilitare testing
-const authRateLimit = NODE_ENV === 'development' ? 20 : 10;
-app.use('/api/auth/login', rateLimiter.createLimiter({
-  windowMs: rateLimitWindowMs,
-  max: authRateLimit,
-  message: 'Troppi tentativi di accesso, riprova più tardi',
-  skipSuccessfulRequests: true // Non conta richieste di successo
-}));
-app.use('/api/auth/refresh', rateLimiter.createLimiter({
-  windowMs: rateLimitWindowMs,
-  max: authRateLimit,
-  message: 'Troppi tentativi di refresh token, riprova più tardi',
-  skipSuccessfulRequests: true
-}));
+  message: 'Troppe richieste, riprova pi? tardi'
+});
+app.use('/api', (req, res, next) => {
+  if ((req.path || '').startsWith('/auth/')) {
+    return next();
+  }
+  return apiLimiter(req, res, next);
+});
 
 // Static files
 const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, 'uploads');
@@ -148,6 +138,7 @@ app.use('/api/impostazioni', (req, res, next) => {
 app.use('/api/clienti', require('./routes/clienti')(db));
 app.use('/api/attivita', require('./routes/attivita')(db));
 app.use('/api/commesse', require('./routes/commesse')(db));
+app.use('/api/note-spese', require('./routes/noteSpese')(db));
 app.use('/api/kanban', require('./routes/kanban')(db));
 
 // Error handling middleware (usa ErrorHandler centralizzato)

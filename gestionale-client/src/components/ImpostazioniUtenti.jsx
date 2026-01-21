@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import api from '../services/api'
 
-function ImpostazioniUtenti({ currentUser, onUserUpdated, onBack, toast }) {
+function ImpostazioniUtenti({ currentUser, onUserUpdated, onUsersChanged, onBack, toast, showHeader = true, title = 'Impostazioni utenti' }) {
   const [utenti, setUtenti] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -14,6 +14,7 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onBack, toast }) {
     password: '',
     role: 'user',
     email: '',
+    telefono: '',
     nome: '',
     cognome: '',
     mezzo: '',
@@ -46,6 +47,7 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onBack, toast }) {
       password: '',
       role: utente.role || 'user',
       email: utente.email || '',
+      telefono: utente.telefono || '',
       nome: utente.nome || '',
       cognome: utente.cognome || '',
       mezzo: utente.mezzo || '',
@@ -79,11 +81,15 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onBack, toast }) {
         rimborso_km: rimborso
       })
       setUtenti((prev) => [...prev, created])
+      if (onUsersChanged) {
+        onUsersChanged()
+      }
       setCreateData({
         username: '',
         password: '',
         role: 'user',
         email: '',
+        telefono: '',
         nome: '',
         cognome: '',
         mezzo: '',
@@ -127,6 +133,9 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onBack, toast }) {
       if (currentUser?.id === updated.id && onUserUpdated) {
         onUserUpdated(updated)
       }
+      if (onUsersChanged) {
+        onUsersChanged()
+      }
       cancelEdit()
       if (loadingToastId) {
         toast?.updateToast(loadingToastId, { type: 'success', title: 'Completato', message: 'Utente aggiornato con successo', duration: 3000 })
@@ -154,6 +163,9 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onBack, toast }) {
       const loadingToastId = toast?.showLoading('Eliminazione in corso...', 'Eliminazione utente')
       await api.deleteUtente(utente.id)
       setUtenti((prev) => prev.filter((u) => u.id !== utente.id))
+      if (onUsersChanged) {
+        onUsersChanged()
+      }
       if (loadingToastId) {
         toast?.updateToast(loadingToastId, { type: 'success', title: 'Completato', message: 'Utente eliminato con successo', duration: 3000 })
       } else {
@@ -171,12 +183,16 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onBack, toast }) {
 
   return (
     <div>
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2 className="section-title mb-0">Impostazioni utenti</h2>
-        <button className="btn btn-secondary" onClick={onBack}>
-          Indietro
-        </button>
-      </div>
+      {showHeader && (
+        <div className="d-flex justify-content-between align-items-center mb-4">
+          <h2 className="section-title mb-0">{title}</h2>
+          {onBack && (
+            <button className="btn btn-secondary" onClick={onBack}>
+              Indietro
+            </button>
+          )}
+        </div>
+      )}
 
       {error && (
         <div className="alert alert-warning mb-3">
@@ -238,6 +254,15 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onBack, toast }) {
                 />
               </div>
               <div className="col-md-4">
+                <label className="form-label">Telefono</label>
+                <input
+                  type="tel"
+                  className="form-control"
+                  value={createData.telefono}
+                  onChange={(e) => setCreateData((prev) => ({ ...prev, telefono: e.target.value }))}
+                />
+              </div>
+              <div className="col-md-4">
                 <label className="form-label">Nome</label>
                 <input
                   className="form-control"
@@ -292,7 +317,7 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onBack, toast }) {
       )}
 
       <div className="card">
-        <div className="card-header">Elenco utenti</div>
+        <div className="card-header">Dati operatore</div>
         <div className="card-body">
           {loading ? (
             <div className="text-center py-4">
@@ -310,6 +335,7 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onBack, toast }) {
                     <th>Username</th>
                     <th>Ruolo</th>
                     <th>Email</th>
+                    <th>Telefono</th>
                     <th>Nome</th>
                     <th>Veicolo</th>
                     <th>Targa</th>
@@ -357,6 +383,18 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onBack, toast }) {
                             />
                           ) : (
                             utente.email || '-'
+                          )}
+                        </td>
+                        <td>
+                          {isEditing ? (
+                            <input
+                              type="tel"
+                              className="form-control"
+                              value={editData.telefono}
+                              onChange={(e) => setEditData((prev) => ({ ...prev, telefono: e.target.value }))}
+                            />
+                          ) : (
+                            utente.telefono || '-'
                           )}
                         </td>
                         <td>

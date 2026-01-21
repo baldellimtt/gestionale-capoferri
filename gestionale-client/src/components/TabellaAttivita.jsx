@@ -15,7 +15,7 @@ import {
 } from '../utils/attivita'
 import { useAttivita } from '../contexts/AttivitaContext'
 
-function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
+function TabellaAttivita({ clienti, user, toast, hideControls = false, targetUserId = null }) {
   // IMPORTANTE: NON usare mai i dati dal Context per evitare problemi con eliminazioni
   // I dati devono essere SEMPRE caricati direttamente dal server per garantire che le eliminazioni siano permanenti
   const { dataVersion, notifyAttivitaChanged } = useAttivita()
@@ -44,6 +44,8 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
   }, [])
   const [error, setError] = useState(null)
   const [expanded, setExpanded] = useState(false)
+  const [showForm, setShowForm] = useState(true)
+  const [showSection, setShowSection] = useState(true)
   const [filterType, setFilterType] = useState('none')
   const [customStartDate, setCustomStartDate] = useState('')
   const [customEndDate, setCustomEndDate] = useState('')
@@ -57,10 +59,12 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
   const [deletedIds, setDeletedIds] = useState(new Set())
   const [hiddenTempDates, setHiddenTempDates] = useState(new Set())
   const [newRowDate, setNewRowDate] = useState(getIsoDate())
+  const [exportDate, setExportDate] = useState(getIsoDate())
   const lastCreatedDateRef = useRef(null)
   const clearEditingTimeoutRef = useRef(null)
   const tableScrollRef = useRef(null)
   const [rimborsoKm, setRimborsoKm] = useState(user?.rimborso_km ?? 0)
+  const effectiveUserId = targetUserId ?? user?.id ?? null
 
   const ATTIVITA_OPTIONS = ['SOPRALLUOGO', 'TRASFERTA']
 
@@ -118,7 +122,8 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
       setLoading(true)
       setError(null)
       // Se forceReset è true, forza refresh dal server (evita cache browser)
-      const data = await api.getAttivita(filters, forceReset)
+      const requestFilters = effectiveUserId ? { ...filters, userId: effectiveUserId } : filters
+      const data = await api.getAttivita(requestFilters, forceReset)
       
       // IMPORTANTE: Verifica che il componente sia ancora montato prima di aggiornare lo stato
       if (!isMountedRef.current) {
@@ -191,6 +196,14 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
     }
   }, []) // Esegui SOLO al mount, non quando loadAttivita cambia
 
+  useEffect(() => {
+    if (!effectiveUserId) return
+    setLocalAttivita([])
+    loadAttivita({}, true).catch(err => {
+      console.error('Errore caricamento attivitÃ  per utente:', err)
+    })
+  }, [effectiveUserId])
+
 
   useEffect(() => {
     setRimborsoKm(user?.rimborso_km ?? 0)
@@ -258,11 +271,13 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
       lastCreatedDateRef.current = today
       api.createAttivita({
         data: today,
+        userId: effectiveUserId || null,
         clienteId: null,
         clienteNome: '',
         attivita: '',
         km: 0,
-        indennita: 0
+        indennita: 0,
+        note: null
       })
         .then((result) => {
           // Verifica che il componente sia ancora montato
@@ -275,7 +290,8 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
             clienteId: null,
             attivita: '',
             km: '',
-            indennita: false
+            indennita: false,
+            note: ''
           }
           setAttivita((prev) => {
             const alreadyExists = prev.some(
@@ -303,22 +319,29 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
     setSaving((prev) => ({ ...prev, [row.id]: true }))
 
     try {
+      const { isComplete } = getRowValidation(row)
       const attivitaData = {
         data: row.data,
+        userId: effectiveUserId || null,
         clienteId: row.clienteId || null,
         clienteNome: row.cliente || null,
         attivita: row.attivita || null,
         km: parseFloat(row.km) || 0,
-        indennita: row.indennita ? 1 : 0
+        indennita: row.indennita ? 1 : 0,
+        note: row.note || null
       }
 
       if (row.id && typeof row.id === 'number') {
         await api.updateAttivita(row.id, attivitaData)
-        toast?.showSuccess('Rimborso aggiornato con successo')
+        if (isComplete) {
+          toast?.showSuccess('Rimborso aggiornato con successo')
+        }
       } else {
         const result = await api.createAttivita(attivitaData)
         setAttivita((prev) => prev.map((r) => (r === row ? { ...r, id: result.id } : r)))
-        toast?.showSuccess('Rimborso salvato con successo')
+        if (isComplete) {
+          toast?.showSuccess('Rimborso salvato con successo')
+        }
       }
       notifyAttivitaChanged?.()
     } catch (err) {
@@ -333,7 +356,7 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
         return next
       })
     }
-  }, [saving, toast, notifyAttivitaChanged])
+  }, [saving, toast, notifyAttivitaChanged, effectiveUserId])
 
   const { scheduleSave } = useDebouncedRowSave(saveRow, 500)
 
@@ -493,24 +516,27 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
 
   const addRowForDate = async (date) => {
     try {
-      const result = await api.createAttivita({
-        data: date,
-        clienteId: null,
-        clienteNome: '',
-        attivita: '',
-        km: 0,
-        indennita: 0
-      })
+    const result = await api.createAttivita({
+      data: date,
+      userId: effectiveUserId || null,
+      clienteId: null,
+      clienteNome: '',
+      attivita: '',
+      km: 0,
+      indennita: 0,
+      note: null
+    })
 
       const newRow = {
         id: result.id,
         data: date,
         cliente: '',
-        clienteId: null,
-        attivita: '',
-        km: '',
-        indennita: false
-      }
+      clienteId: null,
+      attivita: '',
+      km: '',
+      indennita: false,
+      note: ''
+    }
 
       // Aggiorna localmente per feedback immediato
       setAttivita((prev) => {
@@ -592,6 +618,10 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
   }, [filteredAttivita])
 
   const totals = useMemo(() => calculateTotals(filteredAttivita), [filteredAttivita])
+  const hasRowsForExportDate = useMemo(
+    () => filteredAttivita.some((row) => row?.data === exportDate),
+    [filteredAttivita, exportDate]
+  )
   const rimborsoTotale = useMemo(() => {
     const kmValue = Number(totals.totalKm) || 0
     const rateValue = Number(rimborsoKm) || 0
@@ -701,7 +731,9 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
     }
   }, [portalAutocomplete])
 
-  const exportPDF = async () => {
+  const buildPdf = async ({ rows, filterText, fileName } = {}) => {
+    const rowsToExport = rows || filteredAttivita
+    const totalsForRows = calculateTotals(rowsToExport)
     const doc = new jsPDF()
     const headerTextTopY = 18
     let headerX = 14
@@ -753,29 +785,29 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
     doc.setTextColor(60, 60, 60)
     doc.setFont('helvetica', 'bold')
     const reportTitleY = headerBottomY + 12
-    doc.text('Report Rimborsi', 14, reportTitleY)
+    doc.text('Report Rimborsi chilometrici', 14, reportTitleY)
 
-    let filterText = 'Periodo: '
+    let reportFilterText = filterText || 'Periodo: '
     if (!expanded) {
-      filterText += 'Ultimi giorni lavorativi'
+      reportFilterText += 'Ultimi giorni lavorativi'
     } else if (filterType === 'mese') {
       const now = new Date()
-      filterText += `Mese corrente (${now.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })})`
+      reportFilterText += `Mese corrente (${now.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })})`
     } else if (filterType === 'trimestre') {
       const now = new Date()
       const quarter = Math.floor(now.getMonth() / 3) + 1
-      filterText += `Trimestre ${quarter} ${now.getFullYear()}`
+      reportFilterText += `Trimestre ${quarter} ${now.getFullYear()}`
     } else if (filterType === 'custom' && customStartDate && customEndDate) {
-      filterText += `${customStartDate} - ${customEndDate}`
+      reportFilterText += `${customStartDate} - ${customEndDate}`
     } else {
-      filterText += 'Tutti'
+      reportFilterText += 'Tutti'
     }
 
     doc.setFontSize(10)
     doc.setFont('helvetica', 'normal')
     doc.setTextColor(100, 100, 100)
     const filterY = reportTitleY + 7
-    doc.text(filterText, 14, filterY)
+    doc.text(reportFilterText, 14, filterY)
 
     const dipendenteNome = [user?.nome, user?.cognome].filter(Boolean).join(' ').trim()
     const dipendenteLabel = dipendenteNome || user?.username || ''
@@ -795,7 +827,7 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
     }
 
     const tableStartY = filterY + (details.length > 0 ? 6 + details.length * 5 + 3 : 6)
-    const tableData = [...filteredAttivita]
+    const tableData = [...rowsToExport]
       .sort((a, b) => (a?.data || '').localeCompare(b?.data || ''))
       .map((row) => {
       const dateFormatted = formatDateEuropean(row.data)
@@ -804,6 +836,7 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
         row.cliente || '',
         row.attivita || '',
         row.km || '0',
+        row.note || '',
         row.indennita ? 'Sì' : 'No'
       ]
     })
@@ -812,12 +845,13 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
       { content: 'Totale', styles: { fontStyle: 'bold', halign: 'center' } },
       '',
       '',
-      { content: totals.totalKm.toFixed(2), styles: { halign: 'center', fontStyle: 'bold' } },
-      { content: String(totals.totalIndennita), styles: { halign: 'center', fontStyle: 'bold' } }
+      { content: totalsForRows.totalKm.toFixed(2), styles: { halign: 'center', fontStyle: 'bold' } },
+      '',
+      { content: String(totalsForRows.totalIndennita), styles: { halign: 'center', fontStyle: 'bold' } }
     ])
 
     autoTable(doc, {
-      head: [['Data', 'Cliente', 'Rimborso', 'KM', 'Indennita']],
+      head: [['Data', 'Destinazione', 'Rimborso', 'KM', 'Note', 'Indennita']],
       body: tableData,
       startY: tableStartY,
       styles: {
@@ -852,7 +886,8 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
     doc.setFontSize(9)
     doc.setFont('helvetica', 'normal')
     doc.setTextColor(80, 80, 80)
-    const rimborsoText = `Totale KM (${totals.totalKm.toFixed(2)}) x Costo/km (€ ${Number(rimborsoKm || 0).toFixed(2)}) = € ${rimborsoTotale.toFixed(2)}`
+    const rimborsoTotalePdf = totalsForRows.totalKm * Number(rimborsoKm || 0)
+    const rimborsoText = `Totale KM (${totalsForRows.totalKm.toFixed(2)}) x Costo/km (EUR ${Number(rimborsoKm || 0).toFixed(2)}) = EUR ${rimborsoTotalePdf.toFixed(2)}`
     doc.text(rimborsoText, 14, summaryY + 6)
 
     const dataGenerazione = new Date().toLocaleDateString('it-IT', {
@@ -866,7 +901,22 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
     doc.setTextColor(150, 150, 150)
     doc.text(`Generato il: ${dataGenerazione}`, 14, doc.internal.pageSize.height - 10)
 
-    doc.save(`report-rimborsi-${getIsoDate()}.pdf`)
+    doc.save(fileName || `report-rimborsi-${getIsoDate()}.pdf`)
+  }
+
+  const exportPDF = async () => {
+    await buildPdf()
+  }
+
+  const exportPDFForDate = async () => {
+    const rowsForDate = filteredAttivita.filter((row) => row?.data === exportDate)
+    if (!rowsForDate.length) return
+    const label = `Data: ${exportDate}`
+    await buildPdf({
+      rows: rowsForDate,
+      filterText: label,
+      fileName: `report-rimborsi-${exportDate}.pdf`
+    })
   }
 
   const visibleDates = expanded
@@ -905,6 +955,7 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
         attivita: '',
         km: '',
         indennita: false,
+        note: '',
         isTemporary: true
       }
     ]
@@ -934,11 +985,13 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
     try {
       const attivitaData = {
         data: row.data,
+        userId: effectiveUserId || null,
         clienteId: field === 'cliente' ? null : row.clienteId,
         clienteNome: field === 'cliente' ? value : row.cliente,
         attivita: field === 'attivita' ? value : row.attivita,
         km: field === 'km' ? parseFloat(value) || 0 : parseFloat(row.km) || 0,
-        indennita: field === 'indennita' ? (value ? 1 : 0) : row.indennita ? 1 : 0
+        indennita: field === 'indennita' ? (value ? 1 : 0) : row.indennita ? 1 : 0,
+        note: field === 'note' ? value : row.note || null
       }
 
       const result = await api.createAttivita(attivitaData)
@@ -954,6 +1007,10 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
   }
 
 
+  if (!showSection) {
+    return null
+  }
+
   return (
     <div className="rimborsi-section">
       {error && (
@@ -964,7 +1021,7 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
 
       {!hideControls && (
         <div className="d-flex justify-content-between align-items-center mb-4">
-          <h2 className="section-title mb-0 no-title-line">Rimborsi</h2>
+          <h2 className="section-title mb-0 no-title-line">Rimborsi chilometrici</h2>
           <div className="d-flex gap-2">
             {expanded && (
               <button
@@ -980,13 +1037,19 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
             >
               {expanded ? 'Mostra da compilare' : 'Mostra tutte'}
             </button>
+            <button
+              className="btn btn-secondary"
+              onClick={() => setShowSection(false)}
+            >
+              Chiudi
+            </button>
           </div>
         </div>
       )}
 
       {hideControls && !expanded && (
-        <div className="mb-4">
-          <h2 className="section-title mb-0 no-title-line">Rimborsi</h2>
+        <div className="mb-4 d-flex justify-content-between align-items-center">
+          <h2 className="section-title mb-0 no-title-line">Rimborsi chilometrici</h2>
           {hasIncompleteHomeRows && (
             <div className="alert alert-warning mt-2 mb-0">
               Attenzione: sono presenti rimborsi da compilare.
@@ -997,66 +1060,93 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
 
       {expanded && (
         <>
-          <div className="filters-section">
-            <label>Filtro Periodo:</label>
-            <select
-              className="form-select"
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
-              style={{ width: 'auto' }}
-            >
-              <option value="none">Tutti</option>
-              <option value="mese">Mese Corrente</option>
-              <option value="trimestre">Trimestre Corrente</option>
-              <option value="custom">Periodo Personalizzato</option>
-            </select>
+          {showForm && (
+            <>
+              <div className="d-flex justify-content-between align-items-center mb-2">
+                <div className="text-muted">Filtri e inserimento</div>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setShowForm(false)}
+                >
+                  Nascondi form
+                </button>
+              </div>
+              <div className="filters-section">
+                <label>Filtro Periodo:</label>
+                <select
+                  className="form-select"
+                  value={filterType}
+                  onChange={(e) => setFilterType(e.target.value)}
+                  style={{ width: 'auto' }}
+                >
+                  <option value="none">Tutti</option>
+                  <option value="mese">Mese Corrente</option>
+                  <option value="trimestre">Trimestre Corrente</option>
+                  <option value="custom">Periodo Personalizzato</option>
+                </select>
 
-            {filterType === 'custom' && (
-              <>
-                <label>Da:</label>
+                {filterType === 'custom' && (
+                  <>
+                    <label>Da:</label>
+                    <input
+                      type="date"
+                      className="form-control"
+                      value={customStartDate}
+                      onChange={(e) => setCustomStartDate(e.target.value)}
+                      style={{ width: 'auto' }}
+                    />
+                    <label>A:</label>
+                    <input
+                      type="date"
+                      className="form-control"
+                      value={customEndDate}
+                      onChange={(e) => setCustomEndDate(e.target.value)}
+                      style={{ width: 'auto' }}
+                    />
+                  </>
+                )}
+
+                <button
+                  className="btn btn-primary"
+                  onClick={exportPDF}
+                  disabled={filteredAttivita.length === 0}
+                >
+                  Esporta PDF
+                </button>
                 <input
                   type="date"
                   className="form-control"
-                  value={customStartDate}
-                  onChange={(e) => setCustomStartDate(e.target.value)}
+                  value={exportDate}
+                  onChange={(e) => setExportDate(e.target.value)}
                   style={{ width: 'auto' }}
                 />
-                <label>A:</label>
+                <button
+                  className="btn btn-secondary"
+                  onClick={exportPDFForDate}
+                  disabled={!exportDate || !hasRowsForExportDate}
+                >
+                  Esporta per data
+                </button>
+              </div>
+
+              <div className="mb-3">
                 <input
                   type="date"
                   className="form-control"
-                  value={customEndDate}
-                  onChange={(e) => setCustomEndDate(e.target.value)}
-                  style={{ width: 'auto' }}
+                  value={newRowDate}
+                  onChange={(e) => setNewRowDate(e.target.value)}
+                  style={{ width: 'auto', display: 'inline-block', marginRight: '0.5rem' }}
                 />
-              </>
-            )}
-
-            <button
-              className="btn btn-primary"
-              onClick={exportPDF}
-              disabled={filteredAttivita.length === 0}
-            >
-              Esporta PDF
-            </button>
-          </div>
-
-          <div className="mb-3">
-            <input
-              type="date"
-              className="form-control"
-              value={newRowDate}
-              onChange={(e) => setNewRowDate(e.target.value)}
-              style={{ width: 'auto', display: 'inline-block', marginRight: '0.5rem' }}
-            />
-            <button
-              className="btn btn-secondary"
-              onClick={addNewRow}
-              disabled={loading}
-            >
-              + Aggiungi Rimborso
-            </button>
-          </div>
+                <button
+                  className="btn btn-secondary"
+                  onClick={addNewRow}
+                  disabled={loading}
+                >
+                  + Aggiungi Rimborso
+                </button>
+              </div>
+            </>
+          )}
         </>
       )}
 
@@ -1077,9 +1167,10 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
               <thead>
                 <tr>
                   <th>Data</th>
-                  <th>Cliente</th>
+                  <th>Destinazione</th>
                   <th>Attività</th>
                   <th>KM</th>
+                  <th>Note</th>
                   <th>Indennità</th>
                   <th>Azioni</th>
                 </tr>
@@ -1160,7 +1251,7 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
                                   }
                                   clearEditingRow()
                                 }}
-                                placeholder="Cerca cliente..."
+                                placeholder="Destinazione..."
                               />
                             </div>
                           </td>
@@ -1209,6 +1300,24 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
                               onBlur={clearEditingRow}
                               placeholder="0"
                               inputMode="decimal"
+                            />
+                            </td>
+                            <td className={isIncomplete ? 'row-incomplete-cell' : ''}>
+                            <input
+                              type="text"
+                              className="form-control"
+                              value={row.note}
+                              onChange={async (e) => {
+                                const value = e.target.value
+                                if (isTemporary) {
+                                  await handleTemporaryRowChange(row, 'note', value)
+                                } else {
+                                  updateRow(row.id, 'note', value)
+                                }
+                              }}
+                              onFocus={() => setEditingRow(row.id)}
+                              onBlur={clearEditingRow}
+                              placeholder="Note"
                             />
                             </td>
                             <td className={isIncomplete ? 'row-incomplete-cell' : ''}>

@@ -127,6 +127,26 @@ const ValidationSchemas = {
     update: [] // Sarà popolato dopo la definizione
   },
 
+  commessaAuditNote: [
+    param('id')
+      .isInt({ min: 1 })
+      .withMessage('ID non valido'),
+    body('note')
+      .trim()
+      .notEmpty()
+      .withMessage('Nota obbligatoria')
+      .isLength({ max: 2000 })
+      .withMessage('Nota troppo lunga (max 2000 caratteri)'),
+    body('data')
+      .optional({ nullable: true, checkFalsy: true })
+      .custom((value) => {
+        if (value === null || value === undefined || value === '') return true;
+        if (typeof value !== 'string') return false;
+        return /^\d{4}-\d{2}-\d{2}$/.test(value) || /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value);
+      })
+      .withMessage('Data non valida')
+  ],
+
   // Validazione Contatto Cliente
   contatto: {
     create: [
@@ -185,6 +205,14 @@ const ValidationSchemas = {
           return !isNaN(num) && num >= 1;
         })
         .withMessage('ID cliente non valido'),
+      body('userId')
+        .optional({ nullable: true, checkFalsy: false })
+        .custom((value) => {
+          if (value === null || value === undefined || value === '') return true;
+          const num = typeof value === 'number' ? value : parseInt(value, 10);
+          return !isNaN(num) && num >= 1;
+        })
+        .withMessage('ID utente non valido'),
       body('clienteNome')
         .optional({ nullable: true, checkFalsy: true })
         .custom((value) => {
@@ -201,6 +229,14 @@ const ValidationSchemas = {
           return trimmed.length <= 500;
         })
         .withMessage('Attività troppo lunga (max 500 caratteri)'),
+      body('note')
+        .optional({ nullable: true, checkFalsy: true })
+        .custom((value) => {
+          if (value === null || value === undefined || value === '') return true;
+          const trimmed = typeof value === 'string' ? value.trim() : String(value);
+          return trimmed.length <= 1000;
+        })
+        .withMessage('Note troppo lunghe (max 1000 caratteri)'),
       body('km')
         .optional({ nullable: true, checkFalsy: false })
         .custom((value) => {
@@ -303,8 +339,8 @@ const ValidationSchemas = {
         .withMessage('Nome cliente troppo lungo'),
       body('stato')
         .optional({ nullable: true, checkFalsy: true })
-        .isIn(['In corso', 'Chiusa'])
-        .withMessage('Stato non valido (In corso o Chiusa)'),
+        .isIn(['In corso', 'In attesa di approvazione', 'Richieste integrazioni', 'Personalizzato', 'Conclusa'])
+        .withMessage('Stato non valido'),
       body('sotto_stato')
         .optional({ nullable: true, checkFalsy: true })
         .trim()
@@ -312,7 +348,7 @@ const ValidationSchemas = {
         .withMessage('Sotto stato troppo lungo'),
       body('stato_pagamenti')
         .optional({ nullable: true, checkFalsy: true })
-        .isIn(['Non iniziato', 'Parziale', 'Saldo'])
+        .isIn(['Non iniziato', 'Parziale', 'Consuntivo con altre commesse', 'Saldo'])
         .withMessage('Stato pagamenti non valido'),
       body('preventivo')
         .optional({ nullable: true, checkFalsy: true })

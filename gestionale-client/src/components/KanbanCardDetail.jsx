@@ -2,6 +2,14 @@ import { useState, useEffect, useRef } from 'react'
 import api from '../services/api'
 import KanbanComments from './KanbanComments'
 
+const getTodayDate = () => {
+  const today = new Date()
+  const year = today.getFullYear()
+  const month = String(today.getMonth() + 1).padStart(2, '0')
+  const day = String(today.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, onSave, onDelete, onClose, onRefresh, toast }) {
   const [formData, setFormData] = useState({
     titolo: '',
@@ -30,6 +38,9 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
   const [commessaAuditError, setCommessaAuditError] = useState(null)
   const [commessaAuditCommessaId, setCommessaAuditCommessaId] = useState(null)
   const [showCommessaAudit, setShowCommessaAudit] = useState(false)
+  const [auditNoteDate, setAuditNoteDate] = useState(() => getTodayDate())
+  const [auditNoteText, setAuditNoteText] = useState('')
+  const [auditNoteSaving, setAuditNoteSaving] = useState(false)
   const [scadenzaForm, setScadenzaForm] = useState({
     titolo: '',
     descrizione: '',
@@ -64,6 +75,9 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
       setCommessaAuditError(null)
       setCommessaAuditCommessaId(null)
       setShowCommessaAudit(false)
+      setAuditNoteDate(getTodayDate())
+      setAuditNoteText('')
+      setAuditNoteSaving(false)
       loadScadenze()
     } else {
       // Nuova card - imposta colonna predefinita (In Attesa)
@@ -87,6 +101,9 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
       setCommessaAuditError(null)
       setCommessaAuditCommessaId(null)
       setShowCommessaAudit(false)
+      setAuditNoteDate(getTodayDate())
+      setAuditNoteText('')
+      setAuditNoteSaving(false)
     }
   }, [card, colonne])
 
@@ -311,6 +328,7 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
       create: 'Creazione',
       update: 'Aggiornamento',
       delete: 'Eliminazione',
+      note: 'Nota',
       attachment_uploaded: 'Allegato caricato',
       attachment_deleted: 'Eliminazione allegato'
     }
@@ -333,6 +351,12 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
 
   const formatAuditDate = (value) => {
     if (!value) return ''
+    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      const parsed = new Date(`${value}T00:00:00`)
+      if (!Number.isNaN(parsed.getTime())) {
+        return parsed.toLocaleDateString('it-IT')
+      }
+    }
     const date = new Date(value)
     if (Number.isNaN(date.getTime())) return value
     return date.toLocaleString('it-IT')
@@ -357,6 +381,40 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
       setCommessaAuditError('Errore nel caricamento della cronologia commessa')
     } finally {
       setCommessaAuditLoading(false)
+    }
+  }
+
+  const handleAddAuditNote = async () => {
+    if (!formData.commessa_id) return
+    const note = auditNoteText.trim()
+    if (!note) {
+      setCommessaAuditError('Inserisci una nota prima di salvare.')
+      return
+    }
+
+    try {
+      setAuditNoteSaving(true)
+      setCommessaAuditError(null)
+      const loadingToastId = toast?.showLoading('Salvataggio in corso...', 'Aggiungi nota')
+      await api.addCommessaAuditNote(formData.commessa_id, {
+        data: auditNoteDate || null,
+        note
+      })
+      if (loadingToastId) {
+        toast?.updateToast(loadingToastId, { type: 'success', title: 'Completato', message: 'Nota aggiunta alla cronologia', duration: 3000 })
+      } else {
+        toast?.showSuccess('Nota aggiunta alla cronologia')
+      }
+      setAuditNoteText('')
+      setAuditNoteDate(getTodayDate())
+      await loadCommessaAudit(formData.commessa_id)
+    } catch (err) {
+      console.error('Errore aggiunta nota commessa:', err)
+      const errorMsg = err.message || 'Errore nel salvataggio della nota.'
+      setCommessaAuditError(errorMsg)
+      toast?.showError(errorMsg, 'Errore salvataggio')
+    } finally {
+      setAuditNoteSaving(false)
     }
   }
 
@@ -866,6 +924,36 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
               {formData.commessa_id && showCommessaAudit && (
                 <div className="card" style={{ border: '1px solid var(--border-soft)' }}>
                   <div className="card-body" style={{ padding: '0.75rem' }}>
+                    <div className="row g-2 align-items-end mb-3">
+                      <div className="col-md-3">
+                        <label className="form-label">Data</label>
+                        <input
+                          type="date"
+                          className="form-control"
+                          value={auditNoteDate}
+                          onChange={(e) => setAuditNoteDate(e.target.value)}
+                        />
+                      </div>
+                      <div className="col-md-7">
+                        <label className="form-label">Nota</label>
+                        <input
+                          className="form-control"
+                          value={auditNoteText}
+                          onChange={(e) => setAuditNoteText(e.target.value)}
+                          placeholder="Es. relazione inviata"
+                        />
+                      </div>
+                      <div className="col-md-2 d-grid">
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          onClick={handleAddAuditNote}
+                          disabled={auditNoteSaving}
+                        >
+                          {auditNoteSaving ? 'Salvataggio...' : 'Aggiungi'}
+                        </button>
+                      </div>
+                    </div>
                     {commessaAuditLoading && (
                       <div className="text-muted" style={{ fontSize: '0.85rem' }}>
                         Caricamento cronologia...
@@ -892,6 +980,14 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
                               </div>
                               <div className="audit-meta">{formatAuditDate(entry.created_at)}</div>
                             </div>
+                            {entry.action === 'note' && entry.changes && typeof entry.changes === 'object' && (
+                              <div className="audit-changes">
+                                {entry.changes.date && (
+                                  <div>Data nota: {formatAuditDate(entry.changes.date)}</div>
+                                )}
+                                <div>{entry.changes.note || entry.changes.nota || '-'}</div>
+                              </div>
+                            )}
                             {Array.isArray(entry.changes) && entry.changes.length > 0 && (
                               <div className="audit-changes">
                                 {entry.changes.map((change, idx) => (

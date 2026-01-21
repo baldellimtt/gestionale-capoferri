@@ -9,20 +9,21 @@ const router = express.Router();
 
 function createRouter(db) {
   const getAllStmt = db.prepare(`
-    SELECT id, username, role, email, nome, cognome, mezzo, targa, rimborso_km, created_at, updated_at
+    SELECT id, username, role, email, telefono, nome, cognome, mezzo, targa, rimborso_km, created_at, updated_at
     FROM utenti
     ORDER BY cognome ASC, nome ASC, username ASC
   `);
   const getByIdStmt = db.prepare('SELECT * FROM utenti WHERE id = ?');
   const createStmt = db.prepare(`
-    INSERT INTO utenti (username, role, email, password_hash, password_salt, nome, cognome, mezzo, targa, rimborso_km)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO utenti (username, role, email, telefono, password_hash, password_salt, nome, cognome, mezzo, targa, rimborso_km)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const updateStmt = db.prepare(`
     UPDATE utenti SET
       username = ?,
       role = ?,
       email = ?,
+      telefono = ?,
       nome = ?,
       cognome = ?,
       mezzo = ?,
@@ -57,6 +58,7 @@ function createRouter(db) {
         role = 'user',
         password,
         email,
+        telefono,
         nome,
         cognome,
         mezzo,
@@ -90,6 +92,7 @@ function createRouter(db) {
         username,
         role,
         email || null,
+        telefono || null,
         hash,
         salt,
         nome || null,
@@ -106,6 +109,7 @@ function createRouter(db) {
         username: created.username,
         role: created.role,
         email: created.email,
+        telefono: created.telefono,
         nome: created.nome,
         cognome: created.cognome,
         mezzo: created.mezzo,
@@ -129,6 +133,7 @@ function createRouter(db) {
         role = 'user',
         password,
         email,
+        telefono,
         nome,
         cognome,
         mezzo,
@@ -154,6 +159,7 @@ function createRouter(db) {
         username,
         role,
         email || null,
+        telefono || null,
         nome || null,
         cognome || null,
         mezzo || null,
@@ -192,6 +198,7 @@ function createRouter(db) {
         username: updated.username,
         role: updated.role,
         email: updated.email,
+        telefono: updated.telefono,
         nome: updated.nome,
         cognome: updated.cognome,
         mezzo: updated.mezzo,

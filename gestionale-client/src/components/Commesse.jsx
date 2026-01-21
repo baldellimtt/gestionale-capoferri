@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import api from '../services/api'
 import ConfirmDeleteModal from './ConfirmDeleteModal'
 
-const STATI_COMMESSA = ['In corso', 'Chiusa']
-const STATI_PAGAMENTI = ['Non iniziato', 'Parziale', 'Saldo']
-const SOTTOSTATI_IN_CORSO = [
+const STATI_COMMESSA = ['In corso', 'In attesa di approvazione', 'Richieste integrazioni', 'Personalizzato', 'Conclusa']
+const STATI_PAGAMENTI = ['Non iniziato', 'Parziale', 'Consuntivo con altre commesse', 'Saldo']
+const TIPI_LAVORO = [
   'Piano di sicurezza',
   'Pratica strutturale',
   'Variante pratica edilizia',
@@ -13,9 +13,7 @@ const SOTTOSTATI_IN_CORSO = [
   'Accatastamento',
   'Relazione di calcolo',
   'Documentazione per pratica strutturale',
-  'Documentazione per pratica edilizia',
-  'In attesa di approvazione',
-  'Personalizzato'
+  'Documentazione per pratica edilizia'
 ]
 
 const createEmptyForm = () => ({
@@ -23,7 +21,7 @@ const createEmptyForm = () => ({
   cliente_id: '',
   cliente_nome: '',
   stato: 'In corso',
-  sotto_stato: '',
+  sotto_stato: [],
   sotto_stato_custom: '',
   stato_pagamenti: 'Non iniziato',
   preventivo: false,
@@ -38,6 +36,14 @@ const createEmptyForm = () => ({
   allegati: ''
 })
 
+const getTodayDate = () => {
+  const today = new Date()
+  const year = today.getFullYear()
+  const month = String(today.getMonth() + 1).padStart(2, '0')
+  const day = String(today.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 function Commesse({ clienti, toast }) {
   const [commesse, setCommesse] = useState([])
   const [loading, setLoading] = useState(true)
@@ -48,6 +54,7 @@ function Commesse({ clienti, toast }) {
   const [clienteFormInput, setClienteFormInput] = useState('')
   const [showClienteFormAutocomplete, setShowClienteFormAutocomplete] = useState(false)
   const [showForm, setShowForm] = useState(false)
+  const [formTab, setFormTab] = useState('essenziali')
   const [editingId, setEditingId] = useState(null)
   const [formData, setFormData] = useState(createEmptyForm())
   const [initialFormData, setInitialFormData] = useState(createEmptyForm())
@@ -65,6 +72,12 @@ function Commesse({ clienti, toast }) {
   const [commessaAuditError, setCommessaAuditError] = useState(null)
   const [commessaAuditCommessaId, setCommessaAuditCommessaId] = useState(null)
   const [showCommessaAudit, setShowCommessaAudit] = useState(false)
+  const [auditNoteDate, setAuditNoteDate] = useState(() => getTodayDate())
+  const [auditNoteText, setAuditNoteText] = useState('')
+  const [auditNoteSaving, setAuditNoteSaving] = useState(false)
+  const [showConsuntivo, setShowConsuntivo] = useState(false)
+  const [consuntivoIds, setConsuntivoIds] = useState([])
+  const [consuntivoSconto, setConsuntivoSconto] = useState('')
 
   const loadCommesse = async (nextFilters = filters) => {
     try {
@@ -102,8 +115,8 @@ function Commesse({ clienti, toast }) {
   }, [])
 
   useEffect(() => {
-    if (formData.stato === 'Chiusa' && formData.sotto_stato) {
-      setFormData((prev) => ({ ...prev, sotto_stato: '', sotto_stato_custom: '' }))
+    if (formData.stato === 'Conclusa' && formData.sotto_stato.length) {
+      setFormData((prev) => ({ ...prev, sotto_stato: [], sotto_stato_custom: '' }))
     }
   }, [formData.stato, formData.sotto_stato])
 
@@ -148,10 +161,46 @@ function Commesse({ clienti, toast }) {
     return Number.isFinite(parsed) ? parsed : NaN
   }
 
+  const parseTipologie = (value) => {
+    if (!value) return []
+    if (Array.isArray(value)) return value.filter(Boolean)
+    return String(value)
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean)
+  }
+
   const clampPercent = (value) => {
     const parsed = Number.parseInt(value, 10)
     if (!Number.isFinite(parsed)) return 0
     return Math.max(0, Math.min(100, parsed))
+  }
+
+  const toggleTipologia = (value) => {
+    setFormData((prev) => {
+      const current = prev.sotto_stato || []
+      const exists = current.includes(value)
+      return {
+        ...prev,
+        sotto_stato: exists ? current.filter((item) => item !== value) : [...current, value]
+      }
+    })
+  }
+
+  const addCustomTipologia = () => {
+    const value = formData.sotto_stato_custom?.trim()
+    if (!value) return
+    setFormData((prev) => {
+      const current = prev.sotto_stato || []
+      if (current.includes(value)) {
+        return { ...prev, sotto_stato_custom: '' }
+      }
+      return {
+        ...prev,
+        sotto_stato: [...current, value],
+        sotto_stato_custom: ''
+      }
+    })
   }
 
   const resetForm = () => {
@@ -161,6 +210,7 @@ function Commesse({ clienti, toast }) {
     setInitialAllegati([])
     setEditingId(null)
     setShowForm(false)
+    setFormTab('essenziali')
     setSelectedCommessaId('')
     setClienteFormInput('')
     setShowClienteFormAutocomplete(false)
@@ -168,6 +218,9 @@ function Commesse({ clienti, toast }) {
     setCommessaAuditError(null)
     setCommessaAuditCommessaId(null)
     setShowCommessaAudit(false)
+    setAuditNoteDate(getTodayDate())
+    setAuditNoteText('')
+    setAuditNoteSaving(false)
   }
 
   const handleClienteChange = (value) => {
@@ -229,16 +282,19 @@ function Commesse({ clienti, toast }) {
       return
     }
 
-    const resolvedSottoStato = formData.sotto_stato === 'Personalizzato'
-      ? formData.sotto_stato_custom
-      : formData.sotto_stato
+    const tipologie = [...(formData.sotto_stato || [])]
+    const customTipologia = formData.sotto_stato_custom?.trim()
+    if (customTipologia && !tipologie.includes(customTipologia)) {
+      tipologie.push(customTipologia)
+    }
+    const tipologieValue = tipologie.length ? tipologie.join(', ') : null
 
     const payload = {
       ...formData,
       titolo: formData.titolo.trim(),
       cliente_id: formData.cliente_id || null,
       cliente_nome: formData.cliente_nome || null,
-      sotto_stato: formData.stato === 'Chiusa' ? null : (resolvedSottoStato || null),
+      sotto_stato: formData.stato === 'Conclusa' ? null : tipologieValue,
       stato_pagamenti: formData.stato_pagamenti || 'Non iniziato',
       preventivo: !!formData.preventivo,
       importo_preventivo: importoPreventivo,
@@ -288,15 +344,14 @@ function Commesse({ clienti, toast }) {
   }
 
   const handleEdit = async (commessa) => {
-    const isCustomSottoStato = commessa.sotto_stato
-      && !SOTTOSTATI_IN_CORSO.filter((item) => item !== 'Personalizzato').includes(commessa.sotto_stato)
+    const parsedTipologie = parseTipologie(commessa.sotto_stato)
     const nextForm = {
       titolo: commessa.titolo || '',
       cliente_id: commessa.cliente_id || '',
       cliente_nome: commessa.cliente_nome || '',
       stato: commessa.stato || 'In corso',
-      sotto_stato: isCustomSottoStato ? 'Personalizzato' : (commessa.sotto_stato || ''),
-      sotto_stato_custom: isCustomSottoStato ? commessa.sotto_stato : '',
+      sotto_stato: parsedTipologie,
+      sotto_stato_custom: '',
       stato_pagamenti: commessa.stato_pagamenti || 'Non iniziato',
       preventivo: !!commessa.preventivo,
       importo_preventivo: commessa.importo_preventivo ?? 0,
@@ -311,11 +366,15 @@ function Commesse({ clienti, toast }) {
     }
     setEditingId(commessa.id)
     setShowForm(true)
+    setFormTab('essenziali')
     setSelectedCommessaId(String(commessa.id))
     setCommessaAudit([])
     setCommessaAuditError(null)
     setCommessaAuditCommessaId(null)
     setShowCommessaAudit(false)
+    setAuditNoteDate(getTodayDate())
+    setAuditNoteText('')
+    setAuditNoteSaving(false)
     setFormData(nextForm)
     setInitialFormData(nextForm)
     // Carica gli allegati se non sono già stati caricati e salva una snapshot come iniziali
@@ -340,7 +399,7 @@ function Commesse({ clienti, toast }) {
     titolo: 'Titolo',
     cliente_nome: 'Cliente',
     stato: 'Stato commessa',
-    sotto_stato: 'Fase di lavoro',
+    sotto_stato: 'Tipologia di lavoro',
     stato_pagamenti: 'Stato pagamenti',
     preventivo: 'Preventivo',
     importo_preventivo: 'Importo preventivo',
@@ -356,7 +415,7 @@ function Commesse({ clienti, toast }) {
   const auditChangeActions = {
     stato: 'Cambio stato',
     stato_pagamenti: 'Cambio stato pagamenti',
-    sotto_stato: 'Cambio fase di lavoro',
+    sotto_stato: 'Cambio tipologia di lavoro',
     cliente_nome: 'Cambio cliente',
     responsabile: 'Cambio responsabile',
     titolo: 'Modifica titolo',
@@ -384,6 +443,7 @@ function Commesse({ clienti, toast }) {
       create: 'Creazione',
       update: 'Aggiornamento',
       delete: 'Eliminazione',
+      note: 'Nota',
       attachment_uploaded: 'Allegato caricato',
       attachment_deleted: 'Eliminazione allegato'
     }
@@ -406,6 +466,12 @@ function Commesse({ clienti, toast }) {
 
   const formatAuditDate = (value) => {
     if (!value) return ''
+    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      const parsed = new Date(`${value}T00:00:00`)
+      if (!Number.isNaN(parsed.getTime())) {
+        return parsed.toLocaleDateString('it-IT')
+      }
+    }
     const date = new Date(value)
     if (Number.isNaN(date.getTime())) return value
     return date.toLocaleString('it-IT')
@@ -435,6 +501,40 @@ function Commesse({ clienti, toast }) {
 
   const handleDelete = (commessa) => {
     setDeleteConfirm({ show: true, id: commessa.id })
+  }
+
+  const handleAddAuditNote = async () => {
+    if (!selectedCommessaId) return
+    const note = auditNoteText.trim()
+    if (!note) {
+      setCommessaAuditError('Inserisci una nota prima di salvare.')
+      return
+    }
+
+    try {
+      setAuditNoteSaving(true)
+      setCommessaAuditError(null)
+      const loadingToastId = toast?.showLoading('Salvataggio in corso...', 'Aggiungi nota')
+      await api.addCommessaAuditNote(selectedCommessaId, {
+        data: auditNoteDate || null,
+        note
+      })
+      if (loadingToastId) {
+        toast?.updateToast(loadingToastId, { type: 'success', title: 'Completato', message: 'Nota aggiunta alla cronologia', duration: 3000 })
+      } else {
+        toast?.showSuccess('Nota aggiunta alla cronologia')
+      }
+      setAuditNoteText('')
+      setAuditNoteDate(getTodayDate())
+      await loadCommessaAudit(selectedCommessaId)
+    } catch (err) {
+      console.error('Errore aggiunta nota commessa:', err)
+      const errorMsg = err.message || 'Errore nel salvataggio della nota.'
+      setCommessaAuditError(errorMsg)
+      toast?.showError(errorMsg, 'Errore salvataggio')
+    } finally {
+      setAuditNoteSaving(false)
+    }
   }
 
   const handleUpload = async (commessaId, file) => {
@@ -476,9 +576,18 @@ function Commesse({ clienti, toast }) {
 
     try {
       setDeleting(true)
+      const idToDelete = deleteConfirm.id
       const loadingToastId = toast?.showLoading('Eliminazione in corso...', 'Eliminazione commessa')
-      await api.deleteCommessa(deleteConfirm.id)
-      setCommesse((prev) => prev.filter((item) => item.id !== deleteConfirm.id))
+      await api.deleteCommessa(idToDelete)
+      setCommesse((prev) => prev.filter((item) => item.id !== idToDelete))
+      setAllegatiByCommessa((prev) => {
+        const next = { ...prev }
+        delete next[idToDelete]
+        return next
+      })
+      if (editingId === idToDelete) {
+        resetForm()
+      }
       if (loadingToastId) {
         toast?.updateToast(loadingToastId, { type: 'success', title: 'Completato', message: 'Commessa eliminata con successo', duration: 3000 })
       } else {
@@ -497,17 +606,23 @@ function Commesse({ clienti, toast }) {
 
   const commesseSorted = useMemo(() => {
     return [...commesse].sort((a, b) => {
-      const dateA = a.data_inizio || ''
-      const dateB = b.data_inizio || ''
-      if (dateA !== dateB) return dateB.localeCompare(dateA)
-      return Number(b.id) - Number(a.id)
+      const clienteA = (a.cliente_nome || '').toLowerCase()
+      const clienteB = (b.cliente_nome || '').toLowerCase()
+      if (clienteA !== clienteB) return clienteA.localeCompare(clienteB)
+      const titoloA = (a.titolo || '').toLowerCase()
+      const titoloB = (b.titolo || '').toLowerCase()
+      if (titoloA !== titoloB) return titoloA.localeCompare(titoloB)
+      return Number(a.id) - Number(b.id)
     })
   }, [commesse])
 
   const filteredCommesse = useMemo(() => {
     return commesseSorted.filter((commessa) => {
-      if (filters.sottoStato && commessa.sotto_stato !== filters.sottoStato) {
-        return false
+      if (filters.sottoStato) {
+        const tipologie = parseTipologie(commessa.sotto_stato)
+        if (!tipologie.includes(filters.sottoStato)) {
+          return false
+        }
       }
       if (filters.statoPagamenti && commessa.stato_pagamenti !== filters.statoPagamenti) {
         return false
@@ -515,6 +630,21 @@ function Commesse({ clienti, toast }) {
       return true
     })
   }, [commesseSorted, filters.sottoStato, filters.statoPagamenti])
+
+  const toggleConsuntivoId = (id) => {
+    setConsuntivoIds((prev) => (
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    ))
+  }
+
+  const consuntivoCommesse = filteredCommesse.filter((commessa) => consuntivoIds.includes(commessa.id))
+  const consuntivoTotale = consuntivoCommesse.reduce((sum, commessa) => {
+    const value = parseNumber(commessa.importo_totale ?? 0)
+    return sum + (Number.isFinite(value) ? value : 0)
+  }, 0)
+  const consuntivoScontoPercent = Math.max(0, parseNumber(consuntivoSconto) || 0)
+  const consuntivoScontoValue = (consuntivoTotale * consuntivoScontoPercent) / 100
+  const consuntivoFinale = consuntivoTotale - consuntivoScontoValue
 
   const uploadsBase = api.baseURL.replace(/\/api\/?$/, '') + '/uploads'
   const selectedCommessa = commesse.find((item) => String(item.id) === String(selectedCommessaId))
@@ -529,17 +659,18 @@ function Commesse({ clienti, toast }) {
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/(^-|-$)/g, '')
-  const getStatoClass = (value) => (value === 'Chiusa' ? 'status-closed' : 'status-open')
+  const getStatoClass = (value) => (value === 'Conclusa' ? 'status-closed' : 'status-open')
   const getSottoStatoClass = (value) => (value ? `substatus-${toSlug(value)}` : '')
   const getStatoPagamentiClass = (value) => (value ? `payments-${toSlug(value)}` : '')
   const normalizeForm = (data) => {
+    const tipologie = parseTipologie(data.sotto_stato)
     const normalized = {
       titolo: (data.titolo || '').trim(),
       cliente_id: data.cliente_id || '',
       cliente_nome: data.cliente_nome || '',
       stato: data.stato || 'In corso',
-      sotto_stato: data.sotto_stato || '',
-      sotto_stato_custom: data.sotto_stato_custom || '',
+      sotto_stato: tipologie.sort(),
+      sotto_stato_custom: (data.sotto_stato_custom || '').trim(),
       stato_pagamenti: data.stato_pagamenti || 'Non iniziato',
       preventivo: !!data.preventivo,
       importo_preventivo: Number(String(data.importo_preventivo ?? 0).replace(',', '.')) || 0,
@@ -566,6 +697,7 @@ function Commesse({ clienti, toast }) {
   }, [formData, initialFormData, allegatiByCommessa, selectedCommessaId, initialAllegati])
 
   const canSave = isDirty && formData.titolo.trim() !== '' && !saving
+  const isConsuntivoPagamenti = formData.stato_pagamenti === 'Consuntivo con altre commesse'
   const filteredClienti = useMemo(() => {
     if (!clienteFilterInput) return []
     const search = clienteFilterInput.toLowerCase()
@@ -628,6 +760,7 @@ function Commesse({ clienti, toast }) {
                 setInitialAllegati([])
                 setEditingId(null)
                 setShowForm(true)
+                setFormTab('essenziali')
                 setSelectedCommessaId('')
                 setClienteFormInput('')
                 setShowClienteFormAutocomplete(false)
@@ -685,7 +818,7 @@ function Commesse({ clienti, toast }) {
               <option key={stato} value={stato}>{stato}</option>
             ))}
           </select>
-          <label>Fase di lavoro:</label>
+          <label>Tipologia di lavoro:</label>
           <select
             className="form-select"
             value={filters.sottoStato}
@@ -693,7 +826,7 @@ function Commesse({ clienti, toast }) {
             style={{ width: 'auto' }}
           >
             <option value="">Tutti</option>
-            {SOTTOSTATI_IN_CORSO.filter((stato) => stato !== 'Personalizzato').map((stato) => (
+            {TIPI_LAVORO.map((stato) => (
               <option key={stato} value={stato}>{stato}</option>
             ))}
           </select>
@@ -712,14 +845,107 @@ function Commesse({ clienti, toast }) {
         </div>
       )}
 
+      {!showForm && (
+        <div className="card mb-4 consuntivo-card">
+          <div className="card-header d-flex justify-content-between align-items-center">
+            <span>Consuntivo</span>
+            <button
+              type="button"
+              className="btn btn-sm btn-secondary"
+              onClick={() => setShowConsuntivo((prev) => !prev)}
+            >
+              {showConsuntivo ? 'Chiudi consuntivo' : 'Crea consuntivo'}
+            </button>
+          </div>
+          {showConsuntivo && (
+            <div className="card-body">
+              <div className="consuntivo-grid">
+                <div className="consuntivo-list">
+                  {filteredCommesse.map((commessa) => (
+                    <label key={commessa.id} className="consuntivo-item">
+                      <input
+                        type="checkbox"
+                        checked={consuntivoIds.includes(commessa.id)}
+                        onChange={() => toggleConsuntivoId(commessa.id)}
+                      />
+                      <span className="consuntivo-label">
+                        {commessa.cliente_nome || 'Cliente'} - {commessa.titolo}
+                      </span>
+                      <span className="consuntivo-value">
+                        € {Number(parseNumber(commessa.importo_totale ?? 0) || 0).toFixed(2)}
+                      </span>
+                    </label>
+                  ))}
+                  {filteredCommesse.length === 0 && (
+                    <div className="text-muted">Nessuna commessa disponibile.</div>
+                  )}
+                </div>
+                <div className="consuntivo-summary">
+                  <div className="consuntivo-row">
+                    <span>Totale commesse selezionate</span>
+                    <strong>€ {consuntivoTotale.toFixed(2)}</strong>
+                  </div>
+                  <div className="consuntivo-row">
+                    <label className="form-label mb-1">Sconto (%)</label>
+                    <input
+                      className="form-control"
+                      value={consuntivoSconto}
+                      onChange={(e) => setConsuntivoSconto(e.target.value)}
+                      inputMode="decimal"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div className="consuntivo-row">
+                    <span>Sconto applicato</span>
+                    <strong>- € {consuntivoScontoValue.toFixed(2)}</strong>
+                  </div>
+                  <div className="consuntivo-row consuntivo-final">
+                    <span>Conto finale</span>
+                    <strong>€ {consuntivoFinale.toFixed(2)}</strong>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary btn-sm"
+                    onClick={() => {
+                      setConsuntivoIds([])
+                      setConsuntivoSconto('')
+                    }}
+                  >
+                    Reset selezione
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {showForm && (
         <div className="card mb-4">
           <div className="card-header">
             {editingId ? 'Scheda Commessa' : 'Nuova commessa'}
           </div>
           <div className="card-body">
+            <div className="commessa-form-tabs">
+              <button
+                type="button"
+                className={`btn btn-sm ${formTab === 'essenziali' ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setFormTab('essenziali')}
+              >
+                Essenziali
+              </button>
+              <button
+                type="button"
+                className={`btn btn-sm ${formTab === 'dettagli' ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setFormTab('dettagli')}
+              >
+                Dettagli
+              </button>
+            </div>
             <div className="row g-3">
-              <div className="col-md-6">
+              {formTab === 'essenziali' && (
+              <>
+                <div className="col-md-6">
                 <label className="form-label">Titolo commessa</label>
                 <input
                   className="form-control"
@@ -727,7 +953,7 @@ function Commesse({ clienti, toast }) {
                   onChange={(e) => setFormData((prev) => ({ ...prev, titolo: e.target.value }))}
                 />
               </div>
-              <div className="col-md-3">
+              <div className={`col-md-3 importo-pagato-row ${isConsuntivoPagamenti ? 'is-consuntivo' : ''}`}>
                 <label className="form-label">Cliente</label>
                 <div className="autocomplete-container">
                   <input
@@ -774,30 +1000,49 @@ function Commesse({ clienti, toast }) {
                   ))}
                 </select>
               </div>
-              {formData.stato === 'In corso' && (
-                <div className="col-md-3">
-                  <label className="form-label">Fase di lavoro</label>
-                  <select
-                    className={`form-select fase-di-lavoro-select ${getSottoStatoClass(formData.sotto_stato === 'Personalizzato' ? formData.sotto_stato_custom : formData.sotto_stato)}`}
-                    value={formData.sotto_stato}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, sotto_stato: e.target.value }))}
-                  >
-                    <option value="">Seleziona...</option>
-                    {SOTTOSTATI_IN_CORSO.map((stato) => (
-                      <option key={stato} value={stato}>{stato}</option>
+              {formData.stato !== 'Conclusa' && (
+                <div className="col-12">
+                  <label className="form-label">Tipologia di lavoro</label>
+                  <div className="tipologie-lavoro-grid">
+                    {TIPI_LAVORO.map((tipologia) => (
+                      <label key={tipologia} className="form-check form-check-inline tipologia-item">
+                        <input
+                          type="checkbox"
+                          className="form-check-input"
+                          checked={formData.sotto_stato.includes(tipologia)}
+                          onChange={() => toggleTipologia(tipologia)}
+                        />
+                        <span className="form-check-label">{tipologia}</span>
+                      </label>
                     ))}
-                  </select>
-                </div>
-              )}
-              {formData.stato === 'In corso' && formData.sotto_stato === 'Personalizzato' && (
-                <div className="col-md-6">
-                  <label className="form-label">Fase di lavoro personalizzata</label>
-                  <input
-                    className="form-control"
-                    value={formData.sotto_stato_custom}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, sotto_stato_custom: e.target.value }))}
-                    placeholder="Inserisci fase di lavoro"
-                  />
+                  </div>
+                  <div className="tipologia-custom-row">
+                    <input
+                      className="form-control"
+                      value={formData.sotto_stato_custom}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, sotto_stato_custom: e.target.value }))}
+                      placeholder="Aggiungi tipologia personalizzata"
+                    />
+                    <button type="button" className="btn btn-secondary" onClick={addCustomTipologia}>
+                      Aggiungi
+                    </button>
+                  </div>
+                  {formData.sotto_stato.some((item) => !TIPI_LAVORO.includes(item)) && (
+                    <div className="tipologia-custom-tags">
+                      {formData.sotto_stato
+                        .filter((item) => !TIPI_LAVORO.includes(item))
+                        .map((item) => (
+                          <button
+                            key={item}
+                            type="button"
+                            className="tipologia-tag"
+                            onClick={() => toggleTipologia(item)}
+                          >
+                            {item} ×
+                          </button>
+                        ))}
+                    </div>
+                  )}
                 </div>
               )}
               <div className="col-md-3">
@@ -879,6 +1124,10 @@ function Commesse({ clienti, toast }) {
                   })}
                 </select>
               </div>
+              </>
+              )}
+              {formTab === 'dettagli' && (
+              <>
               <div className="col-md-4">
                 <label className="form-label">Data inizio</label>
                 <input
@@ -915,6 +1164,8 @@ function Commesse({ clienti, toast }) {
                   onChange={(e) => setFormData((prev) => ({ ...prev, allegati: e.target.value }))}
                 />
               </div>
+              </>
+              )}
             </div>
           </div>
         </div>
@@ -1010,6 +1261,36 @@ function Commesse({ clienti, toast }) {
             )}
             {selectedCommessaId && showCommessaAudit && (
               <>
+                <div className="row g-2 align-items-end mb-3">
+                  <div className="col-md-3">
+                    <label className="form-label">Data</label>
+                    <input
+                      type="date"
+                      className="form-control"
+                      value={auditNoteDate}
+                      onChange={(e) => setAuditNoteDate(e.target.value)}
+                    />
+                  </div>
+                  <div className="col-md-7">
+                    <label className="form-label">Nota</label>
+                    <input
+                      className="form-control"
+                      value={auditNoteText}
+                      onChange={(e) => setAuditNoteText(e.target.value)}
+                      placeholder="Es. relazione inviata"
+                    />
+                  </div>
+                  <div className="col-md-2 d-grid">
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={handleAddAuditNote}
+                      disabled={auditNoteSaving}
+                    >
+                      {auditNoteSaving ? 'Salvataggio...' : 'Aggiungi'}
+                    </button>
+                  </div>
+                </div>
                 {commessaAuditLoading && (
                   <div className="text-muted" style={{ fontSize: '0.85rem' }}>
                     Caricamento cronologia...
@@ -1036,6 +1317,14 @@ function Commesse({ clienti, toast }) {
                           </div>
                           <div className="audit-meta">{formatAuditDate(entry.created_at)}</div>
                         </div>
+                        {entry.action === 'note' && entry.changes && typeof entry.changes === 'object' && (
+                          <div className="audit-changes">
+                            {entry.changes.date && (
+                              <div>Data nota: {formatAuditDate(entry.changes.date)}</div>
+                            )}
+                            <div>{entry.changes.note || entry.changes.nota || '-'}</div>
+                          </div>
+                        )}
                         {Array.isArray(entry.changes) && entry.changes.length > 0 && (
                           <div className="audit-changes">
                             {entry.changes.map((change, idx) => (
@@ -1103,7 +1392,7 @@ function Commesse({ clienti, toast }) {
                   <th>Commessa</th>
                   <th>Cliente</th>
                   <th>Stato</th>
-                  <th>Fase di lavoro</th>
+                  <th>Tipologia di lavoro</th>
                   <th>Stato pagamenti</th>
                 </tr>
               </thead>

@@ -34,14 +34,17 @@ class Migrations {
       CREATE TABLE IF NOT EXISTS attivita (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         data TEXT NOT NULL,
+        user_id INTEGER,
         cliente_id INTEGER,
         cliente_nome TEXT,
         attivita TEXT,
         km REAL DEFAULT 0,
         indennita INTEGER DEFAULT 0,
+        note TEXT,
         created_at TEXT DEFAULT (datetime('now', 'localtime')),
         updated_at TEXT DEFAULT (datetime('now', 'localtime')),
-        FOREIGN KEY (cliente_id) REFERENCES clienti(id) ON DELETE SET NULL
+        FOREIGN KEY (cliente_id) REFERENCES clienti(id) ON DELETE SET NULL,
+        FOREIGN KEY (user_id) REFERENCES utenti(id) ON DELETE SET NULL
       );
 
       -- Indici per performance
@@ -56,6 +59,7 @@ class Migrations {
         username TEXT NOT NULL UNIQUE,
         role TEXT NOT NULL,
         email TEXT,
+        telefono TEXT,
         password_hash TEXT NOT NULL,
         password_salt TEXT NOT NULL,
         rimborso_km REAL DEFAULT 0,
@@ -110,6 +114,26 @@ class Migrations {
         created_at TEXT DEFAULT (datetime('now', 'localtime')),
         updated_at TEXT DEFAULT (datetime('now', 'localtime')),
         FOREIGN KEY (cliente_id) REFERENCES clienti(id) ON DELETE SET NULL
+      );
+
+      -- Tabella Note Spese
+      CREATE TABLE IF NOT EXISTS note_spese (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        data TEXT,
+        categoria TEXT,
+        descrizione TEXT,
+        importo REAL DEFAULT 0,
+        metodo_pagamento TEXT,
+        rimborsabile INTEGER DEFAULT 1,
+        stato TEXT DEFAULT 'Bozza',
+        allegato_nome TEXT,
+        allegato_path TEXT,
+        allegato_mime TEXT,
+        allegato_size INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now', 'localtime')),
+        updated_at TEXT DEFAULT (datetime('now', 'localtime')),
+        FOREIGN KEY (user_id) REFERENCES utenti(id) ON DELETE CASCADE
       );
 
       -- Tabella Allegati Commesse
@@ -279,9 +303,16 @@ class Migrations {
       CREATE INDEX IF NOT EXISTS idx_commesse_stato_pagamenti ON commesse(stato_pagamenti);
       CREATE INDEX IF NOT EXISTS idx_commesse_stato ON commesse(stato);
       CREATE INDEX IF NOT EXISTS idx_commesse_cliente_id ON commesse(cliente_id);
+
+      -- Indici per performance Note Spese
+      CREATE INDEX IF NOT EXISTS idx_note_spese_user_id ON note_spese(user_id);
+      CREATE INDEX IF NOT EXISTS idx_note_spese_data ON note_spese(data);
+      CREATE INDEX IF NOT EXISTS idx_note_spese_categoria ON note_spese(categoria);
+      CREATE INDEX IF NOT EXISTS idx_note_spese_stato ON note_spese(stato);
     `);
 
     this.ensureUserColumns(db);
+    this.ensureAttivitaColumns(db);
     this.ensureCommesseColumns(db);
     this.ensureCommesseAllegatiColumns(db);
     this.ensureCommesseAuditTable(db);
@@ -371,8 +402,25 @@ class Migrations {
     addColumn('mezzo', 'TEXT');
     addColumn('targa', 'TEXT');
     addColumn('email', 'TEXT');
+    addColumn('telefono', 'TEXT');
     if (!columns.includes('rimborso_km')) {
       db.exec('ALTER TABLE utenti ADD COLUMN rimborso_km REAL DEFAULT 0');
+    }
+  }
+
+  ensureAttivitaColumns(db) {
+    try {
+      const columns = db.prepare('PRAGMA table_info(attivita)').all().map((col) => col.name);
+      if (!columns.includes('note')) {
+        db.exec('ALTER TABLE attivita ADD COLUMN note TEXT');
+        console.log('[MIGRATIONS] Aggiunta colonna note a attivita');
+      }
+      if (!columns.includes('user_id')) {
+        db.exec('ALTER TABLE attivita ADD COLUMN user_id INTEGER');
+        console.log('[MIGRATIONS] Aggiunta colonna user_id a attivita');
+      }
+    } catch (error) {
+      console.log('[MIGRATIONS] Tabella attivita non ancora creata');
     }
   }
 
@@ -504,6 +552,3 @@ class Migrations {
 }
 
 module.exports = new Migrations();
-
-
-

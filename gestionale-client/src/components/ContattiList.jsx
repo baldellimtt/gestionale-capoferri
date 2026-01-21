@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react'
 import api from '../services/api'
+import ConfirmDeleteModal from './ConfirmDeleteModal'
 
 function ContattiList({ clienteId, onUpdate, onContattiChange, currentUser, toast }) {
   const [contatti, setContatti] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [deleteConfirm, setDeleteConfirm] = useState({ show: false, id: null })
+  const [deleting, setDeleting] = useState(false)
   const [showAddForm, setShowAddForm] = useState(false)
   const [formData, setFormData] = useState({
     nome: '',
@@ -77,17 +80,23 @@ function ContattiList({ clienteId, onUpdate, onContattiChange, currentUser, toas
     }
   }
 
-  const handleDelete = async (contattoId) => {
-    if (!window.confirm('Sei sicuro di voler eliminare questo contatto?')) {
+  const handleDelete = (contattoId) => {
+    setDeleteConfirm({ show: true, id: contattoId })
+  }
+
+  const confirmDelete = async () => {
+    if (!deleteConfirm.id) {
+      setDeleteConfirm({ show: false, id: null })
       return
     }
 
     setError(null)
+    setDeleting(true)
     setLoading(true)
 
     try {
       const loadingToastId = toast?.showLoading('Eliminazione in corso...', 'Eliminazione contatto')
-      await api.deleteClienteContatto(clienteId, contattoId)
+      await api.deleteClienteContatto(clienteId, deleteConfirm.id)
       await loadContatti()
       if (loadingToastId) {
         toast?.updateToast(loadingToastId, { type: 'success', title: 'Completato', message: 'Contatto eliminato con successo', duration: 3000 })
@@ -101,8 +110,14 @@ function ContattiList({ clienteId, onUpdate, onContattiChange, currentUser, toas
       setError(errorMsg)
       toast?.showError(errorMsg, 'Errore eliminazione')
     } finally {
+      setDeleting(false)
       setLoading(false)
+      setDeleteConfirm({ show: false, id: null })
     }
+  }
+
+  const cancelDelete = () => {
+    setDeleteConfirm({ show: false, id: null })
   }
 
   const handleEmailClick = (email) => {
@@ -331,9 +346,17 @@ function ContattiList({ clienteId, onUpdate, onContattiChange, currentUser, toas
           ))}
         </div>
       )}
+
+      <ConfirmDeleteModal
+        show={deleteConfirm.show}
+        onClose={cancelDelete}
+        onConfirm={confirmDelete}
+        loading={deleting}
+        title="Elimina contatto"
+        message="Sei sicuro di voler eliminare questo contatto?"
+      />
     </div>
   )
 }
 
 export default ContattiList
-

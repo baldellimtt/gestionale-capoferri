@@ -37,6 +37,181 @@
   --transition-slow: 280ms ease;
 }
 
+.team-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.team-tabs {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.team-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.team-card {
+  padding: 1.4rem 1.5rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-soft);
+  background: var(--bg-1);
+  color: var(--ink-800);
+  transition: var(--transition-fast);
+  box-shadow: var(--shadow-1);
+  min-height: 170px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.team-card-title {
+  font-weight: 700;
+  font-size: 1.4rem;
+  margin-bottom: 0.35rem;
+}
+
+.team-card-meta-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.4rem 0.6rem;
+}
+
+.team-card-meta {
+  font-size: 0.9rem;
+  color: var(--ink-600);
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: 12px;
+  border: 1px solid var(--border-soft);
+  background: var(--bg-2);
+}
+
+.team-card-meta-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-500);
+}
+
+.team-card-meta-value {
+  font-weight: 600;
+  color: var(--ink-800);
+}
+
+.team-card-actions {
+  margin-top: auto;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.6rem;
+  align-items: center;
+  justify-items: stretch;
+}
+
+.note-spese-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.note-spese-layout {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(320px, 1.1fr) minmax(280px, 0.9fr);
+}
+
+.note-spese-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem;
+}
+
+.note-spese-summary-item {
+  background: var(--bg-2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.note-spese-summary-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-500);
+}
+
+.note-spese-table-wrapper {
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-soft);
+  overflow: hidden;
+}
+
+.note-spese-table th {
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+}
+
+.note-spese-table td {
+  font-size: 0.9rem;
+}
+
+.note-spese-check-row {
+  min-height: 42px;
+}
+
+@media (max-width: 980px) {
+  .note-spese-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.team-card.is-clickable {
+  cursor: pointer;
+}
+
+.team-card.is-clickable:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-2);
+  transform: translateY(-2px);
+}
+
+.team-card.is-clickable:focus-visible,
+.team-card.is-active {
+  border-color: var(--brand-500);
+  box-shadow: var(--glow);
+  outline: none;
+}
+
+.team-section-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.team-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.team-panel-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  color: var(--ink-800);
+}
+
+
 *,
 *::before,
 *::after {
@@ -632,6 +807,11 @@ header .logo {
   color: #92400e;
 }
 
+.status-payments.payments-consuntivo-con-altre-commesse {
+  background: rgba(15, 23, 42, 0.5);
+  color: #e2e8f0;
+}
+
 .status-payments.payments-saldo {
   background: rgba(16, 185, 129, 0.2);
   color: #0f766e;
@@ -662,9 +842,116 @@ header .logo {
   box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.14);
 }
 
+.stato-pagamenti-select.payments-consuntivo-con-altre-commesse {
+  border-color: rgba(148, 163, 184, 0.65);
+  box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.18);
+}
+
 .stato-pagamenti-select.payments-saldo {
   border-color: rgba(16, 185, 129, 0.55);
   box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.14);
+}
+
+.commessa-form-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.tipologie-lavoro-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+}
+
+.tipologia-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.tipologia-custom-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.tipologia-custom-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.tipologia-tag {
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: rgba(15, 23, 42, 0.35);
+  color: #e2e8f0;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+}
+
+.importo-pagato-row.is-consuntivo .form-control {
+  background: rgba(15, 23, 42, 0.6);
+  color: #e2e8f0;
+  border-color: rgba(148, 163, 184, 0.5);
+}
+
+.consuntivo-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 1rem;
+}
+
+.consuntivo-list {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.consuntivo-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(15, 23, 42, 0.25);
+}
+
+.consuntivo-label {
+  flex: 1;
+}
+
+.consuntivo-value {
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.consuntivo-summary {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(15, 23, 42, 0.4);
+}
+
+.consuntivo-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.consuntivo-final {
+  font-size: 1.05rem;
+}
+
+@media (max-width: 900px) {
+  .consuntivo-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .substatus-piano-di-sicurezza {

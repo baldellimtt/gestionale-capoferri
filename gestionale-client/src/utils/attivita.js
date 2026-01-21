@@ -7,7 +7,8 @@ export const normalizeAttivitaFromApi = (row) => ({
   clienteId: row.cliente_id || null,
   attivita: row.attivita || '',
   km: row.km || '',
-  indennita: row.indennita === 1
+  indennita: row.indennita === 1,
+  note: row.note || ''
 })
 
 export const dedupeAttivita = (rows, deletedIds = new Set()) => {
@@ -107,7 +108,7 @@ export const getRowValidation = (row) => {
   const kmRaw = row?.km ?? ''
   const kmValue = typeof kmRaw === 'string' ? Number(kmRaw.replace(',', '.')) : Number(kmRaw)
 
-  if (!cliente) missing.push('Cliente')
+  if (!cliente) missing.push('Destinazione')
   if (!attivita) missing.push('Rimborso')
   if (!kmRaw || Number.isNaN(kmValue) || kmValue <= 0) missing.push('KM')
 

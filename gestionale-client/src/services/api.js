@@ -9,6 +9,7 @@ class ApiService {
     this.refreshToken = localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY) || null;
     this.refreshing = false;
     this.refreshPromise = null;
+    this.refreshBlockedUntil = null;
     // Cache per /auth/me per evitare chiamate eccessive
     this.meCache = {
       data: null,
@@ -68,6 +69,7 @@ class ApiService {
     localStorage.removeItem(TOKEN_STORAGE_KEY);
     localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
     this.clearMeCache();
+    this.refreshBlockedUntil = null;
   }
 
   async refreshAccessToken() {
@@ -93,6 +95,10 @@ class ApiService {
         if (!response.ok) {
           const data = await response.json().catch(() => ({}));
           const error = new Error(data.error || 'Refresh token fallito');
+          error.status = response.status;
+          if (response.status === 429) {
+            error.retryAfter = data.retryAfter || 60;
+          }
           if (data.details) {
             error.details = data.details;
           }
@@ -107,6 +113,7 @@ class ApiService {
           } else {
             this.setToken(data.token);
           }
+          this.refreshBlockedUntil = null;
           return data.token;
         }
         throw new Error('Token non ricevuto dal server');
@@ -158,18 +165,25 @@ class ApiService {
       // Se il token è scaduto (401), prova a fare refresh
       if (response.status === 401 && this.getRefreshToken() && !endpoint.includes('/auth/')) {
         try {
+          if (this.refreshBlockedUntil && Date.now() < this.refreshBlockedUntil) {
+            const retryAfter = Math.ceil((this.refreshBlockedUntil - Date.now()) / 1000);
+            const error = new Error('Troppe richieste, riprova piÃ¹ tardi');
+            error.status = 429;
+            error.retryAfter = retryAfter;
+            throw error;
+          }
           const newToken = await this.refreshAccessToken();
           // Riprova la richiesta con il nuovo token
           config.headers.Authorization = `Bearer ${newToken}`;
           const retryResponse = await fetch(url, config);
           
           if (!retryResponse.ok) {
-            // Se anche il refresh fallisce, pulisci i token
-            if (retryResponse.status === 401) {
-              this.clearTokens();
-              throw new Error('Sessione scaduta. Effettua nuovamente l\'accesso.');
-            }
             const retryData = await retryResponse.json().catch(() => ({}));
+            if (retryResponse.status === 401) {
+              const error = new Error(retryData.error || 'Sessione scaduta. Effettua nuovamente l\'accesso.');
+              error.status = 401;
+              throw error;
+            }
             
             // Gestione speciale per errori 429
             if (retryResponse.status === 429) {
@@ -207,8 +221,13 @@ class ApiService {
 
           return data;
         } catch (refreshError) {
+          // Se il refresh Ã¨ limitato, non fare logout: aspetta il retryAfter
+          if (refreshError.status === 429) {
+            const retryAfter = refreshError.retryAfter || 60;
+            this.refreshBlockedUntil = Date.now() + retryAfter * 1000;
+            throw refreshError;
+          }
           // Se il refresh fallisce, pulisci i token e rilancia l'errore
-          this.clearTokens();
           throw refreshError;
         }
       }
@@ -514,6 +533,13 @@ class ApiService {
     return this.request(`/commesse/${id}/audit`);
   }
 
+  async addCommessaAuditNote(id, payload) {
+    return this.request(`/commesse/${id}/audit`, {
+      method: 'POST',
+      body: payload,
+    });
+  }
+
   async uploadCommessaAllegato(id, file) {
     const formData = new FormData();
     formData.append('file', file);
@@ -629,6 +655,7 @@ class ApiService {
     if (filters.year) params.append('year', filters.year);
     if (filters.startDate) params.append('startDate', filters.startDate);
     if (filters.endDate) params.append('endDate', filters.endDate);
+    if (filters.userId) params.append('userId', filters.userId);
     
     // Aggiungi timestamp per evitare cache del browser quando forceRefresh è true
     if (forceRefresh) {
@@ -666,6 +693,45 @@ class ApiService {
     return this.request(`/attivita/${id}`, {
       method: 'DELETE',
     });
+  }
+
+  // Note Spese API
+  async getNoteSpese(filters = {}) {
+    const params = new URLSearchParams();
+    if (filters.userId) params.append('userId', filters.userId);
+    if (filters.categoria) params.append('categoria', filters.categoria);
+    if (filters.stato) params.append('stato', filters.stato);
+    if (filters.startDate) params.append('startDate', filters.startDate);
+    if (filters.endDate) params.append('endDate', filters.endDate);
+    const query = params.toString();
+    const endpoint = query ? `/note-spese?${query}` : '/note-spese';
+    return this.request(endpoint);
+  }
+
+  async createNotaSpesa(payload) {
+    return this.request('/note-spese', {
+      method: 'POST',
+      body: payload,
+    });
+  }
+
+  async updateNotaSpesa(id, payload) {
+    return this.request(`/note-spese/${id}`, {
+      method: 'PUT',
+      body: payload,
+    });
+  }
+
+  async deleteNotaSpesa(id) {
+    return this.request(`/note-spese/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async uploadNotaSpesaAllegato(id, file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.requestForm(`/note-spese/${id}/allegato`, formData);
   }
 
   // Impostazioni API

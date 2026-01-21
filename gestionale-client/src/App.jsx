@@ -13,8 +13,7 @@ const Commesse = lazy(() => import('./components/Commesse'))
 const AnagraficaClienti = lazy(() => import('./components/AnagraficaClienti'))
 const KanbanBoard = lazy(() => import('./components/KanbanBoard'))
 const Home = lazy(() => import('./components/Home'))
-const Impostazioni = lazy(() => import('./components/Impostazioni'))
-const ImpostazioniUtenti = lazy(() => import('./components/ImpostazioniUtenti'))
+const Team = lazy(() => import('./components/Team'))
 const DatiAziendali = lazy(() => import('./components/DatiAziendali'))
 const DatiFiscali = lazy(() => import('./components/DatiFiscali'))
 
@@ -29,7 +28,6 @@ const LoadingFallback = () => (
 
 function App() {
   const [activeView, setActiveView] = useState('home')
-  const [impostazioniView, setImpostazioniView] = useState(null)
   const [clienti, setClienti] = useState([])
   const [utenti, setUtenti] = useState([])
   const [loading, setLoading] = useState(true)
@@ -58,13 +56,13 @@ function App() {
         // Gestione errori specifica per rate limiting
         if (err.status === 429) {
           console.warn('Rate limit raggiunto per /auth/me:', err.retryAfter, 'secondi')
-          // Non fare logout, solo mostra errore e usa cache se disponibile
-          setAuthError(`Troppe richieste. Riprova tra ${err.retryAfter} secondi.`)
+          // Evita di bloccare la schermata di login con un errore "troppe richieste"
+          api.clearTokens()
+          setUser(null)
+          setAuthError(null)
         } else if (err.status === 401) {
-          // Per errori 401 (token scaduto o non valido), pulisci token e non mostrare errore
-          // perché l'utente può semplicemente fare login di nuovo
-          api.setToken(null)
-          setAuthError(null) // Non mostrare errore se il token è scaduto/invalido
+          // Non forzare il logout automatico su 401
+          setAuthError('Sessione scaduta. Riprova più tardi.')
         } else {
           // Per altri errori, mostra un messaggio generico
           setAuthError('Errore di connessione. Riprova.')
@@ -94,9 +92,7 @@ function App() {
     } catch (err) {
       console.error('Errore caricamento clienti:', err)
       if (err.status === 401) {
-        setUser(null)
-        api.setToken(null)
-        setAuthError('Sessione scaduta. Effettua nuovamente l’accesso.')
+        setError('Sessione scaduta. Riprova più tardi.')
       } else {
         setError('Errore nel caricamento dei clienti. Verifica che il server sia avviato.')
       }
@@ -188,17 +184,6 @@ function App() {
           </div>
           {user && (
             <div style={{ display: 'flex', gap: '0.5rem', marginLeft: 'auto' }}>
-              {user.role === 'admin' && (
-                <button
-                  className="btn btn-secondary"
-                  onClick={() => {
-                    setActiveView('impostazioni')
-                    setImpostazioniView(null)
-                  }}
-                >
-                  Impostazioni
-                </button>
-              )}
               <button 
                 className="btn btn-secondary" 
                 onClick={handleLogout}
@@ -221,11 +206,18 @@ function App() {
           <div className="app-layout">
             <nav className="topbar-nav">
               <button
-                className={`topbar-link ${activeView === 'anagrafica' ? 'active' : ''}`}
-                onClick={() => setActiveView('anagrafica')}
+                className={`topbar-link ${activeView === 'kanban' ? 'active' : ''}`}
+                onClick={() => setActiveView('kanban')}
                 type="button"
               >
-                Anagrafica
+                Kanban
+              </button>
+              <button
+                className={`topbar-link ${activeView === 'team' ? 'active' : ''}`}
+                onClick={() => setActiveView('team')}
+                type="button"
+              >
+                Team
               </button>
               <button
                 className={`topbar-link ${activeView === 'commesse' ? 'active' : ''}`}
@@ -235,19 +227,21 @@ function App() {
                 Commesse
               </button>
               <button
-                className={`topbar-link ${activeView === 'kanban' ? 'active' : ''}`}
-                onClick={() => setActiveView('kanban')}
+                className={`topbar-link ${activeView === 'anagrafica' ? 'active' : ''}`}
+                onClick={() => setActiveView('anagrafica')}
                 type="button"
               >
-                Kanban
+                Clienti
               </button>
-              <button
-                className={`topbar-link ${activeView === 'attivita' ? 'active' : ''}`}
-                onClick={() => setActiveView('attivita')}
-                type="button"
-              >
-                Rimborsi
-              </button>
+              {user?.role === 'admin' && (
+                <button
+                  className={`topbar-link ${activeView === 'dati-aziendali' ? 'active' : ''}`}
+                  onClick={() => setActiveView('dati-aziendali')}
+                  type="button"
+                >
+                  Dati aziendali
+                </button>
+              )}
             </nav>
             <div className="content-col">
               <main className="content-area">
@@ -265,6 +259,16 @@ function App() {
                       {activeView === 'commesse' && (
                         <Commesse clienti={clienti} toast={toast} />
                       )}
+                      {activeView === 'team' && (
+                        <Team
+                          clienti={clienti}
+                          user={user}
+                          utenti={utenti}
+                          toast={toast}
+                          onUserUpdated={handleUserUpdated}
+                          onUsersChanged={loadUtenti}
+                        />
+                      )}
                       {activeView === 'anagrafica' && (
                         <AnagraficaClienti
                           clienti={clienti}
@@ -277,35 +281,20 @@ function App() {
                       {activeView === 'kanban' && (
                         <KanbanBoard clienti={clienti} user={user} toast={toast} />
                       )}
-                      {activeView === 'impostazioni' && user?.role === 'admin' && (
-                        <>
-                          {!impostazioniView && (
-                            <Impostazioni
-                              onNavigate={(view) => setImpostazioniView(view)}
-                              onBack={() => setActiveView('home')}
-                            />
-                          )}
-                          {impostazioniView === 'utenti' && (
-                            <ImpostazioniUtenti
-                              currentUser={user}
-                              onUserUpdated={handleUserUpdated}
-                              onBack={() => setImpostazioniView(null)}
-                              toast={toast}
-                            />
-                          )}
-                          {impostazioniView === 'dati-aziendali' && (
-                            <DatiAziendali
-                              onBack={() => setImpostazioniView(null)}
-                              toast={toast}
-                            />
-                          )}
-                          {impostazioniView === 'dati-fiscali' && (
-                            <DatiFiscali
-                              onBack={() => setImpostazioniView(null)}
-                              toast={toast}
-                            />
-                          )}
-                        </>
+                      {activeView === 'dati-aziendali' && user?.role === 'admin' && (
+                        <div>
+                          <div className="d-flex justify-content-between align-items-center mb-4">
+                            <h2 className="section-title mb-0 no-title-line">Dati aziendali</h2>
+                          </div>
+                          <div className="row g-4">
+                            <div className="col-12">
+                              <DatiAziendali showHeader={false} toast={toast} />
+                            </div>
+                            <div className="col-12">
+                              <DatiFiscali showHeader={false} toast={toast} />
+                            </div>
+                          </div>
+                        </div>
                       )}
                     </Suspense>
                   </AttivitaProvider>
