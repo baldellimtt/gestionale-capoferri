@@ -1,4 +1,2 @@
-# Logs directory - esclude tutta la cartella e il contenuto
-gestionale-server/logs/
-gestionale-server/logs/**
+gestionale-server/logs
 logs/

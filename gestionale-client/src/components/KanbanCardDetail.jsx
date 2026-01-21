@@ -615,7 +615,7 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
 
   return (
     <div
-      className="modal"
+      className="modal kanban-card-detail-modal"
       style={{
         display: 'block',
         position: 'fixed',
@@ -627,7 +627,7 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
         backdropFilter: 'blur(4px)',
         WebkitBackdropFilter: 'blur(4px)',
         zIndex: 1050,
-        overflow: 'auto',
+        overflow: 'hidden',
         animation: 'fadeIn 0.2s ease-out'
       }}
     >
@@ -647,7 +647,10 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
             border: '1px solid var(--border-soft)',
             boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.1)',
             background: 'var(--bg-1)',
-            overflow: 'hidden'
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+            maxHeight: 'calc(100vh - 4rem)'
           }}
         >
           <div 
@@ -688,7 +691,7 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
               }}
             />
           </div>
-          <div className="modal-body">
+          <div className="modal-body kanban-card-detail-body">
             {error && (
               <div className="alert alert-warning mb-3">
                 {error}
@@ -1169,7 +1172,7 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
               />
             )}
 
-            <div className="mt-4 d-flex gap-2">
+            <div className="actions-sticky mt-4 d-flex gap-2">
               <button 
                 type="button" 
                 className="btn btn-primary" 

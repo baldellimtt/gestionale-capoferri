@@ -715,7 +715,7 @@ function Commesse({ clienti, toast }) {
       {showForm && (
         <div className="card mb-4">
           <div className="card-header">
-            {editingId ? 'Modifica commessa' : 'Nuova commessa'}
+            {editingId ? 'Scheda Commessa' : 'Nuova commessa'}
           </div>
           <div className="card-body">
             <div className="row g-3">
@@ -916,23 +916,6 @@ function Commesse({ clienti, toast }) {
                 />
               </div>
             </div>
-            <div className="mt-4 d-flex gap-2">
-            <button className="btn btn-primary" onClick={handleSubmit} disabled={!canSave}>
-              {saving ? 'Salvataggio...' : editingId ? 'Salva modifiche' : 'Crea commessa'}
-            </button>
-              {editingId && (
-                <button
-                  className="btn btn-danger"
-                  onClick={() => handleDelete({ id: editingId })}
-                  disabled={saving}
-                >
-                  Elimina
-                </button>
-              )}
-              <button className="btn btn-secondary" onClick={resetForm} disabled={saving}>
-                Annulla
-              </button>
-            </div>
           </div>
         </div>
       )}
@@ -1077,6 +1060,26 @@ function Commesse({ clienti, toast }) {
               </>
             )}
           </div>
+        </div>
+      )}
+
+      {showForm && (
+        <div className="commessa-actions-sticky mt-4 d-flex gap-2">
+          <button className="btn btn-primary" onClick={handleSubmit} disabled={!canSave}>
+            {saving ? 'Salvataggio...' : editingId ? 'Salva modifiche' : 'Crea commessa'}
+          </button>
+          {editingId && (
+            <button
+              className="btn btn-danger"
+              onClick={() => handleDelete({ id: editingId })}
+              disabled={saving}
+            >
+              Elimina
+            </button>
+          )}
+          <button className="btn btn-secondary" onClick={resetForm} disabled={saving}>
+            Annulla
+          </button>
         </div>
       )}
 

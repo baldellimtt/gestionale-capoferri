@@ -394,7 +394,7 @@ function AnagraficaClienti({ clienti, onUpdateClienti, onBack, currentUser, toas
                   />
                 </div>
               </div>
-              <div className="mt-3 d-flex gap-2">
+              <div className="actions-sticky mt-3 d-flex gap-2">
                 <button type="submit" className="btn btn-primary" disabled={!canSave}>
                   {loading ? 'Salvataggio...' : (editingCliente !== null ? 'Salva Modifiche' : 'Aggiungi Cliente')}
                 </button>
@@ -509,6 +509,5 @@ function AnagraficaClienti({ clienti, onUpdateClienti, onBack, currentUser, toas
 }
 
 export default AnagraficaClienti
-
 
 

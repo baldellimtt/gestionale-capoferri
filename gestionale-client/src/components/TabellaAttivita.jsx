@@ -350,6 +350,12 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
     )
   }, [scheduleSave])
 
+  const updateRowLocal = useCallback((id, field, value) => {
+    setAttivita((prev) =>
+      prev.map((row) => (row.id === id ? { ...row, [field]: value } : row))
+    )
+  }, [])
+
   const handleDeleteClick = (row) => {
     const id = row?.id
     if (id == null) {
@@ -1130,7 +1136,7 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
                                       setEditingRow(createdId)
                                     }
                                   } else {
-                                    updateRow(row.id, 'cliente', value)
+                                    updateRowLocal(row.id, 'cliente', value)
                                     setClienteSearch((prev) => ({ ...prev, [row.id]: value }))
                                     setShowAutocomplete((prev) => ({ ...prev, [row.id]: true }))
                                     openAutocompletePortal(row.id, value, e.target)
@@ -1144,8 +1150,9 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
                                   }
                                   setEditingRow(row.id)
                                 }}
-                                onBlur={() => {
+                                onBlur={(e) => {
                                   if (!isTemporary) {
+                                    updateRow(row.id, 'cliente', e.target.value)
                                     setTimeout(() => {
                                       setShowAutocomplete((prev) => ({ ...prev, [row.id]: false }))
                                       setPortalAutocomplete(null)

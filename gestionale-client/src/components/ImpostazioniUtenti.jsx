@@ -279,7 +279,7 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onBack, toast }) {
                 />
               </div>
             </div>
-            <div className="mt-4 d-flex gap-2">
+            <div className="actions-sticky mt-4 d-flex gap-2">
               <button className="btn btn-primary" onClick={handleCreate} disabled={saving}>
                 {saving ? 'Salvataggio...' : 'Crea utente'}
               </button>

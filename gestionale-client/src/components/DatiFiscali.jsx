@@ -354,7 +354,7 @@ function DatiFiscali({ onBack, toast }) {
           </div>
         </div>
 
-        <div className="d-flex gap-2">
+        <div className="actions-sticky d-flex gap-2">
           <button type="submit" className="btn btn-primary" disabled={saving}>
             {saving ? 'Salvataggio...' : 'Salva'}
           </button>
