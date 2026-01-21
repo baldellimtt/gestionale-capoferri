@@ -4,6 +4,7 @@ import ErrorBoundary from './components/ErrorBoundary'
 import api from './services/api'
 import { ToastContainer } from './components/Toast'
 import { useToast } from './hooks/useToast'
+import { AttivitaProvider } from './contexts/AttivitaContext'
 
 // Lazy loading dei componenti principali per code splitting
 const Login = lazy(() => import('./components/Login'))
@@ -43,6 +44,8 @@ function App() {
   useEffect(() => {
     const checkAuth = async () => {
       if (!api.getToken()) {
+        // Se non c'è token, resetta eventuali errori precedenti e mostra login
+        setAuthError(null)
         setAuthChecking(false)
         return
       }
@@ -50,16 +53,21 @@ function App() {
       try {
         const me = await api.me()
         setUser(me)
+        setAuthError(null) // Reset errori se il login è riuscito
       } catch (err) {
         // Gestione errori specifica per rate limiting
         if (err.status === 429) {
           console.warn('Rate limit raggiunto per /auth/me:', err.retryAfter, 'secondi')
           // Non fare logout, solo mostra errore e usa cache se disponibile
           setAuthError(`Troppe richieste. Riprova tra ${err.retryAfter} secondi.`)
-        }
-        // Per altri errori (401, etc.), pulisci token
-        if (err.status === 401) {
+        } else if (err.status === 401) {
+          // Per errori 401 (token scaduto o non valido), pulisci token e non mostrare errore
+          // perché l'utente può semplicemente fare login di nuovo
           api.setToken(null)
+          setAuthError(null) // Non mostrare errore se il token è scaduto/invalido
+        } else {
+          // Per altri errori, mostra un messaggio generico
+          setAuthError('Errore di connessione. Riprova.')
         }
       } finally {
         setAuthChecking(false)
@@ -118,8 +126,19 @@ function App() {
       setAuthError(null)
       const data = await api.login(credentials)
       setUser(data.user)
+      setAuthError(null) // Reset errori se il login è riuscito
     } catch (err) {
-      setAuthError('Credenziali non valide. Riprova.')
+      console.error('Errore login:', err)
+      // Mostra messaggi di errore più specifici
+      if (err.status === 401) {
+        setAuthError('Credenziali non valide. Riprova.')
+      } else if (err.status === 429) {
+        setAuthError(`Troppe richieste. Riprova tra ${err.retryAfter || 60} secondi.`)
+      } else if (err.message && err.message.includes('fetch')) {
+        setAuthError('Errore di connessione. Verifica che il server sia avviato.')
+      } else {
+        setAuthError(err.message || 'Errore durante il login. Riprova.')
+      }
     } finally {
       setAuthLoading(false)
     }
@@ -262,59 +281,61 @@ function App() {
                 {loading ? (
                   <LoadingFallback />
                 ) : (
-                  <Suspense fallback={<LoadingFallback />}>
-                    {activeView === 'home' && (
-                      <Home clienti={clienti} user={user} toast={toast} />
-                    )}
-                    {activeView === 'attivita' && (
-                      <TabellaAttivita clienti={clienti} user={user} toast={toast} />
-                    )}
-                    {activeView === 'commesse' && (
-                      <Commesse clienti={clienti} toast={toast} />
-                    )}
-                    {activeView === 'anagrafica' && (
-                      <AnagraficaClienti
-                        clienti={clienti}
-                        onUpdateClienti={updateClienti}
-                        onBack={() => setActiveView('home')}
-                        currentUser={user}
-                        toast={toast}
-                      />
-                    )}
-                    {activeView === 'kanban' && (
-                      <KanbanBoard clienti={clienti} user={user} toast={toast} />
-                    )}
-                    {activeView === 'impostazioni' && user?.role === 'admin' && (
-                      <>
-                        {!impostazioniView && (
-                          <Impostazioni
-                            onNavigate={(view) => setImpostazioniView(view)}
-                            onBack={() => setActiveView('home')}
-                          />
-                        )}
-                        {impostazioniView === 'utenti' && (
-                          <ImpostazioniUtenti
-                            currentUser={user}
-                            onUserUpdated={handleUserUpdated}
-                            onBack={() => setImpostazioniView(null)}
-                            toast={toast}
-                          />
-                        )}
-                        {impostazioniView === 'dati-aziendali' && (
-                          <DatiAziendali
-                            onBack={() => setImpostazioniView(null)}
-                            toast={toast}
-                          />
-                        )}
-                        {impostazioniView === 'dati-fiscali' && (
-                          <DatiFiscali
-                            onBack={() => setImpostazioniView(null)}
-                            toast={toast}
-                          />
-                        )}
-                      </>
-                    )}
-                  </Suspense>
+                  <AttivitaProvider>
+                    <Suspense fallback={<LoadingFallback />}>
+                      {activeView === 'home' && (
+                        <Home key="home" clienti={clienti} user={user} toast={toast} />
+                      )}
+                      {activeView === 'attivita' && (
+                        <TabellaAttivita key="attivita" clienti={clienti} user={user} toast={toast} />
+                      )}
+                      {activeView === 'commesse' && (
+                        <Commesse clienti={clienti} toast={toast} />
+                      )}
+                      {activeView === 'anagrafica' && (
+                        <AnagraficaClienti
+                          clienti={clienti}
+                          onUpdateClienti={updateClienti}
+                          onBack={() => setActiveView('home')}
+                          currentUser={user}
+                          toast={toast}
+                        />
+                      )}
+                      {activeView === 'kanban' && (
+                        <KanbanBoard clienti={clienti} user={user} toast={toast} />
+                      )}
+                      {activeView === 'impostazioni' && user?.role === 'admin' && (
+                        <>
+                          {!impostazioniView && (
+                            <Impostazioni
+                              onNavigate={(view) => setImpostazioniView(view)}
+                              onBack={() => setActiveView('home')}
+                            />
+                          )}
+                          {impostazioniView === 'utenti' && (
+                            <ImpostazioniUtenti
+                              currentUser={user}
+                              onUserUpdated={handleUserUpdated}
+                              onBack={() => setImpostazioniView(null)}
+                              toast={toast}
+                            />
+                          )}
+                          {impostazioniView === 'dati-aziendali' && (
+                            <DatiAziendali
+                              onBack={() => setImpostazioniView(null)}
+                              toast={toast}
+                            />
+                          )}
+                          {impostazioniView === 'dati-fiscali' && (
+                            <DatiFiscali
+                              onBack={() => setImpostazioniView(null)}
+                              toast={toast}
+                            />
+                          )}
+                        </>
+                      )}
+                    </Suspense>
+                  </AttivitaProvider>
                 )}
               </main>
             </div>
@@ -325,7 +346,11 @@ function App() {
           </Suspense>
         )}
       </div>
-      <ToastContainer toasts={toast.toasts} removeToast={toast.removeToast} />
+      <ToastContainer 
+        toasts={toast.toasts} 
+        removeToast={toast.removeToast}
+        key="toast-container"
+      />
     </ErrorBoundary>
   )
 }

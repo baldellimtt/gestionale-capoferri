@@ -34,41 +34,95 @@ const ValidationSchemas = {
         .trim()
         .isLength({ max: 100 })
         .withMessage('Paese troppo lungo (max 100 caratteri)'),
+      // Accetta sia camelCase che snake_case per compatibilità frontend
       body('codice_destinatario_sdi')
-        .optional()
-        .trim()
-        .isLength({ max: 7 })
-        .withMessage('Codice destinatario SDI non valido'),
+        .optional({ nullable: true, checkFalsy: true })
+        .custom((value) => {
+          if (value === null || value === undefined || value === '') return true;
+          const trimmed = typeof value === 'string' ? value.trim() : String(value);
+          return trimmed.length <= 10;
+        })
+        .withMessage('Codice destinatario SDI troppo lungo (max 10 caratteri)'),
+      body('codiceDestinatarioSDI')
+        .optional({ nullable: true, checkFalsy: true })
+        .custom((value) => {
+          if (value === null || value === undefined || value === '') return true;
+          const trimmed = typeof value === 'string' ? value.trim() : String(value);
+          return trimmed.length <= 10;
+        })
+        .withMessage('Codice destinatario SDI troppo lungo (max 10 caratteri)'),
       body('indirizzo')
-        .optional()
-        .trim()
-        .isLength({ max: 255 })
+        .optional({ nullable: true, checkFalsy: true })
+        .custom((value) => {
+          if (value === null || value === undefined || value === '') return true;
+          const trimmed = typeof value === 'string' ? value.trim() : String(value);
+          return trimmed.length <= 255;
+        })
         .withMessage('Indirizzo troppo lungo (max 255 caratteri)'),
       body('comune')
-        .optional()
-        .trim()
-        .isLength({ max: 100 })
+        .optional({ nullable: true, checkFalsy: true })
+        .custom((value) => {
+          if (value === null || value === undefined || value === '') return true;
+          const trimmed = typeof value === 'string' ? value.trim() : String(value);
+          return trimmed.length <= 100;
+        })
         .withMessage('Comune troppo lungo (max 100 caratteri)'),
       body('cap')
-        .optional()
-        .trim()
-        .matches(/^\d{5}$/)
-        .withMessage('CAP deve essere di 5 cifre'),
+        .optional({ nullable: true, checkFalsy: true })
+        .custom((value) => {
+          if (value === null || value === undefined || value === '') return true;
+          const trimmed = typeof value === 'string' ? String(value).trim() : String(value);
+          if (trimmed === '') return true;
+          return trimmed.length <= 10;
+        })
+        .withMessage('CAP troppo lungo (max 10 caratteri)'),
       body('provincia')
-        .optional()
-        .trim()
-        .isLength({ max: 2 })
-        .withMessage('Provincia deve essere di 2 caratteri'),
+        .optional({ nullable: true, checkFalsy: true })
+        .custom((value) => {
+          if (value === null || value === undefined || value === '') return true;
+          const trimmed = typeof value === 'string' ? value.trim() : String(value);
+          if (trimmed === '') return true;
+          return trimmed.length <= 5;
+        })
+        .withMessage('Provincia troppo lunga (max 5 caratteri)'),
       body('partita_iva')
-        .optional()
-        .trim()
-        .matches(/^\d{11}$/)
-        .withMessage('Partita IVA deve essere di 11 cifre'),
+        .optional({ nullable: true, checkFalsy: true })
+        .custom((value) => {
+          if (value === null || value === undefined || value === '') return true;
+          const trimmed = typeof value === 'string' ? String(value).trim() : String(value);
+          if (trimmed === '') return true;
+          return trimmed.length <= 20;
+        })
+        .withMessage('Partita IVA troppo lunga (max 20 caratteri)'),
+      body('partitaIva')
+        .optional({ nullable: true, checkFalsy: true })
+        .custom((value) => {
+          if (value === null || value === undefined || value === '') return true;
+          const trimmed = typeof value === 'string' ? String(value).trim() : String(value);
+          if (trimmed === '') return true;
+          return trimmed.length <= 20;
+        })
+        .withMessage('Partita IVA troppo lunga (max 20 caratteri)'),
       body('codice_fiscale')
-        .optional()
-        .trim()
-        .matches(/^[A-Z0-9]{16}$/i)
-        .withMessage('Codice Fiscale deve essere di 16 caratteri alfanumerici')
+        .optional({ nullable: true, checkFalsy: true })
+        .custom((value) => {
+          if (value === null || value === undefined || value === '') return true;
+          const trimmed = typeof value === 'string' ? String(value).trim() : String(value);
+          if (trimmed === '') return true;
+          // Solo verifica lunghezza massima, non formato specifico
+          return trimmed.length <= 16;
+        })
+        .withMessage('Codice Fiscale troppo lungo (max 16 caratteri)'),
+      body('codiceFiscale')
+        .optional({ nullable: true, checkFalsy: true })
+        .custom((value) => {
+          if (value === null || value === undefined || value === '') return true;
+          const trimmed = typeof value === 'string' ? String(value).trim() : String(value);
+          if (trimmed === '') return true;
+          // Solo verifica lunghezza massima, non formato specifico
+          return trimmed.length <= 16;
+        })
+        .withMessage('Codice Fiscale troppo lungo (max 16 caratteri)')
     ],
     update: [] // Sarà popolato dopo la definizione
   },
@@ -91,25 +145,20 @@ const ValidationSchemas = {
         .optional({ nullable: true, checkFalsy: true })
         .custom((value) => {
           if (value === null || value === undefined || value === '') return true;
-          // Rimuove spazi, trattini, parentesi e altri caratteri per validare solo i numeri
-          const cleaned = String(value).replace(/[\s\-\(\)\.]/g, '');
-          // Accetta numeri con o senza prefisso +39, da 8 a 15 cifre
-          return /^(\+39)?[0-9]{8,15}$/.test(cleaned);
+          const trimmed = String(value).trim();
+          if (trimmed === '') return true;
+          return trimmed.length <= 25;
         })
-        .withMessage('Telefono non valido'),
+        .withMessage('Telefono troppo lungo (max 25 caratteri)'),
       body('email')
         .optional({ nullable: true, checkFalsy: true })
         .custom((value) => {
           if (value === null || value === undefined || value === '') return true;
           const trimmed = String(value).trim();
           if (trimmed === '') return true;
-          // Valida email solo se non è vuota
-          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-          if (!emailRegex.test(trimmed)) return false;
-          // Verifica lunghezza
           return trimmed.length <= 255;
         })
-        .withMessage('Email non valida (max 255 caratteri)')
+        .withMessage('Email troppo lunga (max 255 caratteri)')
     ],
     update: [] // Sarà popolato dopo la definizione
   },
@@ -120,30 +169,57 @@ const ValidationSchemas = {
       body('data')
         .notEmpty()
         .withMessage('Data obbligatoria')
-        .isISO8601()
+        .custom((value) => {
+          if (typeof value !== 'string') return false;
+          // Accetta formato date ISO8601 (YYYY-MM-DD) o datetime ISO8601
+          const dateOnlyRegex = /^\d{4}-\d{2}-\d{2}$/;
+          const dateTimeRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
+          return dateOnlyRegex.test(value) || dateTimeRegex.test(value);
+        })
         .withMessage('Data non valida (formato YYYY-MM-DD)'),
       body('clienteId')
-        .optional()
-        .isInt({ min: 1 })
+        .optional({ nullable: true, checkFalsy: false })
+        .custom((value) => {
+          if (value === null || value === undefined || value === '') return true;
+          const num = typeof value === 'number' ? value : parseInt(value, 10);
+          return !isNaN(num) && num >= 1;
+        })
         .withMessage('ID cliente non valido'),
       body('clienteNome')
-        .optional()
-        .trim()
-        .isLength({ max: 255 })
+        .optional({ nullable: true, checkFalsy: true })
+        .custom((value) => {
+          if (value === null || value === undefined || value === '') return true;
+          const trimmed = typeof value === 'string' ? value.trim() : String(value);
+          return trimmed.length <= 255;
+        })
         .withMessage('Nome cliente troppo lungo'),
       body('attivita')
-        .optional()
-        .trim()
-        .isLength({ max: 500 })
+        .optional({ nullable: true, checkFalsy: true })
+        .custom((value) => {
+          if (value === null || value === undefined || value === '') return true;
+          const trimmed = typeof value === 'string' ? value.trim() : String(value);
+          return trimmed.length <= 500;
+        })
         .withMessage('Attività troppo lunga (max 500 caratteri)'),
       body('km')
-        .optional()
-        .isFloat({ min: 0 })
+        .optional({ nullable: true, checkFalsy: false })
+        .custom((value) => {
+          if (value === null || value === undefined || value === '') return true;
+          const num = typeof value === 'number' ? value : parseFloat(value);
+          return !isNaN(num) && num >= 0;
+        })
         .withMessage('KM deve essere un numero positivo'),
       body('indennita')
-        .optional()
-        .isBoolean()
-        .withMessage('Indennità deve essere true o false')
+        .optional({ nullable: true, checkFalsy: false })
+        .custom((value) => {
+          // Accetta booleani, 0/1 (numeri), o stringhe '0'/'1'/'true'/'false'
+          if (value === null || value === undefined || value === '') return true;
+          if (typeof value === 'boolean') return true;
+          if (typeof value === 'number' && (value === 0 || value === 1)) return true;
+          if (typeof value === 'string' && ['0', '1', 'true', 'false'].includes(value.toLowerCase())) return true;
+          return false;
+        })
+        .withMessage('Indennità deve essere true/false o 0/1')
     ],
     update: [] // Sarà popolato dopo la definizione
   },
@@ -208,58 +284,58 @@ const ValidationSchemas = {
         .isLength({ max: 255 })
         .withMessage('Titolo troppo lungo (max 255 caratteri)'),
       body('cliente_id')
-        .optional()
+        .optional({ nullable: true, checkFalsy: true })
         .isInt({ min: 1 })
         .withMessage('ID cliente non valido'),
       body('clienteId')
-        .optional()
+        .optional({ nullable: true, checkFalsy: true })
         .isInt({ min: 1 })
         .withMessage('ID cliente non valido'),
       body('cliente_nome')
-        .optional()
+        .optional({ nullable: true, checkFalsy: true })
         .trim()
         .isLength({ max: 255 })
         .withMessage('Nome cliente troppo lungo'),
       body('clienteNome')
-        .optional()
+        .optional({ nullable: true, checkFalsy: true })
         .trim()
         .isLength({ max: 255 })
         .withMessage('Nome cliente troppo lungo'),
       body('stato')
-        .optional()
+        .optional({ nullable: true, checkFalsy: true })
         .isIn(['In corso', 'Chiusa'])
         .withMessage('Stato non valido (In corso o Chiusa)'),
       body('sotto_stato')
-        .optional()
+        .optional({ nullable: true, checkFalsy: true })
         .trim()
         .isLength({ max: 100 })
         .withMessage('Sotto stato troppo lungo'),
       body('stato_pagamenti')
-        .optional()
+        .optional({ nullable: true, checkFalsy: true })
         .isIn(['Non iniziato', 'Parziale', 'Saldo'])
         .withMessage('Stato pagamenti non valido'),
       body('preventivo')
-        .optional()
+        .optional({ nullable: true, checkFalsy: true })
         .isBoolean()
         .withMessage('Preventivo deve essere true o false'),
       body('importo_preventivo')
-        .optional()
+        .optional({ nullable: true, checkFalsy: true })
         .isFloat({ min: 0 })
         .withMessage('Importo preventivo deve essere un numero positivo'),
       body('importo_totale')
-        .optional()
+        .optional({ nullable: true, checkFalsy: true })
         .isFloat({ min: 0 })
         .withMessage('Importo totale deve essere un numero positivo'),
       body('importo_pagato')
-        .optional()
+        .optional({ nullable: true, checkFalsy: true })
         .isFloat({ min: 0 })
         .withMessage('Importo pagato deve essere un numero positivo'),
       body('avanzamento_lavori')
-        .optional()
+        .optional({ nullable: true, checkFalsy: true })
         .isInt({ min: 0, max: 100 })
         .withMessage('Avanzamento lavori deve essere tra 0 e 100'),
       body('responsabile')
-        .optional()
+        .optional({ nullable: true, checkFalsy: true })
         .trim()
         .isLength({ max: 100 })
         .withMessage('Responsabile troppo lungo'),
@@ -348,27 +424,51 @@ const ValidationSchemas = {
           })
           .withMessage('ID commessa non valido'),
         body('cliente_id')
-          .optional()
-          .isInt({ min: 1 })
+          .optional({ nullable: true, checkFalsy: false })
+          .custom((value) => {
+            if (value === null || value === undefined || value === '' || value === 0) return true;
+            const num = typeof value === 'number' ? value : parseInt(value, 10);
+            return !isNaN(num) && num >= 1;
+          })
           .withMessage('ID cliente non valido'),
         body('cliente_nome')
-          .optional()
-          .trim()
-          .isLength({ max: 255 })
+          .optional({ nullable: true, checkFalsy: true })
+          .custom((value) => {
+            if (value === null || value === undefined || value === '') return true;
+            const trimmed = typeof value === 'string' ? value.trim() : String(value);
+            return trimmed.length <= 255;
+          })
           .withMessage('Nome cliente troppo lungo'),
         body('data_inizio')
-          .optional()
-          .isISO8601()
+          .optional({ nullable: true, checkFalsy: true })
+          .custom((value) => {
+            if (value === null || value === undefined || value === '') return true;
+            // Accetta formato date ISO8601 (YYYY-MM-DD) o datetime ISO8601
+            const dateOnlyRegex = /^\d{4}-\d{2}-\d{2}$/;
+            const dateTimeRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
+            return dateOnlyRegex.test(value) || dateTimeRegex.test(value);
+          })
           .withMessage('Data inizio non valida'),
         body('data_fine_prevista')
-          .optional()
-          .isISO8601()
+          .optional({ nullable: true, checkFalsy: true })
+          .custom((value) => {
+            if (value === null || value === undefined || value === '') return true;
+            // Accetta formato date ISO8601 (YYYY-MM-DD) o datetime ISO8601
+            const dateOnlyRegex = /^\d{4}-\d{2}-\d{2}$/;
+            const dateTimeRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
+            return dateOnlyRegex.test(value) || dateTimeRegex.test(value);
+          })
           .withMessage('Data fine prevista non valida'),
         body('tags')
-          .optional()
+          .optional({ nullable: true, checkFalsy: false })
           .custom((value) => {
+            // Accetta null, undefined, array vuoto
+            if (value === null || value === undefined) return true;
+            // Accetta array (anche vuoto)
             if (Array.isArray(value)) return true;
+            // Accetta stringhe JSON valide
             if (typeof value === 'string') {
+              if (value === '') return true; // Stringa vuota è valida
               try {
                 JSON.parse(value);
                 return true;
@@ -612,4 +712,3 @@ ValidationSchemas.kanban.card.update = [
 ];
 
 module.exports = ValidationSchemas;
-

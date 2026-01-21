@@ -2,6 +2,25 @@ import { useState, useEffect, useMemo } from 'react'
 import api from '../services/api'
 import ContattiList from './ContattiList'
 
+// Helper per ottenere il label del campo in italiano
+const getFieldLabel = (fieldName) => {
+  const labels = {
+    'denominazione': 'Denominazione',
+    'paese': 'Paese',
+    'codiceDestinatarioSDI': 'Codice Destinatario SDI',
+    'codice_destinatario_sdi': 'Codice Destinatario SDI',
+    'indirizzo': 'Indirizzo',
+    'comune': 'Comune',
+    'cap': 'CAP',
+    'provincia': 'Provincia',
+    'partitaIva': 'Partita IVA',
+    'partita_iva': 'Partita IVA',
+    'codiceFiscale': 'Codice Fiscale',
+    'codice_fiscale': 'Codice Fiscale'
+  }
+  return labels[fieldName] || fieldName
+}
+
 function AnagraficaClienti({ clienti, onUpdateClienti, onBack, currentUser, toast }) {
   const [showForm, setShowForm] = useState(false)
   const [editingCliente, setEditingCliente] = useState(null)
@@ -64,16 +83,23 @@ function AnagraficaClienti({ clienti, onUpdateClienti, onBack, currentUser, toas
     setLoading(true)
 
     try {
+      // Normalizza i dati: stringhe vuote diventano null
+      const normalizeValue = (value) => {
+        if (value === null || value === undefined) return null
+        const trimmed = String(value).trim()
+        return trimmed === '' ? null : trimmed
+      }
+      
       const clienteData = {
-        denominazione: formData.denominazione,
-        paese: formData.paese || null,
-        codiceDestinatarioSDI: formData.codiceDestinatarioSDI || null,
-        indirizzo: formData.indirizzo || null,
-        comune: formData.comune || null,
-        cap: formData.cap || null,
-        provincia: formData.provincia || null,
-        partitaIva: formData.partitaIva || null,
-        codiceFiscale: formData.codiceFiscale || null
+        denominazione: normalizeValue(formData.denominazione) || '',
+        paese: normalizeValue(formData.paese),
+        codiceDestinatarioSDI: normalizeValue(formData.codiceDestinatarioSDI),
+        indirizzo: normalizeValue(formData.indirizzo),
+        comune: normalizeValue(formData.comune),
+        cap: normalizeValue(formData.cap),
+        provincia: normalizeValue(formData.provincia),
+        partitaIva: normalizeValue(formData.partitaIva),
+        codiceFiscale: normalizeValue(formData.codiceFiscale)
       }
       
       // Mappa camelCase a snake_case per l'API
@@ -113,7 +139,23 @@ function AnagraficaClienti({ clienti, onUpdateClienti, onBack, currentUser, toas
       handleCancel()
     } catch (err) {
       console.error('Errore salvataggio cliente:', err)
-      const errorMsg = 'Errore nel salvataggio del cliente: ' + (err.message || 'Errore sconosciuto')
+      
+      // Se ci sono dettagli di validazione, mostra quelli
+      let errorMsg = 'Errore nel salvataggio del cliente'
+      if (err.details && Array.isArray(err.details) && err.details.length > 0) {
+        // Mostra i dettagli di validazione specifici
+        const detailsMessages = err.details.map(d => {
+          const fieldName = d.field || d.param || 'campo'
+          const fieldLabel = getFieldLabel(fieldName)
+          return `${fieldLabel}: ${d.message}`
+        })
+        errorMsg = 'Errore di validazione:\n' + detailsMessages.join('\n')
+      } else if (err.message) {
+        errorMsg = 'Errore nel salvataggio del cliente: ' + err.message
+      } else {
+        errorMsg = 'Errore nel salvataggio del cliente: Errore sconosciuto'
+      }
+      
       setError(errorMsg)
       toast?.showError(errorMsg, 'Errore salvataggio')
     } finally {
@@ -235,7 +277,7 @@ function AnagraficaClienti({ clienti, onUpdateClienti, onBack, currentUser, toas
       
       {error && (
         <div className="alert alert-warning mb-3">
-          {error}
+          <div style={{ whiteSpace: 'pre-line' }}>{error}</div>
         </div>
       )}
 

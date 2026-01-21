@@ -18,6 +18,8 @@ class ClientiController {
   initStatements() {
     this.stmt = {
       getAll: this.db.prepare('SELECT * FROM clienti ORDER BY denominazione ASC'),
+      getPaginated: this.db.prepare('SELECT * FROM clienti ORDER BY denominazione ASC LIMIT ? OFFSET ?'),
+      getCount: this.db.prepare('SELECT COUNT(*) as total FROM clienti'),
       getById: this.db.prepare('SELECT * FROM clienti WHERE id = ?'),
       create: this.db.prepare(`
         INSERT INTO clienti (
@@ -39,6 +41,18 @@ class ClientiController {
         WHERE denominazione LIKE ? OR paese LIKE ? OR comune LIKE ?
            OR partita_iva LIKE ? OR codice_fiscale LIKE ?
         ORDER BY denominazione ASC
+      `),
+      searchPaginated: this.db.prepare(`
+        SELECT * FROM clienti
+        WHERE denominazione LIKE ? OR paese LIKE ? OR comune LIKE ?
+           OR partita_iva LIKE ? OR codice_fiscale LIKE ?
+        ORDER BY denominazione ASC
+        LIMIT ? OFFSET ?
+      `),
+      searchCount: this.db.prepare(`
+        SELECT COUNT(*) as total FROM clienti
+        WHERE denominazione LIKE ? OR paese LIKE ? OR comune LIKE ?
+           OR partita_iva LIKE ? OR codice_fiscale LIKE ?
       `),
       // Contatti
       getContatti: this.db.prepare('SELECT * FROM clienti_contatti WHERE cliente_id = ? ORDER BY nome ASC'),
@@ -67,35 +81,32 @@ class ClientiController {
       
       if (search) {
         const searchTerm = `%${search}%`;
-        // Per la ricerca, otteniamo tutti i risultati e li paginiamo manualmente
-        // perché la query di ricerca è più complessa
-        const allResults = this.stmt.search.all(searchTerm, searchTerm, searchTerm, searchTerm, searchTerm);
-        total = allResults.length;
-        clienti = allResults.slice(offset, offset + limit);
+        // Usa query paginata e count separati per performance
+        total = this.stmt.searchCount.get(searchTerm, searchTerm, searchTerm, searchTerm, searchTerm).total;
+        clienti = this.stmt.searchPaginated.all(searchTerm, searchTerm, searchTerm, searchTerm, searchTerm, limit, offset);
       } else {
-        // Conta totale senza paginazione
-        const allResults = this.stmt.getAll.all();
-        total = allResults.length;
-        // Applica paginazione manualmente (SQLite non supporta COUNT(*) OVER facilmente)
-        clienti = allResults.slice(offset, offset + limit);
+        // Usa query paginata e count separati per performance
+        total = this.stmt.getCount.get().total;
+        // Se non ci sono parametri di paginazione, restituisci tutti i risultati
+        if (!req.query.page && !req.query.limit) {
+          clienti = this.stmt.getAll.all();
+        } else {
+          clienti = this.stmt.getPaginated.all(limit, offset);
+        }
       }
 
       Logger.info('GET /clienti', { count: clienti.length, total, page, limit, search });
       
-      // Se non c'è ricerca, restituisci dati paginati
-      if (!search && (page > 1 || limit < total)) {
+      // Se ci sono parametri di paginazione, restituisci risposta paginata
+      if (req.query.page || req.query.limit) {
         res.json(Pagination.createResponse(clienti, total, page, limit));
       } else {
-        // Per retrocompatibilità, se non ci sono parametri di paginazione o c'è ricerca, restituisci array semplice
-        if (!req.query.page && !req.query.limit) {
-          res.json(clienti);
-        } else {
-          res.json(Pagination.createResponse(clienti, total, page, limit));
-        }
+        // Per retrocompatibilità, restituisci array semplice
+        res.json(clienti);
       }
     } catch (error) {
       Logger.error('Errore GET /clienti', error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 
@@ -115,7 +126,7 @@ class ClientiController {
       res.json(cliente);
     } catch (error) {
       Logger.error(`Errore GET /clienti/${req.params.id}`, error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 
@@ -130,6 +141,7 @@ class ClientiController {
         partitaIva, partita_iva,
         codiceFiscale, codice_fiscale
       } = body;
+      const cf = codiceFiscale || codice_fiscale;
 
       // Validazione
       if (!denominazione || denominazione.trim().length === 0) {
@@ -146,11 +158,7 @@ class ClientiController {
         throw ErrorHandler.createError('Partita IVA non valida', 400);
       }
 
-      // Valida Codice Fiscale se fornito
-      const cf = codiceFiscale || codice_fiscale;
-      if (cf && !Validators.isValidCodiceFiscale(cf)) {
-        throw ErrorHandler.createError('Codice Fiscale non valido', 400);
-      }
+      // Codice Fiscale: nessuna validazione richiesta
 
       // Valida CAP se fornito
       if (cap && !Validators.isValidCap(cap)) {
@@ -176,7 +184,7 @@ class ClientiController {
         return res.status(error.statusCode).json({ error: error.message });
       }
       Logger.error('Errore POST /clienti', error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 
@@ -216,7 +224,7 @@ class ClientiController {
       res.json({ id: parseInt(id), ...req.body });
     } catch (error) {
       Logger.error(`Errore PUT /clienti/${req.params.id}`, error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 
@@ -233,7 +241,7 @@ class ClientiController {
       res.json({ success: true });
     } catch (error) {
       Logger.error(`Errore DELETE /clienti/${req.params.id}`, error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 
@@ -247,7 +255,7 @@ class ClientiController {
       res.json(contatti);
     } catch (error) {
       Logger.error(`Errore GET /clienti/${req.params.id}/contatti`, error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 
@@ -296,7 +304,7 @@ class ClientiController {
         return res.status(error.statusCode).json({ error: error.message });
       }
       Logger.error(`Errore POST /clienti/${req.params.id}/contatti`, error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 
@@ -335,7 +343,7 @@ class ClientiController {
       res.json(updated);
     } catch (error) {
       Logger.error(`Errore PUT /clienti/${req.params.id}/contatti/${req.params.contattoId}`, error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 
@@ -353,7 +361,7 @@ class ClientiController {
       res.json({ success: true });
     } catch (error) {
       Logger.error(`Errore DELETE /clienti/${req.params.id}/contatti/${req.params.contattoId}`, error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 }
@@ -378,4 +386,3 @@ function createRouter(db) {
 }
 
 module.exports = createRouter;
-

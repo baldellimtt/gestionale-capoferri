@@ -6,7 +6,20 @@ function Login({ onLogin, loading, error }) {
 
   const handleSubmit = (event) => {
     event.preventDefault()
-    onLogin({ username, password })
+    // IMPORTANTE: Rimuovi spazi bianchi iniziali/finali per evitare problemi
+    // Questo risolve il problema quando si copia/incolla la password con spazi
+    const trimmedUsername = username.trim()
+    const trimmedPassword = password.trim()
+    
+    // Verifica che username e password non siano vuoti dopo il trim
+    if (!trimmedUsername || !trimmedPassword) {
+      return // Il form HTML5 required dovrebbe già gestire questo, ma aggiungiamo un controllo extra
+    }
+    
+    onLogin({ 
+      username: trimmedUsername, 
+      password: trimmedPassword 
+    })
   }
 
   return (

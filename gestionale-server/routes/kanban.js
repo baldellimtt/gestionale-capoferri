@@ -224,7 +224,7 @@ class KanbanController {
       res.json(colonne);
     } catch (error) {
       Logger.error('Errore GET /kanban/colonne', error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 
@@ -239,7 +239,7 @@ class KanbanController {
       res.json(colonna);
     } catch (error) {
       Logger.error(`Errore GET /kanban/colonne/${req.params.id}`, error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 
@@ -260,7 +260,7 @@ class KanbanController {
       res.status(201).json(created);
     } catch (error) {
       Logger.error('Errore POST /kanban/colonne', error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 
@@ -280,7 +280,7 @@ class KanbanController {
       res.json(updated);
     } catch (error) {
       Logger.error(`Errore PUT /kanban/colonne/${req.params.id}`, error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 
@@ -300,7 +300,7 @@ class KanbanController {
       res.json({ success: true });
     } catch (error) {
       Logger.error(`Errore DELETE /kanban/colonne/${req.params.id}`, error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 
@@ -370,7 +370,7 @@ class KanbanController {
       res.json(card);
     } catch (error) {
       Logger.error('Errore GET /kanban/card', error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 
@@ -385,7 +385,7 @@ class KanbanController {
       res.json(card);
     } catch (error) {
       Logger.error(`Errore GET /kanban/card/${req.params.id}`, error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 
@@ -452,7 +452,7 @@ class KanbanController {
       res.status(201).json(created);
     } catch (error) {
       Logger.error('Errore POST /kanban/card', error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 
@@ -514,7 +514,7 @@ class KanbanController {
       res.json(updated);
     } catch (error) {
       Logger.error(`Errore PUT /kanban/card/${req.params.id}`, error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 
@@ -555,7 +555,7 @@ class KanbanController {
       res.json(updated);
     } catch (error) {
       Logger.error(`Errore PUT /kanban/card/${req.params.id}/move`, error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 
@@ -570,7 +570,7 @@ class KanbanController {
       res.json({ success: true });
     } catch (error) {
       Logger.error(`Errore DELETE /kanban/card/${req.params.id}`, error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 
@@ -583,7 +583,7 @@ class KanbanController {
       res.json(scadenze);
     } catch (error) {
       Logger.error(`Errore GET /kanban/card/${req.params.cardId}/scadenze`, error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 
@@ -744,7 +744,7 @@ class KanbanController {
       res.json(updated);
     } catch (error) {
       Logger.error(`Errore PUT /kanban/scadenze/${req.params.id}/complete`, error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 
@@ -759,7 +759,7 @@ class KanbanController {
       res.json({ success: true });
     } catch (error) {
       Logger.error(`Errore DELETE /kanban/scadenze/${req.params.id}`, error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 
@@ -772,7 +772,7 @@ class KanbanController {
       res.json(commenti);
     } catch (error) {
       Logger.error(`Errore GET /kanban/card/${req.params.cardId}/commenti`, error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 
@@ -809,7 +809,7 @@ class KanbanController {
       res.status(201).json(created);
     } catch (error) {
       Logger.error(`Errore POST /kanban/card/${req.params.cardId}/commenti`, error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 
@@ -837,7 +837,7 @@ class KanbanController {
       res.json(updated);
     } catch (error) {
       Logger.error(`Errore PUT /kanban/commenti/${req.params.id}`, error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 
@@ -859,7 +859,7 @@ class KanbanController {
       res.json({ success: true });
     } catch (error) {
       Logger.error(`Errore DELETE /kanban/commenti/${req.params.id}`, error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 
@@ -883,7 +883,7 @@ class KanbanController {
       res.json(notifiche);
     } catch (error) {
       Logger.error('Errore GET /kanban/notifiche', error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 
@@ -899,7 +899,7 @@ class KanbanController {
       res.json({ count: result.count });
     } catch (error) {
       Logger.error('Errore GET /kanban/notifiche/unread-count', error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 
@@ -914,7 +914,7 @@ class KanbanController {
       res.json({ success: true });
     } catch (error) {
       Logger.error(`Errore PUT /kanban/notifiche/${req.params.id}/read`, error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 
@@ -930,7 +930,7 @@ class KanbanController {
       res.json({ success: true });
     } catch (error) {
       Logger.error('Errore PUT /kanban/notifiche/read-all', error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 }

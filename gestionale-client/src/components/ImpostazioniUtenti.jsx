@@ -110,10 +110,19 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onBack, toast }) {
       setSaving(true)
       setError(null)
       const loadingToastId = toast?.showLoading('Salvataggio in corso...', 'Salvataggio utente')
-      const updated = await api.updateUtente(id, {
+      
+      // IMPORTANTE: Non inviare il campo password se è vuoto
+      // Questo evita di modificare accidentalmente la password quando si aggiorna un utente
+      const updateData = {
         ...editData,
         rimborso_km: rimborso
-      })
+      }
+      // Rimuovi password se è vuota o non definita
+      if (!updateData.password || updateData.password.trim() === '') {
+        delete updateData.password
+      }
+      
+      const updated = await api.updateUtente(id, updateData)
       setUtenti((prev) => prev.map((u) => (u.id === id ? updated : u)))
       if (currentUser?.id === updated.id && onUserUpdated) {
         onUserUpdated(updated)

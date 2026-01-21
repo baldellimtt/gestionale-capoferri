@@ -7,7 +7,7 @@ export const ToastContainer = ({ toasts, removeToast }) => {
         position: 'fixed',
         top: '20px',
         right: '20px',
-        zIndex: 10000,
+        zIndex: 99999,
         display: 'flex',
         flexDirection: 'column',
         gap: '0.75rem',
@@ -27,8 +27,11 @@ const Toast = ({ toast, onClose }) => {
   const [isVisible, setIsVisible] = useState(false)
 
   useEffect(() => {
-    // Animazione di entrata
-    setIsVisible(true)
+    // Animazione di entrata con piccolo delay per assicurarsi che il DOM sia pronto
+    const timer = setTimeout(() => {
+      setIsVisible(true)
+    }, 10)
+    return () => clearTimeout(timer)
 
     // Progress bar animata
     if (toast.type === 'loading') {

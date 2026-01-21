@@ -232,12 +232,19 @@ class Migrations {
       CREATE INDEX IF NOT EXISTS idx_kanban_card_commessa ON kanban_card(commessa_id);
       CREATE INDEX IF NOT EXISTS idx_kanban_card_responsabile ON kanban_card(responsabile_id);
       CREATE INDEX IF NOT EXISTS idx_kanban_card_cliente ON kanban_card(cliente_id);
+      CREATE INDEX IF NOT EXISTS idx_kanban_card_created_at ON kanban_card(created_at);
       CREATE INDEX IF NOT EXISTS idx_kanban_scadenze_card ON kanban_scadenze(card_id);
       CREATE INDEX IF NOT EXISTS idx_kanban_scadenze_data ON kanban_scadenze(data_scadenza);
       CREATE INDEX IF NOT EXISTS idx_kanban_notifiche_user ON kanban_notifiche(user_id);
       CREATE INDEX IF NOT EXISTS idx_kanban_notifiche_letto ON kanban_notifiche(letto);
       CREATE INDEX IF NOT EXISTS idx_kanban_commenti_card ON kanban_card_commenti(card_id);
       CREATE INDEX IF NOT EXISTS idx_kanban_commenti_user ON kanban_card_commenti(user_id);
+      
+      -- Indici per performance Commesse
+      CREATE INDEX IF NOT EXISTS idx_commesse_data_inizio ON commesse(data_inizio);
+      CREATE INDEX IF NOT EXISTS idx_commesse_stato_pagamenti ON commesse(stato_pagamenti);
+      CREATE INDEX IF NOT EXISTS idx_commesse_stato ON commesse(stato);
+      CREATE INDEX IF NOT EXISTS idx_commesse_cliente_id ON commesse(cliente_id);
     `);
 
     this.ensureUserColumns(db);

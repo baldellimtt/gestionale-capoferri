@@ -3,6 +3,7 @@ const router = express.Router();
 const Logger = require('../utils/logger');
 const { validateRequest } = require('../utils/validationMiddleware');
 const ValidationSchemas = require('../utils/validationSchemas');
+const ErrorHandler = require('../utils/errorHandler');
 
 class AttivitaController {
   constructor(db) {
@@ -79,7 +80,7 @@ class AttivitaController {
       res.json(attivita);
     } catch (error) {
       Logger.error('Errore GET /attivita', error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 
@@ -96,7 +97,7 @@ class AttivitaController {
       res.json(attivita);
     } catch (error) {
       Logger.error(`Errore GET /attivita/${req.params.id}`, error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 
@@ -127,7 +128,7 @@ class AttivitaController {
       res.json(result);
     } catch (error) {
       Logger.error('Errore GET /attivita/totals', error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 
@@ -152,7 +153,7 @@ class AttivitaController {
       res.status(201).json({ id: result.lastInsertRowid, ...req.body });
     } catch (error) {
       Logger.error('Errore POST /attivita', error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 
@@ -183,7 +184,7 @@ class AttivitaController {
       res.json({ id: parseInt(id), ...req.body });
     } catch (error) {
       Logger.error(`Errore PUT /attivita/${req.params.id}`, error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 
@@ -207,7 +208,7 @@ class AttivitaController {
       res.json({ success: true, deletedId: numericId });
     } catch (error) {
       Logger.error(`Errore DELETE /attivita/${req.params.id}`, error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 }

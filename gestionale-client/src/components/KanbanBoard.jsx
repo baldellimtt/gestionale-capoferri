@@ -83,11 +83,32 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
   const handleCardUpdate = async (updatedCard) => {
     try {
       await api.updateKanbanCard(updatedCard.id, updatedCard)
-      await loadData()
-      setSelectedCard(updatedCard)
+      // Ricarica la card aggiornata dal server per avere i dati completi
+      const refreshedCard = await api.getKanbanCardById(updatedCard.id)
+      if (refreshedCard) {
+        setSelectedCard(refreshedCard)
+        // Aggiorna la card nella lista locale senza ricaricare tutto
+        setCard((prevCards) => {
+          const updated = prevCards.map(c => c.id === refreshedCard.id ? refreshedCard : c)
+          // Se la card non è nella lista (potrebbe essere filtrata), aggiungila
+          if (!updated.find(c => c.id === refreshedCard.id)) {
+            return [...updated, refreshedCard]
+          }
+          return updated
+        })
+      } else {
+        // Se la card non viene trovata, usa i dati aggiornati e ricarica tutto
+        setSelectedCard(updatedCard)
+        await loadData()
+      }
+      // Restituisci esplicitamente per indicare successo
+      return { success: true }
     } catch (err) {
       console.error('Errore aggiornamento card:', err)
-      setError('Errore nell\'aggiornamento della card')
+      const errorMsg = 'Errore nell\'aggiornamento della card'
+      setError(errorMsg)
+      toast?.showError(errorMsg, 'Errore salvataggio')
+      throw err // Rilancia l'errore per gestirlo in KanbanCardDetail
     }
   }
 
@@ -285,6 +306,7 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
           onDelete={handleCardDelete}
           onClose={handleCloseDetail}
           onRefresh={loadData}
+          toast={toast}
         />
       )}
     </div>
@@ -292,5 +314,4 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
 }
 
 export default KanbanBoard
-
 

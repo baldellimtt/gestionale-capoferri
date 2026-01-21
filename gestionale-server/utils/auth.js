@@ -13,15 +13,31 @@ function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
 }
 
 function verifyPassword(password, salt, hash) {
-  const { hash: verifyHash } = hashPassword(password, salt);
-  const hashBuffer = Buffer.from(hash, 'hex');
-  const verifyBuffer = Buffer.from(verifyHash, 'hex');
-
-  if (hashBuffer.length !== verifyBuffer.length) {
+  // Verifica input validi
+  if (!password || !salt || !hash) {
     return false;
   }
 
-  return crypto.timingSafeEqual(hashBuffer, verifyBuffer);
+  // Assicurati che salt e hash siano stringhe valide
+  if (typeof salt !== 'string' || typeof hash !== 'string') {
+    return false;
+  }
+
+  try {
+    const { hash: verifyHash } = hashPassword(password, salt);
+    const hashBuffer = Buffer.from(hash, 'hex');
+    const verifyBuffer = Buffer.from(verifyHash, 'hex');
+
+    if (hashBuffer.length !== verifyBuffer.length) {
+      return false;
+    }
+
+    return crypto.timingSafeEqual(hashBuffer, verifyBuffer);
+  } catch (error) {
+    // In caso di errore (es. salt/hash non validi), ritorna false
+    console.error('Errore verifica password:', error);
+    return false;
+  }
 }
 
 function generateToken() {

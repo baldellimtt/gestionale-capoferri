@@ -83,7 +83,9 @@ function createRouter(db) {
         return res.status(400).json({ error: 'Costo km non valido' });
       }
 
-      const { hash, salt } = hashPassword(password);
+      // IMPORTANTE: Rimuovi spazi bianchi iniziali/finali dalla password
+      const trimmedPassword = password.trim();
+      const { hash, salt } = hashPassword(trimmedPassword);
       const result = createStmt.run(
         username,
         role,
@@ -164,9 +166,14 @@ function createRouter(db) {
         return res.status(404).json({ error: 'Utente non trovato' });
       }
 
-      if (password) {
+      // IMPORTANTE: Aggiorna la password SOLO se fornita e non vuota
+      // Questo evita di modificare accidentalmente la password quando si aggiorna un utente
+      if (password && typeof password === 'string' && password.trim().length > 0) {
+        // IMPORTANTE: Rimuovi spazi bianchi iniziali/finali dalla password
+        const trimmedPassword = password.trim();
+        
         // Valida password policy
-        const passwordValidation = passwordPolicy.validate(password);
+        const passwordValidation = passwordPolicy.validate(trimmedPassword);
         if (!passwordValidation.valid) {
           return res.status(400).json({
             error: 'Password non valida',
@@ -174,8 +181,9 @@ function createRouter(db) {
             suggestions: passwordPolicy.getSuggestions()
           });
         }
-        const { hash, salt } = hashPassword(password);
+        const { hash, salt } = hashPassword(trimmedPassword);
         updatePasswordStmt.run(hash, salt, id);
+        Logger.info('Password aggiornata', { id, username });
       }
 
       const updated = getByIdStmt.get(id);

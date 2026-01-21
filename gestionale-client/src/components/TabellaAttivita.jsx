@@ -13,10 +13,35 @@ import {
   getRowValidation,
   normalizeAttivitaFromApi
 } from '../utils/attivita'
+import { useAttivita } from '../contexts/AttivitaContext'
 
 function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
-  const [attivita, setAttivita] = useState([])
+  // IMPORTANTE: NON usare mai i dati dal Context per evitare problemi con eliminazioni
+  // I dati devono essere SEMPRE caricati direttamente dal server per garantire che le eliminazioni siano permanenti
+  const { dataVersion, notifyAttivitaChanged } = useAttivita()
+  const AUTO_CREATE_SUPPRESS_KEY = 'attivita_auto_create_suppressed_dates'
+  const [localAttivita, setLocalAttivita] = useState([])
   const [loading, setLoading] = useState(true)
+  const lastDataVersionRef = useRef(0)
+  const hasLoadedFromServerRef = useRef(false) // Traccia se abbiamo caricato dal server dopo il mount
+  const isMountedRef = useRef(true) // Traccia se il componente è montato
+  const isLoadingRef = useRef(false) // Traccia se stiamo caricando per evitare loop
+  const suppressedAutoCreateDatesRef = useRef(new Set())
+  
+  // IMPORTANTE: Usa SEMPRE i dati locali per garantire che le eliminazioni siano permanenti
+  // Non usare mai i dati dal Context perché potrebbero essere vecchi e contenere righe eliminate
+  // I dati locali vengono sempre aggiornati dal server quando si monta il componente
+  const attivita = localAttivita
+  const setAttivita = useCallback((updater) => {
+    if (typeof updater === 'function') {
+      setLocalAttivita(prev => {
+        const newValue = updater(prev)
+        return newValue
+      })
+    } else {
+      setLocalAttivita(updater)
+    }
+  }, [])
   const [error, setError] = useState(null)
   const [expanded, setExpanded] = useState(false)
   const [filterType, setFilterType] = useState('none')
@@ -39,38 +64,159 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
 
   const ATTIVITA_OPTIONS = ['SOPRALLUOGO', 'TRASFERTA']
 
-  const loadAttivita = useCallback(async (filters = {}) => {
+  const loadSuppressedAutoCreateDates = useCallback(() => {
     try {
-      setLoading(true)
-      setError(null)
-      const data = await api.getAttivita(filters)
-      const formatted = data.map(normalizeAttivitaFromApi)
-      const unique = dedupeAttivita(formatted, deletedIds)
-      setAttivita(unique)
+      const raw = sessionStorage.getItem(AUTO_CREATE_SUPPRESS_KEY)
+      if (!raw) return new Set()
+      const parsed = JSON.parse(raw)
+      if (!Array.isArray(parsed)) return new Set()
+      return new Set(parsed.filter(Boolean))
     } catch (err) {
-      console.error('Errore caricamento attività:', err)
-      setError('Errore nel caricamento delle attività. Verifica che il server sia avviato.')
-    } finally {
-      setLoading(false)
+      return new Set()
     }
-  }, [deletedIds])
+  }, [AUTO_CREATE_SUPPRESS_KEY])
+
+  const persistSuppressedAutoCreateDates = useCallback((dates) => {
+    try {
+      sessionStorage.setItem(AUTO_CREATE_SUPPRESS_KEY, JSON.stringify([...dates]))
+    } catch (err) {
+      // Ignore storage errors
+    }
+  }, [AUTO_CREATE_SUPPRESS_KEY])
+
+  const suppressAutoCreateForDate = useCallback((date) => {
+    if (!date) return
+    const next = new Set(suppressedAutoCreateDatesRef.current)
+    next.add(date)
+    suppressedAutoCreateDatesRef.current = next
+    persistSuppressedAutoCreateDates(next)
+  }, [persistSuppressedAutoCreateDates])
+
+  const clearAutoCreateSuppression = useCallback((date) => {
+    if (!date) return
+    const next = new Set(suppressedAutoCreateDatesRef.current)
+    if (!next.has(date)) return
+    next.delete(date)
+    suppressedAutoCreateDatesRef.current = next
+    persistSuppressedAutoCreateDates(next)
+  }, [persistSuppressedAutoCreateDates])
 
   useEffect(() => {
-    loadAttivita()
-  }, [loadAttivita])
+    suppressedAutoCreateDatesRef.current = loadSuppressedAutoCreateDates()
+  }, [loadSuppressedAutoCreateDates])
+
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
+
+  const loadAttivita = useCallback(async (filters = {}, forceReset = false) => {
+    try {
+      isLoadingRef.current = true
+      setLoading(true)
+      setError(null)
+      // Se forceReset è true, forza refresh dal server (evita cache browser)
+      const data = await api.getAttivita(filters, forceReset)
+      
+      // IMPORTANTE: Verifica che il componente sia ancora montato prima di aggiornare lo stato
+      if (!isMountedRef.current) {
+        return
+      }
+      
+      const formatted = data.map(normalizeAttivitaFromApi)
+      
+      // IMPORTANTE: I dati dal server sono già la fonte di verità
+      // Non usiamo deletedIds per filtrare i dati dal server perché se il server
+      // ha eliminato il record, non sarà nei dati. deletedIds serve solo per
+      // ottimistiche update locali prima che il server confermi.
+      
+      // Rimuovi duplicati e filtra eventuali record temporanei
+      const unique = dedupeAttivita(formatted, new Set())
+      
+      // Sempre resetta con i dati dal server per garantire sincronizzazione
+      // Questo assicura che quando navighi tra home e rimborsi, i dati siano sempre aggiornati
+      setLocalAttivita(unique) // Usa sempre setLocalAttivita per aggiornare lo stato locale
+      hasLoadedFromServerRef.current = true // Marca che abbiamo caricato dal server
+      
+      // Pulisci deletedIds perché i dati dal server sono la fonte di verità
+      setDeletedIds(new Set())
+    } catch (err) {
+      console.error('Errore caricamento attività:', err)
+      if (isMountedRef.current) {
+        setError('Errore nel caricamento delle attività. Verifica che il server sia avviato.')
+      }
+    } finally {
+      if (isMountedRef.current) {
+        isLoadingRef.current = false
+        setLoading(false)
+      }
+    }
+  }, [])
+
+  // Quando dataVersion cambia (notifica di refresh globale dal Context), ricarica sempre dal server
+  // Non fidarti dei dati nel Context perché potrebbero essere vecchi
+  useEffect(() => {
+    if (dataVersion > lastDataVersionRef.current) {
+      lastDataVersionRef.current = dataVersion
+      // Ricarica sempre dal server quando dataVersion cambia per assicurarsi che i dati siano freschi
+      // Solo se il componente è già montato e ha caricato i dati iniziali
+      if (hasLoadedFromServerRef.current) {
+        loadAttivita({}, true).catch(err => {
+          console.error('Errore refresh attività:', err)
+        })
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataVersion])
+  
+  // IMPORTANTE: Carica SEMPRE dal server quando il componente si monta
+  // Questo garantisce che le eliminazioni siano permanenti quando si naviga via e si torna
+  useEffect(() => {
+    // Quando il componente si monta (ogni volta che si naviga verso questa vista),
+    // carica SEMPRE i dati freschi dal server per assicurarsi che siano sincronizzati
+    // Questo risolve il problema delle righe eliminate che riappaiono quando si naviga via e si ritorna
+    hasLoadedFromServerRef.current = false // Reset del flag
+    setLocalAttivita([]) // Reset dei dati locali per forzare il caricamento dal server
+    
+    // Forza il caricamento dal server con un timestamp per evitare cache
+    loadAttivita({}, true).catch(err => {
+      console.error('Errore caricamento iniziale attività:', err)
+    })
+    
+    // Cleanup: quando il componente si smonta, resetta i flag
+    return () => {
+      hasLoadedFromServerRef.current = false
+    }
+  }, []) // Esegui SOLO al mount, non quando loadAttivita cambia
+
 
   useEffect(() => {
     setRimborsoKm(user?.rimborso_km ?? 0)
   }, [user])
 
+  // IMPORTANTE: Questo useEffect carica i dati quando cambiano i filtri
+  // Ma solo se il componente è già stato montato e ha caricato i dati iniziali
   useEffect(() => {
+    // Non caricare se non abbiamo ancora caricato i dati iniziali o se stiamo ancora caricando
+    if (!hasLoadedFromServerRef.current || isLoadingRef.current) {
+      return
+    }
+    
+    // Carica i dati filtrati dal server
     if (expanded) {
       const filters = buildServerFilters(filterType, customStartDate, customEndDate)
-      loadAttivita(filters)
+      loadAttivita(filters, true).catch(err => {
+        console.error('Errore caricamento filtrato attività:', err)
+      })
     } else {
-      loadAttivita()
+      loadAttivita({}, true).catch(err => {
+        console.error('Errore caricamento attività:', err)
+      })
     }
-  }, [expanded, filterType, customStartDate, customEndDate, loadAttivita])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expanded, filterType, customStartDate, customEndDate])
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -84,18 +230,29 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
   }, [])
 
   useEffect(() => {
-    if (loading) return
+    // Non eseguire se stiamo ancora caricando o se non abbiamo ancora caricato i dati iniziali
+    if (loading || !hasLoadedFromServerRef.current) return
 
     const today = getIsoDate()
-    if (lastCreatedDateRef.current === today) return
-    if (!isWorkingDay(today)) {
+    const hasTodayRow = attivita.some(
+      (row) => row.data === today && row.id && typeof row.id === 'number' && !row.isTemporary
+    )
+
+    if (hasTodayRow) {
+      clearAutoCreateSuppression(today)
       lastCreatedDateRef.current = today
       return
     }
 
-    const hasTodayRow = attivita.some(
-      (row) => row.data === today && row.id && typeof row.id === 'number' && !row.isTemporary
-    )
+    if (lastCreatedDateRef.current === today) return
+    if (suppressedAutoCreateDatesRef.current.has(today)) {
+      lastCreatedDateRef.current = today
+      return
+    }
+    if (!isWorkingDay(today)) {
+      lastCreatedDateRef.current = today
+      return
+    }
 
     if (!hasTodayRow) {
       lastCreatedDateRef.current = today
@@ -108,6 +265,9 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
         indennita: 0
       })
         .then((result) => {
+          // Verifica che il componente sia ancora montato
+          if (!isMountedRef.current) return
+          
           const newRow = {
             id: result.id,
             data: today,
@@ -127,12 +287,15 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
         })
         .catch((err) => {
           console.error('Errore creazione riga oggi:', err)
+          if (err.details) {
+            console.error('Dettagli validazione:', err.details)
+          }
           lastCreatedDateRef.current = null
         })
     } else {
       lastCreatedDateRef.current = today
     }
-  }, [loading, attivita])
+  }, [loading, attivita, clearAutoCreateSuppression])
 
   const saveRow = useCallback(async (row) => {
     if (saving[row.id]) return
@@ -157,6 +320,7 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
         setAttivita((prev) => prev.map((r) => (r === row ? { ...r, id: result.id } : r)))
         toast?.showSuccess('Rimborso salvato con successo')
       }
+      notifyAttivitaChanged?.()
     } catch (err) {
       console.error('Errore salvataggio attività:', err)
       const errorMsg = 'Errore nel salvataggio: ' + (err.message || 'Errore sconosciuto')
@@ -169,7 +333,7 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
         return next
       })
     }
-  }, [saving, toast])
+  }, [saving, toast, notifyAttivitaChanged])
 
   const { scheduleSave } = useDebouncedRowSave(saveRow, 500)
 
@@ -225,6 +389,7 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
           next.add(tempDate)
           return next
         })
+        suppressAutoCreateForDate(tempDate)
       }
       return
     }
@@ -238,6 +403,8 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
     setDeleteConfirm({ show: false, id: null, isTemporary: false })
     setDeleting(true)
 
+    // Ottimisticamente nascondi dall'UI usando deletedIds
+    // Non modifichiamo attivita direttamente perché sarà sostituito dal reload dal server
     setDeletedIds((prev) => {
       if (prev.has(idToDelete)) return prev
       const next = new Set(prev)
@@ -245,24 +412,67 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
       return next
     })
 
-    setAttivita((prev) => prev.filter((row) => Number(row?.id) !== idToDelete))
-
     try {
       const loadingToastId = toast?.showLoading('Eliminazione in corso...', 'Eliminazione rimborso')
+      const deletedRow = attivita.find((row) => {
+        const rowId = typeof row.id === 'string' ? parseInt(row.id, 10) : Number(row.id)
+        return !isNaN(rowId) && rowId === idToDelete
+      })
+      const deletedDate = deletedRow?.data
+      const today = getIsoDate()
+      
+      // IMPORTANTE: Elimina dal database PRIMA di tutto
       await api.deleteAttivita(idToDelete)
+      
+      // Rimuovi immediatamente dall'array locale per feedback immediato
+      setAttivita((prev) => prev.filter((row) => {
+        const rowId = typeof row.id === 'string' ? parseInt(row.id, 10) : Number(row.id)
+        return !isNaN(rowId) && rowId !== idToDelete
+      }))
+      
+      // Aggiorna il toast subito dopo l'eliminazione riuscita
       if (loadingToastId) {
         toast?.updateToast(loadingToastId, { type: 'success', title: 'Completato', message: 'Rimborso eliminato con successo', duration: 3000 })
       } else {
         toast?.showSuccess('Rimborso eliminato con successo')
       }
+      
+      // IMPORTANTE: Dopo l'eliminazione, ricarica SEMPRE dal server per assicurarsi che i dati siano sincronizzati
+      // Questo garantisce che l'eliminazione sia permanente
+      // Aspetta un momento per assicurarsi che il database abbia completato l'eliminazione
+      await new Promise(resolve => setTimeout(resolve, 100))
+      await loadAttivita({}, true)
+
+      if (deletedDate) {
+        suppressAutoCreateForDate(deletedDate)
+      }
+      
+      // Pulisci deletedIds perché il record è stato eliminato con successo
+      setDeletedIds((prev) => {
+        const next = new Set(prev)
+        next.delete(idToDelete)
+        return next
+      })
+      
+      // FORZA il Context a ricaricare per evitare che altri componenti abbiano dati vecchi
+      // Ma non aggiorniamo il Context direttamente perché potremmo avere dati vecchi
+      // Il Context verrà aggiornato quando i componenti si rimonteranno
+      notifyAttivitaChanged?.()
     } catch (err) {
       console.error('Errore eliminazione API:', err)
+      // In caso di errore, ricarica per ottenere lo stato corretto dal server
+      await loadAttivita({}, true)
+      // Rimuovi da deletedIds per permettere che il record appaia di nuovo
+      setDeletedIds((prev) => {
+        const next = new Set(prev)
+        next.delete(idToDelete)
+        return next
+      })
       const errorMsg = 'Errore nell\'eliminazione: ' + (err.message || 'Errore sconosciuto')
       setError(errorMsg)
       toast?.showError(errorMsg, 'Errore eliminazione')
     } finally {
       setDeleting(false)
-      await loadAttivita()
     }
   }
 
@@ -296,6 +506,7 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
         indennita: false
       }
 
+      // Aggiorna localmente per feedback immediato
       setAttivita((prev) => {
         const dateIndex = prev.findIndex((row) => row.data === date)
         if (dateIndex >= 0) {
@@ -303,8 +514,18 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
         }
         return [newRow, ...prev]
       })
+      clearAutoCreateSuppression(date)
+      notifyAttivitaChanged?.()
+      
+      // Ricarica dal server per assicurarsi che i dati siano sincronizzati
+      // Questo è importante quando si naviga tra le viste
+      setTimeout(() => {
+        loadAttivita({}, true).catch(err => {
+          console.error('Errore refresh dopo creazione:', err)
+        })
+      }, 100)
     } catch (err) {
-      console.error('Errore creazione attivitÃ :', err)
+      console.error('Errore creazione attività:', err)
       setError('Errore nella creazione: ' + (err.message || 'Errore sconosciuto'))
     }
   }
@@ -422,11 +643,23 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
   const clearEditingRow = () => {
     if (clearEditingTimeoutRef.current) {
       clearTimeout(clearEditingTimeoutRef.current)
+      clearEditingTimeoutRef.current = null
     }
     clearEditingTimeoutRef.current = setTimeout(() => {
       setEditingRowId(null)
+      clearEditingTimeoutRef.current = null
     }, 300)
   }
+  
+  // Cleanup timeout al unmount
+  useEffect(() => {
+    return () => {
+      if (clearEditingTimeoutRef.current) {
+        clearTimeout(clearEditingTimeoutRef.current)
+        clearEditingTimeoutRef.current = null
+      }
+    }
+  }, [])
 
   useEffect(() => {
     if (!portalAutocomplete?.anchorEl) return
@@ -644,6 +877,10 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
       return rows
     }
 
+    if (suppressedAutoCreateDatesRef.current.has(date)) {
+      return []
+    }
+
     if (hiddenTempDates.has(date)) {
       return []
     }
@@ -687,7 +924,9 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
       }
 
       const result = await api.createAttivita(attivitaData)
+      clearAutoCreateSuppression(row.data)
       await loadAttivita()
+      notifyAttivitaChanged?.()
       return result?.id || true
     } catch (err) {
       console.error('Errore creazione riga:', err)
@@ -1084,4 +1323,3 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false }) {
 }
 
 export default TabellaAttivita
-

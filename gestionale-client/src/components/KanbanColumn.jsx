@@ -3,7 +3,6 @@ import KanbanCard from './KanbanCard'
 
 function KanbanColumn({ colonna, card, onCardClick, onMoveCard }) {
   const [dragOver, setDragOver] = useState(false)
-  const [draggedCardId, setDraggedCardId] = useState(null)
   
   const cardInColonna = card.filter(c => c.colonna_id === colonna.id)
 
@@ -172,9 +171,6 @@ function KanbanColumn({ colonna, card, onCardClick, onMoveCard }) {
               key={cardItem.id}
               card={cardItem}
               onCardClick={onCardClick}
-              onMove={onMoveCard}
-              colonne={[]}
-              isDraggingOver={dragOver && draggedCardId === cardItem.id}
             />
           ))
         )}
@@ -184,7 +180,6 @@ function KanbanColumn({ colonna, card, onCardClick, onMoveCard }) {
 }
 
 export default KanbanColumn
-
 
 
 

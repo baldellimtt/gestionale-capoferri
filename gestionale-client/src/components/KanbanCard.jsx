@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-function KanbanCard({ card, onCardClick, onMove, colonne, isDraggingOver = false }) {
+function KanbanCard({ card, onCardClick }) {
   const [isDragging, setIsDragging] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
 
@@ -89,9 +89,7 @@ function KanbanCard({ card, onCardClick, onMove, colonne, isDraggingOver = false
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       style={{
-        background: isDraggingOver 
-          ? `linear-gradient(135deg, ${prioritaColor}15 0%, var(--bg-1) 100%)`
-          : 'var(--bg-1)',
+        background: 'var(--bg-1)',
         border: `2px solid ${prioritaColor}`,
         borderRadius: 'var(--radius-sm)',
         padding: '0.75rem',
@@ -207,5 +205,4 @@ function KanbanCard({ card, onCardClick, onMove, colonne, isDraggingOver = false
 }
 
 export default KanbanCard
-
 

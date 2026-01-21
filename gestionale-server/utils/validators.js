@@ -16,76 +16,35 @@ class Validators {
   }
 
   /**
-   * Valida email formato base
+   * Valida email con controllo di lunghezza
    */
   static isValidEmail(email) {
     if (!email) return false;
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email) && email.length <= 255;
+    return String(email).trim().length <= 255;
   }
 
   /**
-   * Valida telefono italiano (formato flessibile)
+   * Valida telefono con controllo di lunghezza
    */
   static isValidPhone(phone) {
     if (!phone) return false;
-    // Rimuove spazi, trattini, parentesi
-    const cleaned = phone.replace(/[\s\-\(\)]/g, '');
-    // Accetta numeri con o senza prefisso +39
-    return /^(\+39)?[0-9]{8,12}$/.test(cleaned);
+    return String(phone).trim().length <= 25;
   }
 
   /**
-   * Valida Partita IVA italiana
+   * Valida Partita IVA con controllo di lunghezza
    */
   static isValidPartitaIva(piva) {
     if (!piva) return false;
-    const cleaned = piva.replace(/\s/g, '');
-    // Partita IVA italiana: 11 cifre
-    if (!/^\d{11}$/.test(cleaned)) return false;
-    
-    // Algoritmo di validazione Luhn-like per P.IVA
-    let sum = 0;
-    for (let i = 0; i < 10; i++) {
-      let digit = parseInt(cleaned[i]);
-      if (i % 2 === 1) {
-        digit *= 2;
-        if (digit > 9) digit -= 9;
-      }
-      sum += digit;
-    }
-    const checkDigit = (10 - (sum % 10)) % 10;
-    return checkDigit === parseInt(cleaned[10]);
+    return piva.replace(/\s/g, '').length <= 20;
   }
 
   /**
-   * Valida Codice Fiscale italiano (formato base)
-   */
-  static isValidCodiceFiscale(cf) {
-    if (!cf) return false;
-    const cleaned = cf.replace(/\s/g, '').toUpperCase();
-    // CF: 16 caratteri alfanumerici
-    return /^[A-Z0-9]{16}$/.test(cleaned);
-  }
-
-  /**
-   * Valida CAP italiano (5 cifre)
+   * Valida CAP con controllo di lunghezza
    */
   static isValidCap(cap) {
     if (!cap) return false;
-    const cleaned = cap.replace(/\s/g, '');
-    return /^\d{5}$/.test(cleaned);
-  }
-
-  /**
-   * Valida data formato YYYY-MM-DD
-   */
-  static isValidDate(dateString) {
-    if (!dateString) return false;
-    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-    if (!dateRegex.test(dateString)) return false;
-    const date = new Date(dateString);
-    return date instanceof Date && !isNaN(date);
+    return cap.replace(/\s/g, '').length <= 10;
   }
 
   /**
@@ -95,15 +54,6 @@ class Validators {
     if (id === null || id === undefined) return false;
     const numId = parseInt(id, 10);
     return !isNaN(numId) && numId > 0 && Number.isFinite(numId);
-  }
-
-  /**
-   * Valida numero positivo
-   */
-  static isValidPositiveNumber(value, allowZero = true) {
-    if (value === null || value === undefined) return false;
-    const num = parseFloat(value);
-    return !isNaN(num) && Number.isFinite(num) && (allowZero ? num >= 0 : num > 0);
   }
 
   /**

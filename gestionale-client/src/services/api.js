@@ -612,7 +612,7 @@ class ApiService {
   }
 
   // Attività API
-  async getAttivita(filters = {}) {
+  async getAttivita(filters = {}, forceRefresh = false) {
     const params = new URLSearchParams();
     if (filters.filter) params.append('filter', filters.filter);
     if (filters.month) params.append('month', filters.month);
@@ -620,6 +620,11 @@ class ApiService {
     if (filters.year) params.append('year', filters.year);
     if (filters.startDate) params.append('startDate', filters.startDate);
     if (filters.endDate) params.append('endDate', filters.endDate);
+    
+    // Aggiungi timestamp per evitare cache del browser quando forceRefresh è true
+    if (forceRefresh) {
+      params.append('_t', Date.now().toString());
+    }
 
     const query = params.toString();
     const endpoint = query ? `/attivita?${query}` : '/attivita';

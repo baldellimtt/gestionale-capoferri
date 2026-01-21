@@ -47,6 +47,7 @@ class CommesseController {
   }
 
   initStatements() {
+    // Query base senza LIMIT per retrocompatibilità
     this.stmt = {
       getAll: this.db.prepare('SELECT * FROM commesse ORDER BY data_inizio DESC, id DESC'),
       getByCliente: this.db.prepare('SELECT * FROM commesse WHERE cliente_id = ? ORDER BY data_inizio DESC, id DESC'),
@@ -61,6 +62,36 @@ class CommesseController {
         SELECT * FROM commesse
         WHERE cliente_id = ? AND stato = ?
         ORDER BY data_inizio DESC, id DESC
+      `),
+      // Query paginate con LIMIT/OFFSET
+      getAllPaginated: this.db.prepare('SELECT * FROM commesse ORDER BY data_inizio DESC, id DESC LIMIT ? OFFSET ?'),
+      getByClientePaginated: this.db.prepare('SELECT * FROM commesse WHERE cliente_id = ? ORDER BY data_inizio DESC, id DESC LIMIT ? OFFSET ?'),
+      getByStatoPaginated: this.db.prepare('SELECT * FROM commesse WHERE stato = ? ORDER BY data_inizio DESC, id DESC LIMIT ? OFFSET ?'),
+      getByStatoPagamentiPaginated: this.db.prepare('SELECT * FROM commesse WHERE stato_pagamenti = ? ORDER BY data_inizio DESC, id DESC LIMIT ? OFFSET ?'),
+      getByClienteStatoPagamentiPaginated: this.db.prepare(`
+        SELECT * FROM commesse
+        WHERE cliente_id = ? AND stato_pagamenti = ?
+        ORDER BY data_inizio DESC, id DESC
+        LIMIT ? OFFSET ?
+      `),
+      getByClienteStatoPaginated: this.db.prepare(`
+        SELECT * FROM commesse
+        WHERE cliente_id = ? AND stato = ?
+        ORDER BY data_inizio DESC, id DESC
+        LIMIT ? OFFSET ?
+      `),
+      // Count queries
+      getCount: this.db.prepare('SELECT COUNT(*) as total FROM commesse'),
+      getCountByCliente: this.db.prepare('SELECT COUNT(*) as total FROM commesse WHERE cliente_id = ?'),
+      getCountByStato: this.db.prepare('SELECT COUNT(*) as total FROM commesse WHERE stato = ?'),
+      getCountByStatoPagamenti: this.db.prepare('SELECT COUNT(*) as total FROM commesse WHERE stato_pagamenti = ?'),
+      getCountByClienteStatoPagamenti: this.db.prepare(`
+        SELECT COUNT(*) as total FROM commesse
+        WHERE cliente_id = ? AND stato_pagamenti = ?
+      `),
+      getCountByClienteStato: this.db.prepare(`
+        SELECT COUNT(*) as total FROM commesse
+        WHERE cliente_id = ? AND stato = ?
       `),
       getById: this.db.prepare('SELECT * FROM commesse WHERE id = ?'),
       create: this.db.prepare(`
@@ -183,37 +214,54 @@ class CommesseController {
       let commesse;
       let total;
 
-      // Ottieni tutti i risultati filtrati
+      // Usa query paginate e count separati per performance
+      const usePagination = !!(req.query.page || req.query.limit);
+
       if (clienteId && statoPagamenti) {
-        commesse = this.stmt.getByClienteStatoPagamenti.all(clienteId, statoPagamenti);
+        total = this.stmt.getCountByClienteStatoPagamenti.get(clienteId, statoPagamenti).total;
+        commesse = usePagination 
+          ? this.stmt.getByClienteStatoPagamentiPaginated.all(clienteId, statoPagamenti, limit, offset)
+          : this.stmt.getByClienteStatoPagamenti.all(clienteId, statoPagamenti);
       } else if (clienteId && stato) {
-        commesse = this.stmt.getByClienteStato.all(clienteId, stato);
+        total = this.stmt.getCountByClienteStato.get(clienteId, stato).total;
+        commesse = usePagination
+          ? this.stmt.getByClienteStatoPaginated.all(clienteId, stato, limit, offset)
+          : this.stmt.getByClienteStato.all(clienteId, stato);
       } else if (statoPagamenti) {
-        commesse = this.stmt.getByStatoPagamenti.all(statoPagamenti);
+        total = this.stmt.getCountByStatoPagamenti.get(statoPagamenti).total;
+        commesse = usePagination
+          ? this.stmt.getByStatoPagamentiPaginated.all(statoPagamenti, limit, offset)
+          : this.stmt.getByStatoPagamenti.all(statoPagamenti);
       } else if (clienteId) {
-        commesse = this.stmt.getByCliente.all(clienteId);
+        total = this.stmt.getCountByCliente.get(clienteId).total;
+        commesse = usePagination
+          ? this.stmt.getByClientePaginated.all(clienteId, limit, offset)
+          : this.stmt.getByCliente.all(clienteId);
       } else if (stato) {
-        commesse = this.stmt.getByStato.all(stato);
+        total = this.stmt.getCountByStato.get(stato).total;
+        commesse = usePagination
+          ? this.stmt.getByStatoPaginated.all(stato, limit, offset)
+          : this.stmt.getByStato.all(stato);
       } else {
-        commesse = this.stmt.getAll.all();
+        total = this.stmt.getCount.get().total;
+        commesse = usePagination
+          ? this.stmt.getAllPaginated.all(limit, offset)
+          : this.stmt.getAll.all();
       }
 
-      total = commesse.length;
-      // Applica paginazione manualmente
-      const paginatedCommesse = commesse.slice(offset, offset + limit);
-
-      Logger.info('GET /commesse', { count: paginatedCommesse.length, total, page, limit, clienteId, stato, statoPagamenti });
+      Logger.info('GET /commesse', { count: commesse.length, total, page, limit, clienteId, stato, statoPagamenti });
       
       // Se ci sono parametri di paginazione, restituisci risposta paginata
-      if (req.query.page || req.query.limit) {
-        res.json(Pagination.createResponse(paginatedCommesse, total, page, limit));
+      if (usePagination) {
+        res.json(Pagination.createResponse(commesse, total, page, limit));
       } else {
         // Per retrocompatibilità, restituisci array semplice
         res.json(commesse);
       }
     } catch (error) {
       Logger.error('Errore GET /commesse', error);
-      res.status(500).json({ error: error.message });
+      const isProduction = process.env.NODE_ENV === 'production';
+      res.status(500).json({ error: isProduction ? 'Errore interno del server' : error.message });
     }
   }
 
@@ -230,7 +278,7 @@ class CommesseController {
       res.json(commessa);
     } catch (error) {
       Logger.error(`Errore GET /commesse/${req.params.id}`, error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 
@@ -263,31 +311,36 @@ class CommesseController {
         allegati
       } = payload;
 
-      const result = this.stmt.create.run(
-        titolo.trim(),
-        cliente_id || clienteId || null,
-        cliente_nome || clienteNome || null,
-        stato || 'In corso',
-        sotto_stato || null,
-        stato_pagamenti || 'Non iniziato',
-        preventivo ? 1 : 0,
-        this.parseNumber(importo_preventivo, 0),
-        this.parseNumber(importo_totale, 0),
-        this.parseNumber(importo_pagato, 0),
-        this.parseIntValue(avanzamento_lavori, 0),
-        responsabile || null,
-        data_inizio || null,
-        data_fine || null,
-        note || null,
-        allegati || null
-      );
+      // Usa transazione per garantire atomicità
+      const transaction = this.db.transaction(() => {
+        const result = this.stmt.create.run(
+          titolo.trim(),
+          cliente_id || clienteId || null,
+          cliente_nome || clienteNome || null,
+          stato || 'In corso',
+          sotto_stato || null,
+          stato_pagamenti || 'Non iniziato',
+          preventivo ? 1 : 0,
+          this.parseNumber(importo_preventivo, 0),
+          this.parseNumber(importo_totale, 0),
+          this.parseNumber(importo_pagato, 0),
+          this.parseIntValue(avanzamento_lavori, 0),
+          responsabile || null,
+          data_inizio || null,
+          data_fine || null,
+          note || null,
+          allegati || null
+        );
+        return result.lastInsertRowid;
+      });
 
-      Logger.info('POST /commesse', { id: result.lastInsertRowid });
-      const created = this.stmt.getById.get(result.lastInsertRowid);
+      const commessaId = transaction();
+      Logger.info('POST /commesse', { id: commessaId });
+      const created = this.stmt.getById.get(commessaId);
       res.status(201).json(created);
     } catch (error) {
       Logger.error('Errore POST /commesse', error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 
@@ -351,7 +404,7 @@ class CommesseController {
       res.json(updated);
     } catch (error) {
       Logger.error(`Errore PUT /commesse/${req.params.id}`, error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 
@@ -363,29 +416,56 @@ class CommesseController {
         return res.status(400).json({ error: 'ID non valido' });
       }
 
-      const allegati = this.stmt.getAllegati.all(numericId);
-      allegati.forEach((allegato) => {
-        const absolutePath = path.join(__dirname, '..', allegato.file_path || '');
-        if (fs.existsSync(absolutePath)) {
-          fs.unlinkSync(absolutePath);
+      // Usa transazione per garantire atomicità dell'eliminazione
+      const transaction = this.db.transaction(() => {
+        // Verifica che la commessa esista
+        const existing = this.stmt.getById.get(numericId);
+        if (!existing) {
+          throw ErrorHandler.createError('Commessa non trovata', 404);
         }
+
+        // Elimina allegati dal database (i file vengono eliminati dopo per sicurezza)
+        const allegati = this.stmt.getAllegati.all(numericId);
+        
+        // Elimina commessa dal database
+        const result = this.stmt.delete.run(numericId);
+        if (result.changes === 0) {
+          throw ErrorHandler.createError('Commessa non trovata', 404);
+        }
+
+        return allegati;
       });
 
-      const commessaDir = path.join(uploadsRoot, String(numericId));
-      if (fs.existsSync(commessaDir)) {
-        fs.rmSync(commessaDir, { recursive: true, force: true });
-      }
+      // Esegui transazione
+      const allegati = transaction();
 
-      const result = this.stmt.delete.run(numericId);
-      if (result.changes === 0) {
-        return res.status(404).json({ error: 'Commessa non trovata' });
+      // Dopo la transazione, elimina i file fisici
+      // Se l'eliminazione dei file fallisce, la commessa è già stata eliminata dal DB
+      try {
+        allegati.forEach((allegato) => {
+          const absolutePath = path.join(__dirname, '..', allegato.file_path || '');
+          if (fs.existsSync(absolutePath)) {
+            fs.unlinkSync(absolutePath);
+          }
+        });
+
+        const commessaDir = path.join(uploadsRoot, String(numericId));
+        if (fs.existsSync(commessaDir)) {
+          fs.rmSync(commessaDir, { recursive: true, force: true });
+        }
+      } catch (fileError) {
+        Logger.warn(`Errore eliminazione file per commessa ${numericId}`, fileError);
+        // Non blocchiamo la risposta anche se l'eliminazione file fallisce
       }
 
       Logger.info(`DELETE /commesse/${numericId}`);
       res.json({ success: true });
     } catch (error) {
+      if (error.statusCode) {
+        return res.status(error.statusCode).json({ error: error.message });
+      }
       Logger.error(`Errore DELETE /commesse/${req.params.id}`, error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 
@@ -396,7 +476,7 @@ class CommesseController {
       res.json(allegati);
     } catch (error) {
       Logger.error('Errore GET /commesse/allegati', error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 
@@ -450,7 +530,7 @@ class CommesseController {
         return res.status(error.statusCode).json({ error: error.message });
       }
       Logger.error('Errore POST /commesse/allegati', error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 
@@ -471,7 +551,7 @@ class CommesseController {
       res.json({ success: true });
     } catch (error) {
       Logger.error('Errore DELETE /commesse/allegati', error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
 }
@@ -481,7 +561,7 @@ function createRouter(db) {
 
   router.get('/:id/allegati', validateRequest(ValidationSchemas.id), (req, res) => controller.getAllegati(req, res));
   router.post('/:id/allegati', validateRequest(ValidationSchemas.id), upload.single('file'), (req, res) => controller.uploadAllegato(req, res));
-  router.delete('/allegati/:allegatoId', validateRequest(ValidationSchemas.id), (req, res) => controller.deleteAllegato(req, res));
+  router.delete('/allegati/:allegatoId', validateRequest(ValidationSchemas.idParam('allegatoId')), (req, res) => controller.deleteAllegato(req, res));
   router.get('/:id', validateRequest(ValidationSchemas.id), (req, res) => controller.getById(req, res));
   router.get('/', validateRequest(ValidationSchemas.pagination), (req, res) => controller.getAll(req, res));
   router.post('/', validateRequest(ValidationSchemas.commessa.create), (req, res) => controller.create(req, res));

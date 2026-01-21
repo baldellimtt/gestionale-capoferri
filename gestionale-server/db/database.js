@@ -2,6 +2,7 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
 const migrations = require('./migrations');
+const Logger = require('../utils/loggerWinston');
 
 class DatabaseManager {
   constructor(dbPath) {
@@ -26,7 +27,13 @@ class DatabaseManager {
     // Esegui migrations
     migrations.run(this.db);
     
-    console.log('[DB] Database inizializzato:', this.dbPath);
+    // Configurazioni aggiuntive per performance e sicurezza
+    this.db.pragma('synchronous = NORMAL');
+    this.db.pragma('cache_size = -64000'); // 64MB cache
+    this.db.pragma('temp_store = MEMORY');
+    this.db.pragma('mmap_size = 268435456'); // 256MB memory-mapped I/O
+    
+    Logger.info('Database inizializzato', { path: this.dbPath });
   }
 
   getDb() {
@@ -34,17 +41,20 @@ class DatabaseManager {
   }
 
   close() {
-    this.db.close();
-    console.log('[DB] Connessione chiusa');
+    if (this.db && this.db.open) {
+      this.db.close();
+      Logger.info('Connessione database chiusa');
+    }
   }
 
   backup(backupPath) {
-    this.db.backup(backupPath)
+    return this.db.backup(backupPath)
       .then(() => {
-        console.log('[DB] Backup completato:', backupPath);
+        Logger.info('Backup database completato', { path: backupPath });
+        return backupPath;
       })
       .catch((err) => {
-        console.error('[DB] Errore backup:', err);
+        Logger.error('Errore backup database', { path: backupPath, error: err.message });
         throw err;
       });
   }

@@ -12,6 +12,7 @@
     "backup:list": "node services/backup.js --list",
     "backup:restore": "node services/backup.js --restore",
     "reset:attivita": "node scripts/reset-attivita.js",
+    "reset:password": "node scripts/reset-password.js",
     "seed:kanban": "node scripts/seed-kanban.js"
   },
   "keywords": [],

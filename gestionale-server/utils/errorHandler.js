@@ -66,6 +66,17 @@ class ErrorHandler {
   }
 
   /**
+   * Sanitizza messaggio errore per non esporre informazioni sensibili
+   */
+  static sanitizeErrorMessage(error) {
+    const isProduction = process.env.NODE_ENV === 'production';
+    if (isProduction && (error.statusCode === 500 || error.status === 500)) {
+      return 'Errore interno del server';
+    }
+    return error.message || 'Errore interno del server';
+  }
+
+  /**
    * Wrapper per async route handlers
    */
   static asyncHandler(fn) {

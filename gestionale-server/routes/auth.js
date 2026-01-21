@@ -27,13 +27,32 @@ function createRouter(db) {
     try {
       const { username, password } = req.body;
 
+      Logger.info('Tentativo di login', { username, hasPassword: !!password });
+
       const user = getUserStmt.get(username);
       if (!user) {
+        Logger.warn('Login fallito: utente non trovato', { username });
         return res.status(401).json({ error: 'Credenziali non valide' });
       }
 
-      const valid = verifyPassword(password, user.password_salt, user.password_hash);
+      // Verifica che salt e hash esistano
+      if (!user.password_salt || !user.password_hash) {
+        Logger.error('Login fallito: password non configurata', { username });
+        return res.status(401).json({ error: 'Credenziali non valide' });
+      }
+
+      // IMPORTANTE: Rimuovi spazi bianchi iniziali/finali dalla password per evitare problemi
+      // Questo risolve il problema quando si copia/incolla la password con spazi
+      const trimmedPassword = password.trim();
+      
+      const valid = verifyPassword(trimmedPassword, user.password_salt, user.password_hash);
       if (!valid) {
+        Logger.warn('Login fallito: password non valida', { 
+          username,
+          passwordLength: trimmedPassword.length,
+          hasSalt: !!user.password_salt,
+          hasHash: !!user.password_hash
+        });
         return res.status(401).json({ error: 'Credenziali non valide' });
       }
 

@@ -20,11 +20,9 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
   const [error, setError] = useState(null)
   const [showScadenzaForm, setShowScadenzaForm] = useState(false)
   const [clienteSearch, setClienteSearch] = useState('')
-  const [showAutocomplete, setShowAutocomplete] = useState(false)
   const [portalAutocomplete, setPortalAutocomplete] = useState(null)
   const autocompleteRef = useRef(null)
   const [commessaSearch, setCommessaSearch] = useState('')
-  const [showCommessaAutocomplete, setShowCommessaAutocomplete] = useState(false)
   const [portalCommessaAutocomplete, setPortalCommessaAutocomplete] = useState(null)
   const commessaAutocompleteRef = useRef(null)
   const [scadenzaForm, setScadenzaForm] = useState({
@@ -83,9 +81,7 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (!e.target.closest('.autocomplete-container') && !e.target.closest('.autocomplete-portal')) {
-        setShowAutocomplete(false)
         setPortalAutocomplete(null)
-        setShowCommessaAutocomplete(false)
         setPortalCommessaAutocomplete(null)
       }
     }
@@ -173,27 +169,54 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
 
   // Gestisci selezione cliente
   const handleClienteSelect = (cliente) => {
-    setFormData(prev => ({
-      ...prev,
-      cliente_id: cliente.id,
-      cliente_nome: cliente.denominazione
-    }))
+    setFormData(prev => {
+      const newClienteId = cliente.id
+      // Se la commessa selezionata non appartiene al nuovo cliente, resettala
+      const currentCommessa = commesse.find(c => c.id === prev.commessa_id)
+      const shouldResetCommessa = currentCommessa && currentCommessa.cliente_id !== newClienteId
+      
+      // Se la commessa deve essere resettata, resetta anche il campo di ricerca
+      if (shouldResetCommessa) {
+        setCommessaSearch('')
+      }
+      
+      return {
+        ...prev,
+        cliente_id: newClienteId,
+        cliente_nome: cliente.denominazione,
+        commessa_id: shouldResetCommessa ? '' : prev.commessa_id
+      }
+    })
     setClienteSearch(cliente.denominazione)
-    setShowAutocomplete(false)
     setPortalAutocomplete(null)
   }
 
   // Filtra commesse per autocompletamento
   const getFilteredCommesse = (searchTerm) => {
-    if (!searchTerm || searchTerm.trim() === '') {
-      return commesse.slice(0, 10)
+    let filtered = commesse
+    
+    // Se è selezionato un cliente, filtra solo le commesse di quel cliente
+    if (formData.cliente_id) {
+      const clienteId = typeof formData.cliente_id === 'number' 
+        ? formData.cliente_id 
+        : parseInt(formData.cliente_id, 10)
+      if (!isNaN(clienteId)) {
+        filtered = filtered.filter((commessa) => 
+          commessa.cliente_id === clienteId
+        )
+      }
     }
-    return commesse
-      .filter((commessa) => 
-        commessa.titolo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        commessa.cliente_nome?.toLowerCase().includes(searchTerm.toLowerCase())
+    
+    // Se c'è un termine di ricerca, filtra anche per quello
+    if (searchTerm && searchTerm.trim() !== '') {
+      const searchLower = searchTerm.toLowerCase()
+      filtered = filtered.filter((commessa) => 
+        commessa.titolo?.toLowerCase().includes(searchLower) ||
+        commessa.cliente_nome?.toLowerCase().includes(searchLower)
       )
-      .slice(0, 10)
+    }
+    
+    return filtered.slice(0, 10)
   }
 
   // Apri portal autocompletamento commessa
@@ -221,7 +244,6 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
       commessa_id: commessa.id
     }))
     setCommessaSearch(commessa.titolo)
-    setShowCommessaAutocomplete(false)
     setPortalCommessaAutocomplete(null)
   }
 
@@ -277,30 +299,41 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
 
       if (card?.id) {
         await onSave({ ...cardData, id: card.id })
+        // Aggiorna il toast IMMEDIATAMENTE dopo il salvataggio riuscito
+        // Non aspettare, mostra subito il toast
         if (loadingToastId) {
           toast?.updateToast(loadingToastId, { type: 'success', title: 'Completato', message: 'Card aggiornata con successo', duration: 3000 })
         } else {
           toast?.showSuccess('Card aggiornata con successo')
         }
+        // Delay più lungo per permettere al toast di essere visibile prima di chiudere la modal
+        // Il toast ha durata di 3000ms, aspettiamo almeno 800ms per essere sicuri che sia visibile
+        await new Promise(resolve => setTimeout(resolve, 800))
         // Chiudi la modal dopo il salvataggio riuscito
         onClose()
       } else {
         const created = await api.createKanbanCard(cardData)
         await onRefresh()
+        // Aggiorna il toast subito dopo la creazione riuscita
         if (loadingToastId) {
           toast?.updateToast(loadingToastId, { type: 'success', title: 'Completato', message: 'Card creata con successo', duration: 3000 })
         } else {
           toast?.showSuccess('Card creata con successo')
         }
+        // Piccolo delay per permettere al toast di essere visibile prima di chiudere la modal
+        await new Promise(resolve => setTimeout(resolve, 300))
         onClose()
       }
     } catch (err) {
       console.error('Errore salvataggio card:', err)
+      console.error('Dettagli errore:', err.details)
+      console.error('Dati inviati:', cardData)
       // Gestione errori più dettagliata
       let errorMsg = 'Errore nel salvataggio: ' + (err.message || 'Errore sconosciuto')
       if (err.status === 400) {
         errorMsg = err.message || 'Errore di validazione. Verifica i dati inseriti.'
         if (err.details && Array.isArray(err.details)) {
+          console.error('Errori di validazione:', err.details)
           errorMsg = err.details.map(d => d.message || `${d.field}: ${d.message}`).join('. ')
         }
       } else if (err.status === 401) {
@@ -624,7 +657,6 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
                       onChange={(e) => {
                         const value = e.target.value
                         setClienteSearch(value)
-                        setShowAutocomplete(true)
                         openAutocompletePortal(value, e.target)
                         // Se il valore viene cancellato, resetta anche cliente_id
                         if (value.trim() === '') {
@@ -636,12 +668,10 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
                         }
                       }}
                       onFocus={(e) => {
-                        setShowAutocomplete(true)
                         openAutocompletePortal(clienteSearch || formData.cliente_nome, e.target)
                       }}
                       onBlur={() => {
                         setTimeout(() => {
-                          setShowAutocomplete(false)
                           setPortalAutocomplete(null)
                         }, 200)
                       }}
@@ -659,7 +689,6 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
                       onChange={(e) => {
                         const value = e.target.value
                         setCommessaSearch(value)
-                        setShowCommessaAutocomplete(true)
                         openCommessaAutocompletePortal(value, e.target)
                         // Se il valore viene cancellato, resetta anche commessa_id
                         if (value.trim() === '') {
@@ -670,13 +699,11 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
                         }
                       }}
                       onFocus={(e) => {
-                        setShowCommessaAutocomplete(true)
                         const currentCommessa = commesse.find(c => c.id === formData.commessa_id)
                         openCommessaAutocompletePortal(commessaSearch || currentCommessa?.titolo || '', e.target)
                       }}
                       onBlur={() => {
                         setTimeout(() => {
-                          setShowCommessaAutocomplete(false)
                           setPortalCommessaAutocomplete(null)
                         }, 200)
                       }}
@@ -1045,4 +1072,3 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
 }
 
 export default KanbanCardDetail
-
