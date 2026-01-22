@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import api from '../services/api'
 import ConfirmDeleteModal from './ConfirmDeleteModal'
 
-const STATI_COMMESSA = ['In corso', 'In attesa di approvazione', 'Richieste integrazioni', 'Personalizzato', 'Conclusa']
+const STATI_COMMESSA = ['In corso', 'Preventivato', 'In attesa di approvazione', 'Richieste integrazioni', 'Personalizzato', 'Conclusa']
 const STATI_PAGAMENTI = ['Non iniziato', 'Parziale', 'Consuntivo con altre commesse', 'Saldo']
 const TIPI_LAVORO = [
   'Piano di sicurezza',
@@ -49,6 +49,7 @@ function Commesse({ clienti, toast }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [filters, setFilters] = useState({ clienteId: '', stato: '', sottoStato: '', statoPagamenti: '' })
+  const [yearFilter, setYearFilter] = useState('')
   const [clienteFilterInput, setClienteFilterInput] = useState('')
   const [showClienteFilterAutocomplete, setShowClienteFilterAutocomplete] = useState(false)
   const [clienteFormInput, setClienteFormInput] = useState('')
@@ -174,6 +175,17 @@ function Commesse({ clienti, toast }) {
     const parsed = Number.parseInt(value, 10)
     if (!Number.isFinite(parsed)) return 0
     return Math.max(0, Math.min(100, parsed))
+  }
+
+  const getCommessaYear = (commessa) => {
+    const raw = commessa?.data_inizio || commessa?.created_at
+    if (!raw) return ''
+    if (typeof raw === 'string' && /^\d{4}/.test(raw)) {
+      return raw.slice(0, 4)
+    }
+    const parsed = new Date(raw)
+    if (Number.isNaN(parsed.getTime())) return ''
+    return String(parsed.getFullYear())
   }
 
   const toggleTipologia = (value) => {
@@ -618,6 +630,12 @@ function Commesse({ clienti, toast }) {
 
   const filteredCommesse = useMemo(() => {
     return commesseSorted.filter((commessa) => {
+      if (yearFilter) {
+        const commessaYear = getCommessaYear(commessa)
+        if (commessaYear !== yearFilter) {
+          return false
+        }
+      }
       if (filters.sottoStato) {
         const tipologie = parseTipologie(commessa.sotto_stato)
         if (!tipologie.includes(filters.sottoStato)) {
@@ -629,7 +647,7 @@ function Commesse({ clienti, toast }) {
       }
       return true
     })
-  }, [commesseSorted, filters.sottoStato, filters.statoPagamenti])
+  }, [commesseSorted, filters.sottoStato, filters.statoPagamenti, yearFilter])
 
   const toggleConsuntivoId = (id) => {
     setConsuntivoIds((prev) => (
@@ -712,6 +730,14 @@ function Commesse({ clienti, toast }) {
       .filter((cliente) => cliente.denominazione?.toLowerCase().includes(search))
       .slice(0, 10)
   }, [clienteFormInput, clienti])
+  const availableYears = useMemo(() => {
+    const years = new Set()
+    commesse.forEach((commessa) => {
+      const year = getCommessaYear(commessa)
+      if (year) years.add(year)
+    })
+    return Array.from(years).sort((a, b) => b.localeCompare(a))
+  }, [commesse])
 
   const truncate = (value, max = 80) => {
     if (!value) return ''
@@ -816,6 +842,18 @@ function Commesse({ clienti, toast }) {
             <option value="">Tutti</option>
             {STATI_COMMESSA.map((stato) => (
               <option key={stato} value={stato}>{stato}</option>
+            ))}
+          </select>
+          <label>Anno:</label>
+          <select
+            className="form-select"
+            value={yearFilter}
+            onChange={(e) => setYearFilter(e.target.value)}
+            style={{ width: 'auto' }}
+          >
+            <option value="">Tutti</option>
+            {availableYears.map((year) => (
+              <option key={year} value={year}>{year}</option>
             ))}
           </select>
           <label>Tipologia di lavoro:</label>
@@ -1412,9 +1450,6 @@ function Commesse({ clienti, toast }) {
                     >
                       <td>
                         <div className="commessa-title">{commessa.titolo}</div>
-                        {commessa.responsabile && (
-                          <div className="commessa-meta">Responsabile: {commessa.responsabile}</div>
-                        )}
                         {commessa.note && (
                           <div className="commessa-meta">{commessa.note}</div>
                         )}

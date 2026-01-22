@@ -10,7 +10,7 @@ const { validateRequest } = require('../utils/validationMiddleware');
 const ValidationSchemas = require('../utils/validationSchemas');
 const Pagination = require('../utils/pagination');
 
-const STATI_COMMESSA = ['In corso', 'In attesa di approvazione', 'Richieste integrazioni', 'Personalizzato', 'Conclusa'];
+const STATI_COMMESSA = ['In corso', 'Preventivato', 'In attesa di approvazione', 'Richieste integrazioni', 'Personalizzato', 'Conclusa'];
 const STATI_PAGAMENTI = ['Non iniziato', 'Parziale', 'Consuntivo con altre commesse', 'Saldo'];
 
 const uploadsRoot = path.join(__dirname, '..', 'uploads', 'commesse');

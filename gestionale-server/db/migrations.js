@@ -5,6 +5,9 @@ class Migrations {
       CREATE TABLE IF NOT EXISTS clienti (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         denominazione TEXT NOT NULL,
+        qualifica TEXT,
+        nome TEXT,
+        cognome TEXT,
         paese TEXT,
         codice_destinatario_sdi TEXT,
         indirizzo TEXT,
@@ -13,6 +16,8 @@ class Migrations {
         provincia TEXT,
         partita_iva TEXT,
         codice_fiscale TEXT,
+        email TEXT,
+        pec TEXT,
         created_at TEXT DEFAULT (datetime('now', 'localtime')),
         updated_at TEXT DEFAULT (datetime('now', 'localtime'))
       );
@@ -313,6 +318,7 @@ class Migrations {
 
     this.ensureUserColumns(db);
     this.ensureAttivitaColumns(db);
+    this.ensureClientiColumns(db);
     this.ensureCommesseColumns(db);
     this.ensureCommesseAllegatiColumns(db);
     this.ensureCommesseAuditTable(db);
@@ -421,6 +427,25 @@ class Migrations {
       }
     } catch (error) {
       console.log('[MIGRATIONS] Tabella attivita non ancora creata');
+    }
+  }
+
+  ensureClientiColumns(db) {
+    try {
+      const columns = db.prepare('PRAGMA table_info(clienti)').all().map((col) => col.name);
+      const addColumn = (name, type) => {
+        if (!columns.includes(name)) {
+          db.exec(`ALTER TABLE clienti ADD COLUMN ${name} ${type}`);
+        }
+      };
+
+      addColumn('qualifica', 'TEXT');
+      addColumn('nome', 'TEXT');
+      addColumn('cognome', 'TEXT');
+      addColumn('email', 'TEXT');
+      addColumn('pec', 'TEXT');
+    } catch (error) {
+      console.log('[MIGRATIONS] Tabella clienti non ancora creata');
     }
   }
 

@@ -6,6 +6,9 @@ import ContattiList from './ContattiList'
 const getFieldLabel = (fieldName) => {
   const labels = {
     'denominazione': 'Denominazione',
+    'qualifica': 'Qualifica',
+    'nome': 'Nome',
+    'cognome': 'Cognome',
     'paese': 'Paese',
     'codiceDestinatarioSDI': 'Codice Destinatario SDI',
     'codice_destinatario_sdi': 'Codice Destinatario SDI',
@@ -16,20 +19,35 @@ const getFieldLabel = (fieldName) => {
     'partitaIva': 'Partita IVA',
     'partita_iva': 'Partita IVA',
     'codiceFiscale': 'Codice Fiscale',
-    'codice_fiscale': 'Codice Fiscale'
+    'codice_fiscale': 'Codice Fiscale',
+    'email': 'Email',
+    'pec': 'PEC'
   }
   return labels[fieldName] || fieldName
 }
 
+const QUALIFICHE = [
+  'Società',
+  'Ingegnere',
+  'Architetto',
+  'Geometra',
+  'Persona fisica',
+  'Altro'
+]
+
 function AnagraficaClienti({ clienti, onUpdateClienti, onBack, currentUser, toast }) {
   const [showForm, setShowForm] = useState(false)
   const [editingCliente, setEditingCliente] = useState(null)
+  const [formTab, setFormTab] = useState('anagrafica')
   const [searchTerm, setSearchTerm] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [filteredClienti, setFilteredClienti] = useState([])
   const [formData, setFormData] = useState({
     denominazione: '',
+    qualifica: '',
+    nome: '',
+    cognome: '',
     paese: '',
     codiceDestinatarioSDI: '',
     indirizzo: '',
@@ -37,10 +55,15 @@ function AnagraficaClienti({ clienti, onUpdateClienti, onBack, currentUser, toas
     cap: '',
     provincia: '',
     partitaIva: '',
-    codiceFiscale: ''
+    codiceFiscale: '',
+    email: '',
+    pec: ''
   })
   const [initialFormData, setInitialFormData] = useState({
     denominazione: '',
+    qualifica: '',
+    nome: '',
+    cognome: '',
     paese: '',
     codiceDestinatarioSDI: '',
     indirizzo: '',
@@ -48,7 +71,9 @@ function AnagraficaClienti({ clienti, onUpdateClienti, onBack, currentUser, toas
     cap: '',
     provincia: '',
     partitaIva: '',
-    codiceFiscale: ''
+    codiceFiscale: '',
+    email: '',
+    pec: ''
   })
   const [contatti, setContatti] = useState([])
   const [initialContatti, setInitialContatti] = useState([])
@@ -92,6 +117,9 @@ function AnagraficaClienti({ clienti, onUpdateClienti, onBack, currentUser, toas
       
       const clienteData = {
         denominazione: normalizeValue(formData.denominazione) || '',
+        qualifica: normalizeValue(formData.qualifica),
+        nome: normalizeValue(formData.nome),
+        cognome: normalizeValue(formData.cognome),
         paese: normalizeValue(formData.paese),
         codiceDestinatarioSDI: normalizeValue(formData.codiceDestinatarioSDI),
         indirizzo: normalizeValue(formData.indirizzo),
@@ -99,12 +127,17 @@ function AnagraficaClienti({ clienti, onUpdateClienti, onBack, currentUser, toas
         cap: normalizeValue(formData.cap),
         provincia: normalizeValue(formData.provincia),
         partitaIva: normalizeValue(formData.partitaIva),
-        codiceFiscale: normalizeValue(formData.codiceFiscale)
+        codiceFiscale: normalizeValue(formData.codiceFiscale),
+        email: normalizeValue(formData.email),
+        pec: normalizeValue(formData.pec)
       }
       
       // Mappa camelCase a snake_case per l'API
       const apiData = {
         denominazione: clienteData.denominazione,
+        qualifica: clienteData.qualifica,
+        nome: clienteData.nome,
+        cognome: clienteData.cognome,
         paese: clienteData.paese,
         codiceDestinatarioSDI: clienteData.codiceDestinatarioSDI,
         indirizzo: clienteData.indirizzo,
@@ -112,7 +145,9 @@ function AnagraficaClienti({ clienti, onUpdateClienti, onBack, currentUser, toas
         cap: clienteData.cap,
         provincia: clienteData.provincia,
         partitaIva: clienteData.partitaIva,
-        codiceFiscale: clienteData.codiceFiscale
+        codiceFiscale: clienteData.codiceFiscale,
+        email: clienteData.email,
+        pec: clienteData.pec
       }
 
       const loadingToastId = toast?.showLoading('Salvataggio in corso...', 'Salvataggio cliente')
@@ -166,6 +201,9 @@ function AnagraficaClienti({ clienti, onUpdateClienti, onBack, currentUser, toas
   const handleEdit = async (cliente) => {
     const nextFormData = {
       denominazione: cliente.denominazione || '',
+      qualifica: cliente.qualifica || '',
+      nome: cliente.nome || '',
+      cognome: cliente.cognome || '',
       paese: cliente.paese || '',
       codiceDestinatarioSDI: cliente.codice_destinatario_sdi || '',
       indirizzo: cliente.indirizzo || '',
@@ -173,12 +211,15 @@ function AnagraficaClienti({ clienti, onUpdateClienti, onBack, currentUser, toas
       cap: cliente.cap || '',
       provincia: cliente.provincia || '',
       partitaIva: cliente.partita_iva || '',
-      codiceFiscale: cliente.codice_fiscale || ''
+      codiceFiscale: cliente.codice_fiscale || '',
+      email: cliente.email || '',
+      pec: cliente.pec || ''
     }
     setFormData(nextFormData)
     setInitialFormData(nextFormData)
     setEditingCliente(cliente)
     setShowForm(true)
+    setFormTab('anagrafica')
     
     // Carica i contatti iniziali
     try {
@@ -225,8 +266,12 @@ function AnagraficaClienti({ clienti, onUpdateClienti, onBack, currentUser, toas
   const handleCancel = () => {
     setShowForm(false)
     setEditingCliente(null)
+    setFormTab('anagrafica')
     const emptyForm = {
       denominazione: '',
+      qualifica: '',
+      nome: '',
+      cognome: '',
       paese: '',
       codiceDestinatarioSDI: '',
       indirizzo: '',
@@ -234,7 +279,9 @@ function AnagraficaClienti({ clienti, onUpdateClienti, onBack, currentUser, toas
       cap: '',
       provincia: '',
       partitaIva: '',
-      codiceFiscale: ''
+      codiceFiscale: '',
+      email: '',
+      pec: ''
     }
     setFormData(emptyForm)
     setInitialFormData(emptyForm)
@@ -295,7 +342,10 @@ function AnagraficaClienti({ clienti, onUpdateClienti, onBack, currentUser, toas
           </div>
           <button 
             className="btn btn-primary"
-            onClick={() => setShowForm(true)}
+            onClick={() => {
+              setShowForm(true)
+              setFormTab('anagrafica')
+            }}
             disabled={loading}
           >
             + Aggiungi Cliente
@@ -310,89 +360,162 @@ function AnagraficaClienti({ clienti, onUpdateClienti, onBack, currentUser, toas
           </div>
           <div className="card-body">
             <form onSubmit={handleSubmit}>
+              <div className="commessa-form-tabs">
+                <button
+                  type="button"
+                  className={`btn btn-sm ${formTab === 'anagrafica' ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => setFormTab('anagrafica')}
+                >
+                  Anagrafica
+                </button>
+                <button
+                  type="button"
+                  className={`btn btn-sm ${formTab === 'fiscale' ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => setFormTab('fiscale')}
+                >
+                  Dati fiscali
+                </button>
+              </div>
               <div className="row g-3">
-                <div className="col-md-6">
-                  <label className="form-label">Denominazione *</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={formData.denominazione}
-                    onChange={(e) => setFormData({ ...formData, denominazione: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="col-md-6">
-                  <label className="form-label">Paese</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={formData.paese}
-                    onChange={(e) => setFormData({ ...formData, paese: e.target.value })}
-                  />
-                </div>
-                <div className="col-md-6">
-                  <label className="form-label">Codice Destinatario SDI</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={formData.codiceDestinatarioSDI}
-                    onChange={(e) => setFormData({ ...formData, codiceDestinatarioSDI: e.target.value })}
-                  />
-                </div>
-                <div className="col-md-12">
-                  <label className="form-label">Indirizzo</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={formData.indirizzo}
-                    onChange={(e) => setFormData({ ...formData, indirizzo: e.target.value })}
-                  />
-                </div>
-                <div className="col-md-4">
-                  <label className="form-label">Comune</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={formData.comune}
-                    onChange={(e) => setFormData({ ...formData, comune: e.target.value })}
-                  />
-                </div>
-                <div className="col-md-4">
-                  <label className="form-label">CAP</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={formData.cap}
-                    onChange={(e) => setFormData({ ...formData, cap: e.target.value })}
-                  />
-                </div>
-                <div className="col-md-4">
-                  <label className="form-label">Provincia</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={formData.provincia}
-                    onChange={(e) => setFormData({ ...formData, provincia: e.target.value })}
-                  />
-                </div>
-                <div className="col-md-6">
-                  <label className="form-label">Partita IVA</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={formData.partitaIva}
-                    onChange={(e) => setFormData({ ...formData, partitaIva: e.target.value })}
-                  />
-                </div>
-                <div className="col-md-6">
-                  <label className="form-label">Codice Fiscale</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={formData.codiceFiscale}
-                    onChange={(e) => setFormData({ ...formData, codiceFiscale: e.target.value })}
-                  />
-                </div>
+                {formTab === 'anagrafica' && (
+                  <>
+                    <div className="col-md-6">
+                      <label className="form-label">Denominazione *</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={formData.denominazione}
+                        onChange={(e) => setFormData({ ...formData, denominazione: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="col-md-3">
+                      <label className="form-label">Qualifica</label>
+                      <select
+                        className="form-select"
+                        value={formData.qualifica}
+                        onChange={(e) => setFormData({ ...formData, qualifica: e.target.value })}
+                      >
+                        <option value="">Seleziona</option>
+                        {QUALIFICHE.map((qualifica) => (
+                          <option key={qualifica} value={qualifica}>{qualifica}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-md-3">
+                      <label className="form-label">Paese</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={formData.paese}
+                        onChange={(e) => setFormData({ ...formData, paese: e.target.value })}
+                      />
+                    </div>
+                    <div className="col-md-3">
+                      <label className="form-label">Nome</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={formData.nome}
+                        onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
+                      />
+                    </div>
+                    <div className="col-md-3">
+                      <label className="form-label">Cognome</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={formData.cognome}
+                        onChange={(e) => setFormData({ ...formData, cognome: e.target.value })}
+                      />
+                    </div>
+                    <div className="col-md-6">
+                      <label className="form-label">Indirizzo</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={formData.indirizzo}
+                        onChange={(e) => setFormData({ ...formData, indirizzo: e.target.value })}
+                      />
+                    </div>
+                    <div className="col-md-4">
+                      <label className="form-label">Comune</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={formData.comune}
+                        onChange={(e) => setFormData({ ...formData, comune: e.target.value })}
+                      />
+                    </div>
+                    <div className="col-md-4">
+                      <label className="form-label">CAP</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={formData.cap}
+                        onChange={(e) => setFormData({ ...formData, cap: e.target.value })}
+                      />
+                    </div>
+                    <div className="col-md-4">
+                      <label className="form-label">Provincia</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={formData.provincia}
+                        onChange={(e) => setFormData({ ...formData, provincia: e.target.value })}
+                      />
+                    </div>
+                  </>
+                )}
+                {formTab === 'fiscale' && (
+                  <>
+                    <div className="col-md-4">
+                      <label className="form-label">Partita IVA</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={formData.partitaIva}
+                        onChange={(e) => setFormData({ ...formData, partitaIva: e.target.value })}
+                      />
+                    </div>
+                    <div className="col-md-4">
+                      <label className="form-label">Codice Fiscale</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={formData.codiceFiscale}
+                        onChange={(e) => setFormData({ ...formData, codiceFiscale: e.target.value })}
+                      />
+                    </div>
+                    <div className="col-md-4">
+                      <label className="form-label">Codice Destinatario SDI</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={formData.codiceDestinatarioSDI}
+                        onChange={(e) => setFormData({ ...formData, codiceDestinatarioSDI: e.target.value })}
+                      />
+                    </div>
+                    <div className="col-md-6">
+                      <label className="form-label">Email</label>
+                      <input
+                        type="email"
+                        className="form-control"
+                        value={formData.email}
+                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      />
+                    </div>
+                    <div className="col-md-6">
+                      <label className="form-label">PEC</label>
+                      <input
+                        type="email"
+                        className="form-control"
+                        value={formData.pec}
+                        onChange={(e) => setFormData({ ...formData, pec: e.target.value })}
+                      />
+                    </div>
+                  </>
+                )}
               </div>
               <div className="actions-sticky mt-3 d-flex gap-2">
                 <button type="submit" className="btn btn-primary" disabled={!canSave}>
@@ -509,4 +632,3 @@ function AnagraficaClienti({ clienti, onUpdateClienti, onBack, currentUser, toas
 }
 
 export default AnagraficaClienti
-

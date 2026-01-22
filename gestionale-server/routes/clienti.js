@@ -16,23 +16,25 @@ class ClientiController {
       getById: this.db.prepare('SELECT * FROM clienti WHERE id = ?'),
       create: this.db.prepare(`
         INSERT INTO clienti (
-          denominazione, paese, codice_destinatario_sdi, indirizzo,
-          comune, cap, provincia, partita_iva, codice_fiscale
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          denominazione, qualifica, nome, cognome, paese, codice_destinatario_sdi,
+          indirizzo, comune, cap, provincia, partita_iva, codice_fiscale,
+          email, pec
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `),
       update: this.db.prepare(`
         UPDATE clienti SET
-          denominazione = ?, paese = ?, codice_destinatario_sdi = ?,
+          denominazione = ?, qualifica = ?, nome = ?, cognome = ?, paese = ?, codice_destinatario_sdi = ?,
           indirizzo = ?, comune = ?, cap = ?, provincia = ?,
-          partita_iva = ?, codice_fiscale = ?,
+          partita_iva = ?, codice_fiscale = ?, email = ?, pec = ?,
           updated_at = datetime('now', 'localtime')
         WHERE id = ?
       `),
       delete: this.db.prepare('DELETE FROM clienti WHERE id = ?'),
       search: this.db.prepare(`
         SELECT * FROM clienti
-        WHERE denominazione LIKE ? OR paese LIKE ? OR comune LIKE ?
-           OR partita_iva LIKE ? OR codice_fiscale LIKE ?
+        WHERE denominazione LIKE ? OR nome LIKE ? OR cognome LIKE ?
+           OR paese LIKE ? OR comune LIKE ? OR partita_iva LIKE ?
+           OR codice_fiscale LIKE ? OR email LIKE ? OR pec LIKE ?
         ORDER BY denominazione ASC
       `),
       contattiGetByCliente: this.db.prepare(`
@@ -68,7 +70,17 @@ class ClientiController {
       let clienti;
       if (search) {
         const searchTerm = `%${search}%`;
-        clienti = this.stmt.search.all(searchTerm, searchTerm, searchTerm, searchTerm, searchTerm);
+        clienti = this.stmt.search.all(
+          searchTerm,
+          searchTerm,
+          searchTerm,
+          searchTerm,
+          searchTerm,
+          searchTerm,
+          searchTerm,
+          searchTerm,
+          searchTerm
+        );
       } else {
         clienti = this.stmt.getAll.all();
       }
@@ -101,11 +113,12 @@ class ClientiController {
   create(req, res) {
     try {
       const {
-        denominazione, paese, 
+        denominazione, qualifica, nome, cognome, paese,
         codiceDestinatarioSDI, codice_destinatario_sdi,
         indirizzo, comune, cap, provincia, 
         partitaIva, partita_iva,
-        codiceFiscale, codice_fiscale
+        codiceFiscale, codice_fiscale,
+        email, pec
       } = req.body;
 
       if (!denominazione) {
@@ -113,15 +126,20 @@ class ClientiController {
       }
 
       const result = this.stmt.create.run(
-        denominazione, 
-        paese || null, 
+        denominazione,
+        qualifica || null,
+        nome || null,
+        cognome || null,
+        paese || null,
         (codiceDestinatarioSDI || codice_destinatario_sdi) || null,
         indirizzo || null, 
         comune || null, 
         cap || null,
         provincia || null, 
         (partitaIva || partita_iva) || null, 
-        (codiceFiscale || codice_fiscale) || null
+        (codiceFiscale || codice_fiscale) || null,
+        email || null,
+        pec || null
       );
 
       Logger.info('POST /clienti', { id: result.lastInsertRowid });
@@ -136,11 +154,12 @@ class ClientiController {
     try {
       const { id } = req.params;
       const {
-        denominazione, paese, 
+        denominazione, qualifica, nome, cognome, paese,
         codiceDestinatarioSDI, codice_destinatario_sdi,
         indirizzo, comune, cap, provincia, 
         partitaIva, partita_iva,
-        codiceFiscale, codice_fiscale
+        codiceFiscale, codice_fiscale,
+        email, pec
       } = req.body;
 
       if (!denominazione) {
@@ -148,8 +167,11 @@ class ClientiController {
       }
 
       const result = this.stmt.update.run(
-        denominazione, 
-        paese || null, 
+        denominazione,
+        qualifica || null,
+        nome || null,
+        cognome || null,
+        paese || null,
         (codiceDestinatarioSDI || codice_destinatario_sdi) || null,
         indirizzo || null, 
         comune || null, 
@@ -157,6 +179,8 @@ class ClientiController {
         provincia || null, 
         (partitaIva || partita_iva) || null, 
         (codiceFiscale || codice_fiscale) || null,
+        email || null,
+        pec || null,
         id
       );
 

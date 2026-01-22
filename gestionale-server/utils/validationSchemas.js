@@ -29,6 +29,30 @@ const ValidationSchemas = {
         .withMessage('Denominazione obbligatoria')
         .isLength({ max: 255 })
         .withMessage('Denominazione troppo lunga (max 255 caratteri)'),
+      body('qualifica')
+        .optional({ nullable: true, checkFalsy: true })
+        .custom((value) => {
+          if (value === null || value === undefined || value === '') return true;
+          const trimmed = typeof value === 'string' ? value.trim() : String(value);
+          return trimmed.length <= 100;
+        })
+        .withMessage('Qualifica troppo lunga (max 100 caratteri)'),
+      body('nome')
+        .optional({ nullable: true, checkFalsy: true })
+        .custom((value) => {
+          if (value === null || value === undefined || value === '') return true;
+          const trimmed = typeof value === 'string' ? value.trim() : String(value);
+          return trimmed.length <= 100;
+        })
+        .withMessage('Nome troppo lungo (max 100 caratteri)'),
+      body('cognome')
+        .optional({ nullable: true, checkFalsy: true })
+        .custom((value) => {
+          if (value === null || value === undefined || value === '') return true;
+          const trimmed = typeof value === 'string' ? value.trim() : String(value);
+          return trimmed.length <= 100;
+        })
+        .withMessage('Cognome troppo lungo (max 100 caratteri)'),
       body('paese')
         .optional()
         .trim()
@@ -122,7 +146,23 @@ const ValidationSchemas = {
           // Solo verifica lunghezza massima, non formato specifico
           return trimmed.length <= 16;
         })
-        .withMessage('Codice Fiscale troppo lungo (max 16 caratteri)')
+        .withMessage('Codice Fiscale troppo lungo (max 16 caratteri)'),
+      body('email')
+        .optional({ nullable: true, checkFalsy: true })
+        .custom((value) => {
+          if (value === null || value === undefined || value === '') return true;
+          const trimmed = typeof value === 'string' ? String(value).trim() : String(value);
+          return trimmed.length <= 255;
+        })
+        .withMessage('Email troppo lunga (max 255 caratteri)'),
+      body('pec')
+        .optional({ nullable: true, checkFalsy: true })
+        .custom((value) => {
+          if (value === null || value === undefined || value === '') return true;
+          const trimmed = typeof value === 'string' ? String(value).trim() : String(value);
+          return trimmed.length <= 255;
+        })
+        .withMessage('PEC troppo lunga (max 255 caratteri)')
     ],
     update: [] // Sarà popolato dopo la definizione
   },
@@ -339,7 +379,7 @@ const ValidationSchemas = {
         .withMessage('Nome cliente troppo lungo'),
       body('stato')
         .optional({ nullable: true, checkFalsy: true })
-        .isIn(['In corso', 'In attesa di approvazione', 'Richieste integrazioni', 'Personalizzato', 'Conclusa'])
+        .isIn(['In corso', 'Preventivato', 'In attesa di approvazione', 'Richieste integrazioni', 'Personalizzato', 'Conclusa'])
         .withMessage('Stato non valido'),
       body('sotto_stato')
         .optional({ nullable: true, checkFalsy: true })
