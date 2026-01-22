@@ -6,6 +6,8 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: parseInt(process.env.VITE_PORT || '5173', 10),
+    host: process.env.VITE_HOST || '0.0.0.0',
+    allowedHosts: ['www.gestionale.studiocapoferri.eu'],
     proxy: {
       '/api': {
         target: process.env.VITE_API_URL || 'http://localhost:3001',
