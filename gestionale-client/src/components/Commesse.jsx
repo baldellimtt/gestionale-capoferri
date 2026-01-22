@@ -1302,7 +1302,9 @@ function Commesse({ clienti, toast }) {
                           <div className="audit-changes">
                             {getAuditChangeList(entry).map((change, idx) => (
                               <div key={`${entry.id}-change-${idx}`}>
-                                {formatFieldLabel(change.field)}: {formatChangeValue(change.from, change.field)} -> {formatChangeValue(change.to, change.field)}
+                                {formatFieldLabel(change.field)}: {formatChangeValue(change.from, change.field)}
+                                {' -> '}
+                                {formatChangeValue(change.to, change.field)}
                               </div>
                             ))}
                           </div>
