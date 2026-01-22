@@ -178,6 +178,39 @@
   color: var(--ink-800);
 }
 
+.payments-box {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid var(--border-soft);
+  background: var(--bg-1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--brand-700);
+}
+
+.payments-box.is-paid {
+  border-color: var(--brand-500);
+  box-shadow: inset 0 0 0 1px var(--brand-200);
+}
+
+.payments-box-euro {
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+.payments-box-check {
+  font-size: 0.7rem;
+  line-height: 1;
+  min-height: 0.7rem;
+  color: var(--brand-600);
+}
+
 .note-spese-section {
   display: flex;
   flex-direction: column;

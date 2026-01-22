@@ -10,6 +10,7 @@ import { AttivitaProvider } from './contexts/AttivitaContext'
 const Login = lazy(() => import('./components/Login'))
 const TabellaAttivita = lazy(() => import('./components/TabellaAttivita'))
 const Commesse = lazy(() => import('./components/Commesse'))
+const Consuntivi = lazy(() => import('./components/Consuntivi'))
 const AnagraficaClienti = lazy(() => import('./components/AnagraficaClienti'))
 const KanbanBoard = lazy(() => import('./components/KanbanBoard'))
 const Home = lazy(() => import('./components/Home'))
@@ -227,6 +228,13 @@ function App() {
                 Commesse
               </button>
               <button
+                className={`topbar-link ${activeView === 'consuntivi' ? 'active' : ''}`}
+                onClick={() => setActiveView('consuntivi')}
+                type="button"
+              >
+                Consuntivi
+              </button>
+              <button
                 className={`topbar-link ${activeView === 'anagrafica' ? 'active' : ''}`}
                 onClick={() => setActiveView('anagrafica')}
                 type="button"
@@ -258,6 +266,9 @@ function App() {
                       )}
                       {activeView === 'commesse' && (
                         <Commesse clienti={clienti} toast={toast} />
+                      )}
+                      {activeView === 'consuntivi' && (
+                        <Consuntivi />
                       )}
                       {activeView === 'team' && (
                         <Team

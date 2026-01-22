@@ -76,9 +76,6 @@ function Commesse({ clienti, toast }) {
   const [auditNoteDate, setAuditNoteDate] = useState(() => getTodayDate())
   const [auditNoteText, setAuditNoteText] = useState('')
   const [auditNoteSaving, setAuditNoteSaving] = useState(false)
-  const [showConsuntivo, setShowConsuntivo] = useState(false)
-  const [consuntivoIds, setConsuntivoIds] = useState([])
-  const [consuntivoSconto, setConsuntivoSconto] = useState('')
 
   const loadCommesse = async (nextFilters = filters) => {
     try {
@@ -666,20 +663,6 @@ function Commesse({ clienti, toast }) {
     })
   }, [commesseSorted, filters.sottoStato, filters.statoPagamenti, yearFilter])
 
-  const toggleConsuntivoId = (id) => {
-    setConsuntivoIds((prev) => (
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
-    ))
-  }
-
-  const consuntivoCommesse = filteredCommesse.filter((commessa) => consuntivoIds.includes(commessa.id))
-  const consuntivoTotale = consuntivoCommesse.reduce((sum, commessa) => {
-    const value = parseNumber(commessa.importo_totale ?? 0)
-    return sum + (Number.isFinite(value) ? value : 0)
-  }, 0)
-  const consuntivoScontoPercent = Math.max(0, parseNumber(consuntivoSconto) || 0)
-  const consuntivoScontoValue = (consuntivoTotale * consuntivoScontoPercent) / 100
-  const consuntivoFinale = consuntivoTotale - consuntivoScontoValue
 
   const uploadsBase = api.baseURL.replace(/\/api\/?$/, '') + '/uploads'
   const selectedCommessa = commesse.find((item) => String(item.id) === String(selectedCommessaId))
@@ -900,81 +883,6 @@ function Commesse({ clienti, toast }) {
         </div>
       )}
 
-      {!showForm && (
-        <div className="card mb-4 consuntivo-card">
-          <div className="card-header d-flex justify-content-between align-items-center">
-            <span>Consuntivo</span>
-            <button
-              type="button"
-              className="btn btn-sm btn-secondary"
-              onClick={() => setShowConsuntivo((prev) => !prev)}
-            >
-              {showConsuntivo ? 'Chiudi consuntivo' : 'Crea consuntivo'}
-            </button>
-          </div>
-          {showConsuntivo && (
-            <div className="card-body">
-              <div className="consuntivo-grid">
-                <div className="consuntivo-list">
-                  {filteredCommesse.map((commessa) => (
-                    <label key={commessa.id} className="consuntivo-item">
-                      <input
-                        type="checkbox"
-                        checked={consuntivoIds.includes(commessa.id)}
-                        onChange={() => toggleConsuntivoId(commessa.id)}
-                      />
-                      <span className="consuntivo-label">
-                        {commessa.cliente_nome || 'Cliente'} - {commessa.titolo}
-                      </span>
-                      <span className="consuntivo-value">
-                        € {Number(parseNumber(commessa.importo_totale ?? 0) || 0).toFixed(2)}
-                      </span>
-                    </label>
-                  ))}
-                  {filteredCommesse.length === 0 && (
-                    <div className="text-muted">Nessuna commessa disponibile.</div>
-                  )}
-                </div>
-                <div className="consuntivo-summary">
-                  <div className="consuntivo-row">
-                    <span>Totale commesse selezionate</span>
-                    <strong>€ {consuntivoTotale.toFixed(2)}</strong>
-                  </div>
-                  <div className="consuntivo-row">
-                    <label className="form-label mb-1">Sconto (%)</label>
-                    <input
-                      className="form-control"
-                      value={consuntivoSconto}
-                      onChange={(e) => setConsuntivoSconto(e.target.value)}
-                      inputMode="decimal"
-                      placeholder="0"
-                    />
-                  </div>
-                  <div className="consuntivo-row">
-                    <span>Sconto applicato</span>
-                    <strong>- € {consuntivoScontoValue.toFixed(2)}</strong>
-                  </div>
-                  <div className="consuntivo-row consuntivo-final">
-                    <span>Conto finale</span>
-                    <strong>€ {consuntivoFinale.toFixed(2)}</strong>
-                  </div>
-                  <button
-                    type="button"
-                    className="btn btn-outline-secondary btn-sm"
-                    onClick={() => {
-                      setConsuntivoIds([])
-                      setConsuntivoSconto('')
-                    }}
-                  >
-                    Reset selezione
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
       {showForm && (
         <div className="card mb-4">
           <div className="card-header">
@@ -1100,6 +1008,46 @@ function Commesse({ clienti, toast }) {
                   )}
                 </div>
               )}
+              <div className="col-md-4">
+                <label className="form-label">Data inizio</label>
+                <input
+                  type="date"
+                  className="form-control"
+                  value={formData.data_inizio}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, data_inizio: e.target.value }))}
+                />
+              </div>
+              <div className="col-md-4">
+                <label className="form-label">Data fine</label>
+                <input
+                  type="date"
+                  className="form-control"
+                  value={formData.data_fine}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, data_fine: e.target.value }))}
+                />
+              </div>
+              <div className="col-md-4">
+                <label className="form-label">Responsabile</label>
+                <select
+                  className="form-select"
+                  value={formData.responsabile}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, responsabile: e.target.value }))}
+                >
+                  <option value="">Seleziona responsabile</option>
+                  {utenti.map((utente) => {
+                    const label = getUtenteLabel(utente)
+                    return (
+                      <option key={utente.id} value={label}>
+                        {label}
+                      </option>
+                    )
+                  })}
+                </select>
+              </div>
+              </>
+              )}
+              {formTab === 'dettagli' && (
+              <>
               <div className="col-md-3">
                 <label className="form-label">Preventivo</label>
                 <select
@@ -1147,6 +1095,7 @@ function Commesse({ clienti, toast }) {
                   onChange={(e) => setFormData((prev) => ({ ...prev, importo_pagato: e.target.value }))}
                   inputMode="decimal"
                   placeholder="0.00"
+                  disabled={isConsuntivoPagamenti}
                 />
               </div>
               <div className="col-md-3">
@@ -1161,46 +1110,10 @@ function Commesse({ clienti, toast }) {
                   ))}
                 </select>
               </div>
-              <div className="col-md-4">
-                <label className="form-label">Responsabile</label>
-                <select
-                  className="form-select"
-                  value={formData.responsabile}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, responsabile: e.target.value }))}
-                >
-                  <option value="">Seleziona responsabile</option>
-                  {utenti.map((utente) => {
-                    const label = getUtenteLabel(utente)
-                    return (
-                      <option key={utente.id} value={label}>
-                        {label}
-                      </option>
-                    )
-                  })}
-                </select>
-              </div>
               </>
               )}
-              {formTab === 'dettagli' && (
-              <>
-              <div className="col-md-4">
-                <label className="form-label">Data inizio</label>
-                <input
-                  type="date"
-                  className="form-control"
-                  value={formData.data_inizio}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, data_inizio: e.target.value }))}
-                />
-              </div>
-              <div className="col-md-4">
-                <label className="form-label">Data fine</label>
-                <input
-                  type="date"
-                  className="form-control"
-                  value={formData.data_fine}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, data_fine: e.target.value }))}
-                />
-              </div>
+            </div>
+            <div className="row g-3 mt-3">
               <div className="col-md-6">
                 <label className="form-label">Note</label>
                 <textarea
@@ -1219,8 +1132,6 @@ function Commesse({ clienti, toast }) {
                   onChange={(e) => setFormData((prev) => ({ ...prev, allegati: e.target.value }))}
                 />
               </div>
-              </>
-              )}
             </div>
           </div>
         </div>
@@ -1472,8 +1383,14 @@ function Commesse({ clienti, toast }) {
                     </div>
                     <div className="commessa-card-meta">
                       <span className="commessa-card-meta-label">Pagamenti</span>
-                      <span className={`status-badge status-payments ${getStatoPagamentiClass(commessa.stato_pagamenti)}`}>
-                        {commessa.stato_pagamenti || 'Non iniziato'}
+                      <span
+                        className={`payments-box ${commessa.stato_pagamenti === 'Saldo' ? 'is-paid' : ''}`}
+                        title={commessa.stato_pagamenti || 'Non iniziato'}
+                      >
+                        <span className="payments-box-euro">€</span>
+                        <span className="payments-box-check">
+                          {commessa.stato_pagamenti === 'Saldo' ? 'V' : ''}
+                        </span>
                       </span>
                     </div>
                   </div>
