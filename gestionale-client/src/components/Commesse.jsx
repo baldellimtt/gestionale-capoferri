@@ -1303,7 +1303,7 @@ function Commesse({ clienti, toast }) {
             <span>Cronologia commessa</span>
             <button
               type="button"
-              className="btn btn-sm btn-outline-primary"
+              className="btn btn-sm btn-secondary"
               onClick={() => setShowCommessaAudit((prev) => !prev)}
               disabled={!selectedCommessaId}
             >

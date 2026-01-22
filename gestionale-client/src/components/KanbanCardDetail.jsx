@@ -923,7 +923,7 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
                 <h6 style={{ margin: 0 }}>Cronologia commessa</h6>
                 <button
                   type="button"
-                  className="btn btn-sm btn-outline-primary"
+                  className="btn btn-sm btn-secondary"
                   onClick={() => {
                     if (!formData.commessa_id) return
                     setShowCommessaAudit(prev => !prev)

@@ -526,6 +526,7 @@ header .logo {
 .btn-secondary:hover {
   background: var(--bg-3);
   border-color: var(--border-strong);
+  color: var(--ink-800);
 }
 
 .btn-danger {
