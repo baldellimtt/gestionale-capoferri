@@ -279,9 +279,6 @@ function Consuntivi() {
         <div className="text-muted">Caricamento commesse...</div>
       ) : (
         <div className="card mb-4 consuntivo-card">
-          <div className="card-header d-flex justify-content-between align-items-center">
-            <span>Consuntivo</span>
-          </div>
           <div className="card-body">
             <div className="consuntivo-grid">
               <div className="consuntivo-list">
