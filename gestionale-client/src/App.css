@@ -115,6 +115,69 @@
   justify-items: stretch;
 }
 
+.commesse-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+
+.commessa-card {
+  text-align: left;
+  padding: 1.2rem 1.3rem;
+  border-radius: var(--radius-sm);
+  border: 2px solid var(--brand-300);
+  background: var(--bg-1);
+  color: var(--ink-800);
+  transition: var(--transition-fast);
+  box-shadow: var(--shadow-1);
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  cursor: pointer;
+}
+
+.commessa-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-2);
+}
+
+.commessa-card-title {
+  font-weight: 700;
+  font-size: 1.2rem;
+  color: var(--brand-700);
+}
+
+.commessa-card-meta-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.4rem 0.6rem;
+}
+
+.commessa-card-meta {
+  font-size: 0.85rem;
+  color: var(--ink-600);
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: 12px;
+  border: 1px solid var(--border-soft);
+  background: var(--bg-2);
+}
+
+.commessa-card-meta-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-500);
+}
+
+.commessa-card-meta-value {
+  font-weight: 600;
+  color: var(--ink-800);
+}
+
 .note-spese-section {
   display: flex;
   flex-direction: column;

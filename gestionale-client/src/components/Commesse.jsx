@@ -1429,72 +1429,58 @@ function Commesse({ clienti, toast }) {
 
       {!showForm && (
         <div className="attivita-table-container">
-        {loading ? (
-          <div className="text-center py-5">
-            <div className="spinner-border" role="status">
-              <span className="visually-hidden">Caricamento...</span>
+          {loading ? (
+            <div className="text-center py-5">
+              <div className="spinner-border" role="status">
+                <span className="visually-hidden">Caricamento...</span>
+              </div>
             </div>
-          </div>
-        ) : filteredCommesse.length === 0 ? (
-          <div className="alert alert-info mt-3">
-            Nessuna commessa presente.
-          </div>
-        ) : (
-          <div className="attivita-table-scroll">
-            <table className="table table-dark attivita-table commesse-table">
-              <thead>
-                <tr>
-                  <th>Commessa</th>
-                  <th>Cliente</th>
-                  <th>Stato</th>
-                  <th>Tipologia di lavoro</th>
-                  <th>Stato pagamenti</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredCommesse.map((commessa) => {
-                  const allegati = allegatiByCommessa[commessa.id] || []
-                  return (
-                    <tr
-                      key={commessa.id}
-                      className="commessa-row"
-                      onClick={(e) => {
-                        e.preventDefault()
-                        e.stopPropagation()
-                        handleEdit(commessa)
-                      }}
-                      style={{ cursor: 'pointer' }}
-                    >
-                      <td>
-                        <div className="commessa-title">{commessa.titolo}</div>
-                      </td>
-                      <td>{commessa.cliente_nome || '-'}</td>
-                      <td>
-                        <span className={`status-badge ${getStatoClass(commessa.stato)}`}>
-                          {commessa.stato || 'In corso'}
+          ) : filteredCommesse.length === 0 ? (
+            <div className="alert alert-info mt-3">
+              Nessuna commessa presente.
+            </div>
+          ) : (
+            <div className="commesse-grid">
+              {filteredCommesse.map((commessa) => (
+                <button
+                  key={commessa.id}
+                  type="button"
+                  className="commessa-card"
+                  onClick={() => handleEdit(commessa)}
+                >
+                  <div className="commessa-card-title">{commessa.titolo}</div>
+                  <div className="commessa-card-meta-list">
+                    <div className="commessa-card-meta">
+                      <span className="commessa-card-meta-label">Cliente</span>
+                      <span className="commessa-card-meta-value">{commessa.cliente_nome || '-'}</span>
+                    </div>
+                    <div className="commessa-card-meta">
+                      <span className="commessa-card-meta-label">Stato</span>
+                      <span className={`status-badge ${getStatoClass(commessa.stato)}`}>
+                        {commessa.stato || 'In corso'}
+                      </span>
+                    </div>
+                    <div className="commessa-card-meta">
+                      <span className="commessa-card-meta-label">Tipologia</span>
+                      {commessa.sotto_stato ? (
+                        <span className={`status-badge substatus-badge ${getSottoStatoClass(commessa.sotto_stato)}`}>
+                          {commessa.sotto_stato}
                         </span>
-                      </td>
-                      <td>
-                        {commessa.sotto_stato ? (
-                          <span className={`status-badge substatus-badge ${getSottoStatoClass(commessa.sotto_stato)}`}>
-                            {commessa.sotto_stato}
-                          </span>
-                        ) : (
-                          '-'
-                        )}
-                      </td>
-                      <td>
-                        <span className={`status-badge status-payments ${getStatoPagamentiClass(commessa.stato_pagamenti)}`}>
-                          {commessa.stato_pagamenti || 'Non iniziato'}
-                        </span>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                      ) : (
+                        <span className="commessa-card-meta-value">-</span>
+                      )}
+                    </div>
+                    <div className="commessa-card-meta">
+                      <span className="commessa-card-meta-label">Pagamenti</span>
+                      <span className={`status-badge status-payments ${getStatoPagamentiClass(commessa.stato_pagamenti)}`}>
+                        {commessa.stato_pagamenti || 'Non iniziato'}
+                      </span>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
