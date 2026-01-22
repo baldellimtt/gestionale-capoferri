@@ -368,10 +368,17 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
 
   const formatAuditDate = (value) => {
     if (!value) return ''
-    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-      const parsed = new Date(`${value}T00:00:00`)
-      if (!Number.isNaN(parsed.getTime())) {
-        return parsed.toLocaleDateString('it-IT')
+    if (typeof value === 'string') {
+      const dateOnlyMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+      if (dateOnlyMatch) {
+        const [, year, month, day] = dateOnlyMatch
+        return `${day}/${month}/${year}`
+      }
+      const dateTimeMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/)
+      if (dateTimeMatch) {
+        const [, year, month, day, hours, minutes, seconds] = dateTimeMatch
+        const timePart = seconds ? `${hours}:${minutes}:${seconds}` : `${hours}:${minutes}`
+        return `${day}/${month}/${year} ${timePart}`
       }
     }
     const date = new Date(value)
