@@ -8,6 +8,7 @@ function Team({ utenti = [], user, clienti = [], toast, onUserUpdated, onUsersCh
   const [members, setMembers] = useState([])
   const [selectedMemberId, setSelectedMemberId] = useState(null)
   const [showUserManagement, setShowUserManagement] = useState(false)
+  const [noteSpeseOpenKey, setNoteSpeseOpenKey] = useState(0)
 
   const teamMembers = useMemo(() => {
     if (utenti.length > 0) return utenti
@@ -36,6 +37,9 @@ function Team({ utenti = [], user, clienti = [], toast, onUserUpdated, onUsersCh
     if (!member?.id) return
     setSelectedMemberId(member.id)
     setActiveSection(section)
+    if (section === 'note-spese') {
+      setNoteSpeseOpenKey((prev) => prev + 1)
+    }
   }
 
   const handleCardKeyDown = (event, member) => {
@@ -184,7 +188,7 @@ function Team({ utenti = [], user, clienti = [], toast, onUserUpdated, onUsersCh
               <TabellaAttivita clienti={clienti} user={selectedMember || user} toast={toast} targetUserId={selectedMember?.id || null} />
             )}
             {activeSection === 'note-spese' && (
-              <NoteSpese selectedMember={selectedMember || user} currentUser={user} toast={toast} />
+              <NoteSpese selectedMember={selectedMember || user} currentUser={user} toast={toast} openKey={noteSpeseOpenKey} />
             )}
           </>
         </div>
