@@ -4,7 +4,7 @@ import NoteSpese from './NoteSpese'
 import ImpostazioniUtenti from './ImpostazioniUtenti'
 
 function Team({ utenti = [], user, clienti = [], toast, onUserUpdated, onUsersChanged }) {
-  const [activeSection, setActiveSection] = useState('dati-operatore')
+  const [activeSection, setActiveSection] = useState(null)
   const [members, setMembers] = useState([])
   const [selectedMemberId, setSelectedMemberId] = useState(null)
   const [showUserManagement, setShowUserManagement] = useState(false)
@@ -22,17 +22,6 @@ function Team({ utenti = [], user, clienti = [], toast, onUserUpdated, onUsersCh
   const canEditUsers = user?.role === 'admin'
   const selectedMember = members.find((member) => member?.id === selectedMemberId) || null
 
-  const handleSelectMember = (member) => {
-    const nextId = member?.id || null
-    if (nextId && nextId === selectedMemberId) {
-      setSelectedMemberId(null)
-      setActiveSection('dati-operatore')
-      return
-    }
-    setSelectedMemberId(nextId)
-    setActiveSection('dati-operatore')
-  }
-
   const handleOpenSection = (member, section) => {
     if (!member?.id) return
     setSelectedMemberId(member.id)
@@ -41,14 +30,6 @@ function Team({ utenti = [], user, clienti = [], toast, onUserUpdated, onUsersCh
       setNoteSpeseOpenKey((prev) => prev + 1)
     }
   }
-
-  const handleCardKeyDown = (event, member) => {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault()
-      handleSelectMember(member)
-    }
-  }
-
 
   return (
     <div className="team-section">
@@ -68,16 +49,11 @@ function Team({ utenti = [], user, clienti = [], toast, onUserUpdated, onUsersCh
       <div className="team-grid">
         {members.map((member) => {
           const fullName = [member?.nome, member?.cognome].filter(Boolean).join(' ').trim()
-          const isSelectable = Boolean(member?.id)
           const isActive = selectedMemberId && member?.id === selectedMemberId
           return (
             <div
               key={member.id || member.username}
-              className={`team-card ${isSelectable ? 'is-clickable' : ''} ${isActive ? 'is-active' : ''}`}
-              onClick={isSelectable ? () => handleSelectMember(member) : undefined}
-              onKeyDown={(event) => handleCardKeyDown(event, member)}
-              role={isSelectable ? 'button' : undefined}
-              tabIndex={isSelectable ? 0 : undefined}
+              className={`team-card ${isActive ? 'is-active' : ''}`}
             >
               <div className="team-card-title">{fullName || member.username || 'Profilo'}</div>
               <div className="team-card-meta-list">
@@ -148,42 +124,6 @@ function Team({ utenti = [], user, clienti = [], toast, onUserUpdated, onUsersCh
       {selectedMember && (
         <div className="team-section-panel mt-3">
           <>
-            {activeSection === 'dati-operatore' && (
-              <div className="mb-4">
-                <div className="card">
-                  <div className="card-header">Dati operatore</div>
-                  <div className="card-body">
-                    <div className="row g-3">
-                      <div className="col-md-4">
-                        <label className="form-label">Username</label>
-                        <input className="form-control" value={selectedMember?.username || ''} readOnly />
-                      </div>
-                      <div className="col-md-4">
-                        <label className="form-label">Ruolo</label>
-                        <input className="form-control" value={selectedMember?.role || ''} readOnly />
-                      </div>
-                      <div className="col-md-4">
-                        <label className="form-label">Email</label>
-                        <input className="form-control" value={selectedMember?.email || ''} readOnly />
-                      </div>
-                      <div className="col-md-4">
-                        <label className="form-label">Telefono</label>
-                        <input className="form-control" value={selectedMember?.telefono || ''} readOnly />
-                      </div>
-                      <div className="col-md-4">
-                        <label className="form-label">Autoveicolo</label>
-                        <input className="form-control" value={selectedMember?.mezzo || ''} readOnly />
-                      </div>
-                      <div className="col-md-4">
-                        <label className="form-label">Rimborso euro/km</label>
-                        <input className="form-control" value={Number(selectedMember?.rimborso_km || 0).toFixed(2)} readOnly />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
             {activeSection === 'rimborsi' && (
               <TabellaAttivita clienti={clienti} user={selectedMember || user} toast={toast} targetUserId={selectedMember?.id || null} />
             )}

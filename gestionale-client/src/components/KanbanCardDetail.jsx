@@ -314,15 +314,26 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
     note: 'Modifica note'
   }
 
+  const getAuditChangeList = (entry) => {
+    if (!entry) return []
+    if (Array.isArray(entry.changes)) return entry.changes
+    if (entry.changes && Array.isArray(entry.changes.changes)) return entry.changes.changes
+    return []
+  }
+
   const formatAuditAction = (entry) => {
     if (!entry) return 'Evento'
-    if (entry.action === 'update' && Array.isArray(entry.changes)) {
-      const labels = entry.changes.map((change) => {
+    if (entry.action === 'update') {
+      const changeList = getAuditChangeList(entry)
+      if (!changeList.length) return 'Aggiornamento'
+      const details = changeList.map((change) => {
         if (!change?.field) return 'Aggiornamento'
-        return auditChangeActions[change.field] || `Modifica ${formatFieldLabel(change.field)}`
+        const label = formatFieldLabel(change.field)
+        const from = formatChangeValue(change.from, change.field)
+        const to = formatChangeValue(change.to, change.field)
+        return `${label}: ${from} -> ${to}`
       })
-      const unique = [...new Set(labels)]
-      return unique.length ? unique.join(', ') : 'Aggiornamento'
+      return details.join('; ')
     }
     const mapping = {
       create: 'Creazione',
@@ -331,6 +342,12 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
       note: 'Nota',
       attachment_uploaded: 'Allegato caricato',
       attachment_deleted: 'Eliminazione allegato'
+    }
+    if (entry.action === 'attachment_uploaded' || entry.action === 'attachment_deleted') {
+      const base = mapping[entry.action] || 'Allegato'
+      const name = entry.changes?.original_name
+      const version = entry.changes?.version ? ` (v${entry.changes.version})` : ''
+      return name ? `${base}: ${name}${version}` : base
     }
     return mapping[entry.action] || entry.action || 'Evento'
   }
@@ -988,11 +1005,11 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
                                 <div>{entry.changes.note || entry.changes.nota || '-'}</div>
                               </div>
                             )}
-                            {Array.isArray(entry.changes) && entry.changes.length > 0 && (
+                            {getAuditChangeList(entry).length > 0 && (
                               <div className="audit-changes">
-                                {entry.changes.map((change, idx) => (
+                                {getAuditChangeList(entry).map((change, idx) => (
                                   <div key={`${entry.id}-change-${idx}`}>
-                                    {formatFieldLabel(change.field)}: {formatChangeValue(change.from, change.field)} &gt; {formatChangeValue(change.to, change.field)}
+                                    {formatFieldLabel(change.field)}: {formatChangeValue(change.from, change.field)} -&gt; {formatChangeValue(change.to, change.field)}
                                   </div>
                                 ))}
                               </div>
