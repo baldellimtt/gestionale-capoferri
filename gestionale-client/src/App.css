@@ -761,6 +761,27 @@ header .logo {
   min-width: 180px;
 }
 
+.commesse-table.no-client-column th:nth-child(1),
+.commesse-table.no-client-column td:nth-child(1) {
+  min-width: 240px;
+  text-align: left;
+}
+
+.commesse-table.no-client-column th:nth-child(2),
+.commesse-table.no-client-column td:nth-child(2) {
+  min-width: 140px;
+}
+
+.commesse-table.no-client-column th:nth-child(3),
+.commesse-table.no-client-column td:nth-child(3) {
+  min-width: 220px;
+}
+
+.commesse-table.no-client-column th:nth-child(4),
+.commesse-table.no-client-column td:nth-child(4) {
+  min-width: 180px;
+}
+
 .commessa-title {
   font-weight: 700;
   color: var(--ink-800);

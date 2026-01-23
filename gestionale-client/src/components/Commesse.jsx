@@ -59,6 +59,7 @@ function Commesse({ clienti, toast }) {
   const [editingId, setEditingId] = useState(null)
   const [formData, setFormData] = useState(createEmptyForm())
   const [initialFormData, setInitialFormData] = useState(createEmptyForm())
+  const [selectedClienteViewId, setSelectedClienteViewId] = useState('')
   const [saving, setSaving] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState({ show: false, id: null })
   const [deleting, setDeleting] = useState(false)
@@ -262,6 +263,7 @@ function Commesse({ clienti, toast }) {
     if (!value) {
       setFilters((prev) => ({ ...prev, clienteId: '' }))
       setShowClienteFilterAutocomplete(false)
+      setSelectedClienteViewId('')
       return
     }
 
@@ -274,6 +276,25 @@ function Commesse({ clienti, toast }) {
       setFilters((prev) => ({ ...prev, clienteId: '' }))
     }
     setShowClienteFilterAutocomplete(true)
+  }
+
+  const selectClienteForView = (cliente) => {
+    if (!cliente?.id) return
+    setClienteFilterInput(cliente.denominazione || '')
+    setFilters((prev) => ({ ...prev, clienteId: cliente.id }))
+    setSelectedClienteViewId(String(cliente.id))
+    setShowClienteFilterAutocomplete(false)
+  }
+
+  const handleClienteListSelect = (cliente) => {
+    selectClienteForView(cliente)
+  }
+
+  const handleBackToClientList = () => {
+    setSelectedClienteViewId('')
+    setClienteFilterInput('')
+    setFilters((prev) => ({ ...prev, clienteId: '' }))
+    setShowClienteFilterAutocomplete(false)
   }
 
   const handleSubmit = async () => {
@@ -671,10 +692,23 @@ function Commesse({ clienti, toast }) {
     })
   }, [commesseSorted, filters.sottoStato, filters.statoPagamenti, yearFilter])
 
+  const clientiSorted = useMemo(() => {
+    return [...clienti].sort((a, b) => {
+      return String(a?.denominazione || '').localeCompare(String(b?.denominazione || ''), 'it', { sensitivity: 'base' })
+    })
+  }, [clienti])
+
+  const clientiList = useMemo(() => {
+    if (!clienteFilterInput) return clientiSorted
+    const search = clienteFilterInput.toLowerCase()
+    return clientiSorted.filter((cliente) => cliente.denominazione?.toLowerCase().includes(search))
+  }, [clientiSorted, clienteFilterInput])
+
 
   const uploadsBase = api.baseURL.replace(/\/api\/?$/, '') + '/uploads'
   const selectedCommessa = commesse.find((item) => String(item.id) === String(selectedCommessaId))
   const selectedAllegati = selectedCommessa ? (allegatiByCommessa[selectedCommessa.id] || []) : []
+  const isClientListView = !showForm && !selectedClienteViewId
   const getUtenteLabel = (utente) => {
     const fullName = [utente?.nome, utente?.cognome].filter(Boolean).join(' ').trim()
     return fullName || utente?.username || ''
@@ -785,23 +819,33 @@ function Commesse({ clienti, toast }) {
               Torna alla lista
             </button>
           ) : (
-            <button
-              className="btn btn-secondary"
-              onClick={() => {
-                const empty = createEmptyForm()
-                setFormData(empty)
-                setInitialFormData(empty)
-                setInitialAllegati([])
-                setEditingId(null)
-                setShowForm(true)
-                setFormTab('essenziali')
-                setSelectedCommessaId('')
-                setClienteFormInput('')
-                setShowClienteFormAutocomplete(false)
-              }}
-            >
-              + Nuova Commessa
-            </button>
+            <>
+              {!isClientListView && (
+                <button
+                  className="btn btn-secondary"
+                  onClick={handleBackToClientList}
+                >
+                  Torna ai clienti
+                </button>
+              )}
+              <button
+                className="btn btn-secondary"
+                onClick={() => {
+                  const empty = createEmptyForm()
+                  setFormData(empty)
+                  setInitialFormData(empty)
+                  setInitialAllegati([])
+                  setEditingId(null)
+                  setShowForm(true)
+                  setFormTab('essenziali')
+                  setSelectedCommessaId('')
+                  setClienteFormInput('')
+                  setShowClienteFormAutocomplete(false)
+                }}
+              >
+                + Nuova Commessa
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -829,9 +873,7 @@ function Commesse({ clienti, toast }) {
                     className="autocomplete-item"
                     onMouseDown={(e) => {
                       e.preventDefault()
-                      setClienteFilterInput(cliente.denominazione)
-                      setFilters((prev) => ({ ...prev, clienteId: cliente.id }))
-                      setShowClienteFilterAutocomplete(false)
+                      selectClienteForView(cliente)
                     }}
                   >
                     {cliente.denominazione}
@@ -1348,7 +1390,37 @@ function Commesse({ clienti, toast }) {
         </div>
       )}
 
-      {!showForm && (
+      {!showForm && isClientListView && (
+        <div className="clienti-list">
+          {clientiList.length === 0 ? (
+            <div className="alert alert-info mt-3">
+              Nessun cliente trovato.
+            </div>
+          ) : (
+            clientiList.map((cliente) => (
+              <div
+                key={cliente.id}
+                className="cliente-card"
+                role="button"
+                tabIndex={0}
+                onClick={() => handleClienteListSelect(cliente)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    handleClienteListSelect(cliente)
+                  }
+                }}
+              >
+                <div className="cliente-card-header">
+                  <h3>{cliente.denominazione || '-'}</h3>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
+      {!showForm && !isClientListView && (
         <div className="attivita-table-container">
           {loading ? (
             <div className="text-center py-5">
@@ -1362,10 +1434,10 @@ function Commesse({ clienti, toast }) {
             </div>
           ) : (
             <div className="attivita-table-scroll">
-              <table className="table table-striped commesse-table">
+              <table className={`table table-striped commesse-table ${selectedClienteViewId ? 'no-client-column' : ''}`}>
                 <thead className="table-dark">
                   <tr>
-                    <th>Cliente</th>
+                    {!selectedClienteViewId && <th>Cliente</th>}
                     <th>Commessa</th>
                     <th>Stato</th>
                     <th>Tipologia</th>
@@ -1379,9 +1451,11 @@ function Commesse({ clienti, toast }) {
                       className="commessa-row"
                       onClick={() => handleEdit(commessa)}
                     >
-                      <td>
-                        <div className="commessa-title">{commessa.cliente_nome || '-'}</div>
-                      </td>
+                      {!selectedClienteViewId && (
+                        <td>
+                          <div className="commessa-title">{commessa.cliente_nome || '-'}</div>
+                        </td>
+                      )}
                       <td>
                         <div className="commessa-title">{commessa.titolo || '-'}</div>
                         {commessa.responsabile && (
