@@ -137,7 +137,7 @@ function KanbanFilters({ colonne, clienti, filters, onFiltersChange, onReset }) 
               setShowAutocomplete(true)
               openAutocompletePortal(value, e.target)
               
-              // Se il valore è vuoto, rimuovi il filtro
+              // Se il valore ?? vuoto, rimuovi il filtro
               if (!value.trim()) {
                 handleFilterChange('cliente_id', '')
               }
@@ -207,7 +207,7 @@ function KanbanFilters({ colonne, clienti, filters, onFiltersChange, onReset }) 
           value={filters.priorita || ''}
           onChange={(e) => handleFilterChange('priorita', e.target.value)}
         >
-          <option value="">Tutte le priorità</option>
+          <option value="">Tutte le priorit??</option>
           <option value="bassa" style={{ color: '#10b981', backgroundColor: 'var(--bg-1)' }}>Bassa</option>
           <option value="media" style={{ color: '#3b82f6', backgroundColor: 'var(--bg-1)' }}>Media</option>
           <option value="alta" style={{ color: '#f59e0b', backgroundColor: 'var(--bg-1)' }}>Alta</option>
@@ -224,15 +224,15 @@ function KanbanFilters({ colonne, clienti, filters, onFiltersChange, onReset }) 
         />
 
         <button
-          className="btn btn-sm btn-outline-secondary"
+          className="btn btn-sm btn-secondary"
           onClick={() => setShowAdvanced(!showAdvanced)}
         >
-          {showAdvanced ? '▼' : '▶'} Avanzati
+          {showAdvanced ? '???' : '???'} Avanzati
         </button>
 
         {hasActiveFilters() && (
           <button
-            className="btn btn-sm btn-outline-danger"
+            className="btn btn-sm btn-danger"
             onClick={handleReset}
           >
             Reset
@@ -337,4 +337,5 @@ function KanbanFilters({ colonne, clienti, filters, onFiltersChange, onReset }) 
 }
 
 export default KanbanFilters
+
 

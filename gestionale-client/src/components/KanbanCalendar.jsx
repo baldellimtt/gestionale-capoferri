@@ -155,7 +155,7 @@ function KanbanCalendar({ card, scadenze, colonne, clienti, filters, onCardClick
   const weekDays = useMemo(() => {
     const startOfWeek = new Date(currentDate)
     const day = startOfWeek.getDay()
-    const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1) // Lunedì
+    const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1) // Luned??
     startOfWeek.setDate(diff)
     
     const days = []
@@ -176,7 +176,7 @@ function KanbanCalendar({ card, scadenze, colonne, clienti, filters, onCardClick
     })
   }
 
-  // Colori priorità
+  // Colori priorit??
   const getPrioritaColor = (priorita) => {
     switch (priorita) {
       case 'urgente': return '#ef4444'
@@ -669,24 +669,24 @@ function KanbanCalendar({ card, scadenze, colonne, clienti, filters, onCardClick
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <button
-            className="btn btn-sm btn-outline-secondary"
+            className="btn btn-sm btn-secondary"
             onClick={goToPrevious}
             style={{ minWidth: '40px' }}
           >
-            ←
+            ???
           </button>
           <button
-            className="btn btn-sm btn-outline-primary"
+            className="btn btn-sm btn-primary"
             onClick={goToToday}
           >
             Oggi
           </button>
           <button
-            className="btn btn-sm btn-outline-secondary"
+            className="btn btn-sm btn-secondary"
             onClick={goToNext}
             style={{ minWidth: '40px' }}
           >
-            →
+            ???
           </button>
           
           <div style={{
@@ -706,19 +706,19 @@ function KanbanCalendar({ card, scadenze, colonne, clienti, filters, onCardClick
         
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           <button
-            className={`btn btn-sm ${viewMode === 'month' ? 'btn-primary' : 'btn-outline-secondary'}`}
+            className={`btn btn-sm ${viewMode === 'month' ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => setViewMode('month')}
           >
             Mese
           </button>
           <button
-            className={`btn btn-sm ${viewMode === 'week' ? 'btn-primary' : 'btn-outline-secondary'}`}
+            className={`btn btn-sm ${viewMode === 'week' ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => setViewMode('week')}
           >
             Settimana
           </button>
           <button
-            className={`btn btn-sm ${viewMode === 'day' ? 'btn-primary' : 'btn-outline-secondary'}`}
+            className={`btn btn-sm ${viewMode === 'day' ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => setViewMode('day')}
           >
             Giorno
@@ -743,4 +743,5 @@ function KanbanCalendar({ card, scadenze, colonne, clienti, filters, onCardClick
 }
 
 export default KanbanCalendar
+
 

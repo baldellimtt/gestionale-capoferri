@@ -293,7 +293,7 @@ function Consuntivi() {
                       {commessa.cliente_nome || 'Cliente'} - {commessa.titolo}
                     </span>
                     <span className="consuntivo-value">
-                      € {Number(parseNumber(commessa.importo_totale ?? 0) || 0).toFixed(2)}
+                      ??? {Number(parseNumber(commessa.importo_totale ?? 0) || 0).toFixed(2)}
                     </span>
                   </label>
                 ))}
@@ -304,7 +304,7 @@ function Consuntivi() {
               <div className="consuntivo-summary">
                 <div className="consuntivo-row">
                   <span>Totale commesse selezionate</span>
-                  <strong>€ {consuntivoTotale.toFixed(2)}</strong>
+                  <strong>??? {consuntivoTotale.toFixed(2)}</strong>
                 </div>
                 <div className="consuntivo-row">
                   <label className="form-label mb-1">Sconto (%)</label>
@@ -318,15 +318,15 @@ function Consuntivi() {
                 </div>
                 <div className="consuntivo-row">
                   <span>Sconto applicato</span>
-                  <strong>- € {consuntivoScontoValue.toFixed(2)}</strong>
+                  <strong>- ??? {consuntivoScontoValue.toFixed(2)}</strong>
                 </div>
                 <div className="consuntivo-row consuntivo-final">
                   <span>Conto finale</span>
-                  <strong>€ {consuntivoFinale.toFixed(2)}</strong>
+                  <strong>??? {consuntivoFinale.toFixed(2)}</strong>
                 </div>
                 <button
                   type="button"
-                  className="btn btn-outline-secondary btn-sm"
+                  className="btn btn-secondary btn-sm"
                   onClick={() => {
                     setConsuntivoIds([])
                     setConsuntivoSconto('')
@@ -344,3 +344,4 @@ function Consuntivi() {
 }
 
 export default Consuntivi
+

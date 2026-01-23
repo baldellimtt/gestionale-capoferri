@@ -90,7 +90,7 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
         // Aggiorna la card nella lista locale senza ricaricare tutto
         setCard((prevCards) => {
           const updated = prevCards.map(c => c.id === refreshedCard.id ? refreshedCard : c)
-          // Se la card non è nella lista (potrebbe essere filtrata), aggiungila
+          // Se la card non ?? nella lista (potrebbe essere filtrata), aggiungila
           if (!updated.find(c => c.id === refreshedCard.id)) {
             return [...updated, refreshedCard]
           }
@@ -185,7 +185,7 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
             <div className="d-flex gap-2 align-items-center">
               <div className="btn-group" role="group">
                 <button
-                  className={`btn btn-sm ${viewMode === 'kanban' ? 'btn-primary' : 'btn-outline-secondary'}`}
+                  className={`btn btn-sm ${viewMode === 'kanban' ? 'btn-primary' : 'btn-secondary'}`}
                   onClick={() => setViewMode('kanban')}
                   style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
                 >
@@ -197,7 +197,7 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
                   Kanban
                 </button>
                 <button
-                  className={`btn btn-sm ${viewMode === 'calendar' ? 'btn-primary' : 'btn-outline-secondary'}`}
+                  className={`btn btn-sm ${viewMode === 'calendar' ? 'btn-primary' : 'btn-secondary'}`}
                   onClick={() => setViewMode('calendar')}
                   style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
                 >
@@ -314,4 +314,5 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
 }
 
 export default KanbanBoard
+
 

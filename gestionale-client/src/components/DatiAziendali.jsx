@@ -139,12 +139,12 @@ function DatiAziendali({ onBack, toast, showHeader = true }) {
                   />
                   <button
                     type="button"
-                    className="btn btn-outline-secondary"
+                    className="btn btn-secondary"
                     onClick={() => copyToClipboard(formData.ragione_sociale)}
                     disabled={!formData.ragione_sociale}
                     title="Copia"
                   >
-                    📋
+                    ????
                   </button>
                 </div>
               </div>
@@ -159,12 +159,12 @@ function DatiAziendali({ onBack, toast, showHeader = true }) {
                   />
                   <button
                     type="button"
-                    className="btn btn-outline-secondary"
+                    className="btn btn-secondary"
                     onClick={() => copyToClipboard(formData.partita_iva)}
                     disabled={!formData.partita_iva}
                     title="Copia"
                   >
-                    📋
+                    ????
                   </button>
                 </div>
               </div>
@@ -179,12 +179,12 @@ function DatiAziendali({ onBack, toast, showHeader = true }) {
                   />
                   <button
                     type="button"
-                    className="btn btn-outline-secondary"
+                    className="btn btn-secondary"
                     onClick={() => copyToClipboard(formData.codice_fiscale)}
                     disabled={!formData.codice_fiscale}
                     title="Copia"
                   >
-                    📋
+                    ????
                   </button>
                 </div>
               </div>
@@ -202,3 +202,4 @@ function DatiAziendali({ onBack, toast, showHeader = true }) {
 }
 
 export default DatiAziendali
+
