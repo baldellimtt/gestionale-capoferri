@@ -1131,6 +1131,12 @@ header .logo {
   text-transform: uppercase;
 }
 
+.audit-user-badge {
+  border-radius: var(--radius-sm);
+  text-transform: none;
+  font-weight: 600;
+}
+
 .progress-track {
   position: relative;
   width: 100%;
@@ -1334,12 +1340,11 @@ header .logo {
 }
 
 .audit-item {
-  padding: 0.35rem 0 0.75rem;
-  border-bottom: 1px solid var(--border-soft);
-}
-
-.audit-item:last-child {
-  border-bottom: none;
+  padding: 1rem 1.25rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-soft);
+  background: var(--bg-1);
+  box-shadow: var(--shadow-1);
 }
 
 .audit-header {

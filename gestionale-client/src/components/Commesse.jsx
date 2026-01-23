@@ -77,6 +77,7 @@ function Commesse({ clienti, toast }) {
   const [auditNoteDate, setAuditNoteDate] = useState(() => getTodayDate())
   const [auditNoteText, setAuditNoteText] = useState('')
   const [auditNoteSaving, setAuditNoteSaving] = useState(false)
+  const [sortByLatest, setSortByLatest] = useState(false)
 
   const loadCommesse = async (nextFilters = filters) => {
     try {
@@ -537,6 +538,22 @@ function Commesse({ clienti, toast }) {
     return fullName || user?.username || (entry?.user_id ? `Utente #${entry.user_id}` : 'Sistema')
   }
 
+  const getAuditUserBadgeStyle = (entry) => {
+    const user = entry?.user
+    const seed = String(user?.id || user?.username || entry?.user_id || 'system')
+    let hash = 0
+    for (let i = 0; i < seed.length; i += 1) {
+      hash = ((hash << 5) - hash) + seed.charCodeAt(i)
+      hash |= 0
+    }
+    const hue = Math.abs(hash) % 360
+    return {
+      background: `hsl(${hue} 75% 88%)`,
+      color: `hsl(${hue} 55% 28%)`,
+      border: `1px solid hsl(${hue} 55% 70%)`
+    }
+  }
+
   const loadCommessaAudit = async (commessaId) => {
     if (!commessaId) return
     setCommessaAuditLoading(true)
@@ -662,14 +679,24 @@ function Commesse({ clienti, toast }) {
     const compareValues = (first, second) => {
       return String(first || '').localeCompare(String(second || ''), 'it', { sensitivity: 'base' })
     }
+    const getUpdatedTimestamp = (commessa) => {
+      const value = commessa?.updated_at || commessa?.created_at
+      if (!value) return 0
+      const parsed = new Date(value)
+      return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime()
+    }
     return [...commesse].sort((a, b) => {
+      if (sortByLatest) {
+        const updatedCompare = getUpdatedTimestamp(b) - getUpdatedTimestamp(a)
+        if (updatedCompare !== 0) return updatedCompare
+      }
       const clienteCompare = compareValues(a.cliente_nome, b.cliente_nome)
       if (clienteCompare !== 0) return clienteCompare
       const titoloCompare = compareValues(a.titolo, b.titolo)
       if (titoloCompare !== 0) return titoloCompare
       return Number(a.id) - Number(b.id)
     })
-  }, [commesse])
+  }, [commesse, sortByLatest])
 
   const filteredCommesse = useMemo(() => {
     return commesseSorted.filter((commessa) => {
@@ -852,6 +879,13 @@ function Commesse({ clienti, toast }) {
 
       {!showForm && (
         <div className="filters-section">
+          <button
+            type="button"
+            className={`btn btn-sm ${sortByLatest ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setSortByLatest((prev) => !prev)}
+          >
+            Ultime modifiche
+          </button>
           <label>Cliente:</label>
           <div className="autocomplete-container" style={{ width: 'auto' }}>
             <input
@@ -1325,11 +1359,16 @@ function Commesse({ clienti, toast }) {
                 {!commessaAuditLoading && !commessaAuditError && commessaAudit.length > 0 && (
                   <div className="audit-list">
                     {commessaAudit.map((entry) => (
-                      <div key={entry.id} className="audit-item">
+                      <div key={entry.id} className="audit-item card">
                         <div className="audit-header">
                           <div>
                             <div className="audit-title">{formatAuditAction(entry)}</div>
-                            <div className="audit-meta">Da: {formatAuditUser(entry)}</div>
+                            <div className="audit-meta d-flex align-items-center gap-2 flex-wrap">
+                              <span>Da:</span>
+                              <span className="badge-chip audit-user-badge" style={getAuditUserBadgeStyle(entry)}>
+                                {formatAuditUser(entry)}
+                              </span>
+                            </div>
                           </div>
                           <div className="audit-meta">{formatAuditDate(entry.created_at)}</div>
                         </div>
@@ -1435,7 +1474,7 @@ function Commesse({ clienti, toast }) {
           ) : (
             <div className="attivita-table-scroll">
               <table className={`table table-striped commesse-table ${selectedClienteViewId ? 'no-client-column' : ''}`}>
-                <thead className="table-dark">
+                <thead className="table-dark visually-hidden">
                   <tr>
                     {!selectedClienteViewId && <th>Cliente</th>}
                     <th>Commessa</th>
