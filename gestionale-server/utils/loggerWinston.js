@@ -18,6 +18,10 @@ const NODE_ENV = process.env.NODE_ENV || 'development';
 const LOG_MAX_SIZE = process.env.LOG_MAX_SIZE || '20m';
 const LOG_MAX_FILES = process.env.LOG_MAX_FILES || '14d'; // Mantieni 14 giorni di log
 const LOG_DATE_PATTERN = process.env.LOG_DATE_PATTERN || 'YYYY-MM-DD';
+const LOG_EXCEPTIONS_MAX_SIZE = process.env.LOG_EXCEPTIONS_MAX_SIZE || '5m';
+const LOG_EXCEPTIONS_MAX_FILES = process.env.LOG_EXCEPTIONS_MAX_FILES || '7d';
+const LOG_REJECTIONS_MAX_SIZE = process.env.LOG_REJECTIONS_MAX_SIZE || '5m';
+const LOG_REJECTIONS_MAX_FILES = process.env.LOG_REJECTIONS_MAX_FILES || '7d';
 
 // Valida log level
 const validLevels = ['error', 'warn', 'info', 'verbose', 'debug', 'silly'];
@@ -118,8 +122,8 @@ const exceptionRotateTransport = new DailyRotateFile({
   filename: path.join(LOG_DIR, 'exceptions-%DATE%.log'),
   datePattern: LOG_DATE_PATTERN,
   format: jsonFormat,
-  maxSize: LOG_MAX_SIZE,
-  maxFiles: LOG_MAX_FILES,
+  maxSize: LOG_EXCEPTIONS_MAX_SIZE,
+  maxFiles: LOG_EXCEPTIONS_MAX_FILES,
   zippedArchive: true,
   auditFile: path.join(LOG_DIR, '.audit-exceptions.json'),
   createSymlink: true,
@@ -131,8 +135,8 @@ const rejectionRotateTransport = new DailyRotateFile({
   filename: path.join(LOG_DIR, 'rejections-%DATE%.log'),
   datePattern: LOG_DATE_PATTERN,
   format: jsonFormat,
-  maxSize: LOG_MAX_SIZE,
-  maxFiles: LOG_MAX_FILES,
+  maxSize: LOG_REJECTIONS_MAX_SIZE,
+  maxFiles: LOG_REJECTIONS_MAX_FILES,
   zippedArchive: true,
   auditFile: path.join(LOG_DIR, '.audit-rejections.json'),
   createSymlink: true,

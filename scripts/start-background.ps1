@@ -7,8 +7,8 @@ $logDir = Join-Path $root 'logs'
 $null = New-Item -Path $logDir -ItemType Directory -Force
 $serverOutLog = Join-Path $logDir 'server.out.log'
 $serverErrLog = Join-Path $logDir 'server.err.log'
-$clientOutLog = Join-Path $logDir 'client.out.log'
-$clientErrLog = Join-Path $logDir 'client.err.log'
+$clientBuildOutLog = Join-Path $logDir 'client.build.out.log'
+$clientBuildErrLog = Join-Path $logDir 'client.build.err.log'
 $startupLog = Join-Path $logDir 'startup.log'
 
 $npm = (Get-Command 'npm.cmd' -ErrorAction SilentlyContinue).Source
@@ -21,7 +21,7 @@ if (-not (Test-Path $npm)) {
 if (-not (Test-Path $npm)) {
   throw 'npm.cmd not found. Install Node.js or update the npm path.'
 }
-$clientCommand = 'set NO_COLOR=1&& set FORCE_COLOR=0&& set VITE_PORT=80&& set VITE_HOST=0.0.0.0&& set VITE_API_BASE_URL=/api&& set VITE_API_PROXY_TARGET=http://localhost:3001&& npm run dev'
+$buildClientOnStartup = $true
 
 function Write-StartupLog {
   param([string]$Message)
@@ -46,37 +46,39 @@ function Stop-PortListeners {
 
 function Start-Server {
   Write-StartupLog 'Starting server process'
-  return Start-Process -FilePath $npm -ArgumentList 'run', 'dev' -WorkingDirectory $serverPath -WindowStyle Hidden -RedirectStandardOutput $serverOutLog -RedirectStandardError $serverErrLog -PassThru
+  return Start-Process -FilePath $npm -ArgumentList 'run', 'start' -WorkingDirectory $serverPath -WindowStyle Hidden -RedirectStandardOutput $serverOutLog -RedirectStandardError $serverErrLog -PassThru
 }
 
-function Start-Client {
-  Write-StartupLog 'Starting client process'
-  return Start-Process -FilePath 'cmd.exe' -ArgumentList '/c', $clientCommand -WorkingDirectory $clientPath -WindowStyle Hidden -RedirectStandardOutput $clientOutLog -RedirectStandardError $clientErrLog -PassThru
+function Build-Client {
+  Write-StartupLog 'Building client'
+  $env:NO_COLOR = '1'
+  $env:FORCE_COLOR = '0'
+  return Start-Process -FilePath $npm -ArgumentList 'run', 'build' -WorkingDirectory $clientPath -WindowStyle Hidden -RedirectStandardOutput $clientBuildOutLog -RedirectStandardError $clientBuildErrLog -Wait -PassThru
 }
 
+$didBuildClient = $false
 while ($true) {
   Stop-PortListeners -Port 80
-  Stop-PortListeners -Port 3001
-
+  Stop-PortListeners -Port 443
+  
+  if ($buildClientOnStartup -and -not $didBuildClient) {
+    $buildProc = Build-Client
+    Write-StartupLog "Client build exit code: $($buildProc.ExitCode)"
+    $didBuildClient = $true
+  }
+  
   $serverProcess = Start-Server
-  Start-Sleep -Seconds 2
-  $clientProcess = Start-Client
-
-  Write-StartupLog "Server PID: $($serverProcess.Id); Client PID: $($clientProcess.Id)"
+  Write-StartupLog "Server PID: $($serverProcess.Id)"
   while ($true) {
     $serverAlive = Get-Process -Id $serverProcess.Id -ErrorAction SilentlyContinue
-    $clientAlive = Get-Process -Id $clientProcess.Id -ErrorAction SilentlyContinue
-    if (-not $serverAlive -or -not $clientAlive) {
+    if (-not $serverAlive) {
       break
     }
     Start-Sleep -Seconds 2
   }
-  Write-StartupLog 'Detected process exit; restarting both'
-
-  foreach ($proc in @($serverProcess, $clientProcess)) {
-    if ($proc -and -not $proc.HasExited) {
-      try { $proc.Kill() } catch {}
-    }
+  Write-StartupLog 'Detected server exit; restarting'
+  if ($serverProcess -and -not $serverProcess.HasExited) {
+    try { $serverProcess.Kill() } catch {}
   }
 
   Start-Sleep -Seconds 3

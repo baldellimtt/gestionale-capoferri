@@ -1,6 +1,8 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const http = require('http');
+const https = require('https');
 const helmet = require('helmet');
 require('dotenv').config();
 
@@ -21,6 +23,14 @@ const PORT = parseInt(process.env.PORT, 10);
 const HOST = process.env.HOST || '127.0.0.1';
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'data', 'gestionale.db');
 const NODE_ENV = process.env.NODE_ENV || 'development';
+const HTTP_ENABLED = (process.env.HTTP_ENABLED || 'true').toLowerCase() === 'true';
+const HTTPS_ENABLED = (process.env.HTTPS_ENABLED || 'false').toLowerCase() === 'true';
+const HTTPS_REDIRECT = (process.env.HTTPS_REDIRECT || (HTTPS_ENABLED ? 'true' : 'false')).toLowerCase() === 'true';
+const HTTPS_PORT = parseInt(process.env.HTTPS_PORT || '443', 10);
+const HTTPS_KEY_PATH = process.env.HTTPS_KEY_PATH || '';
+const HTTPS_CERT_PATH = process.env.HTTPS_CERT_PATH || '';
+const HTTPS_PFX_PATH = process.env.HTTPS_PFX_PATH || '';
+const HTTPS_PFX_PASSPHRASE = process.env.HTTPS_PFX_PASSPHRASE || '';
 
 // Inizializza database
 const dbManager = new DatabaseManager(DB_PATH);
@@ -42,7 +52,10 @@ if (trustProxy === 'true') {
   }
 }
 
+let httpsServerEnabled = false;
+
 // Security Headers (Helmet)
+const hstsEnabled = (process.env.HSTS_ENABLED || 'true').toLowerCase() === 'true';
 app.use(helmet({
   contentSecurityPolicy: NODE_ENV === 'production' ? {
     directives: {
@@ -56,8 +69,9 @@ app.use(helmet({
       mediaSrc: ["'self'"],
       frameSrc: ["'none'"],
     },
-  } : false, // Disabilita CSP in development per facilità sviluppo
-  crossOriginEmbedderPolicy: false // Necessario per alcuni browser
+  } : false, // Disabilita CSP in development per facilit?? sviluppo
+  crossOriginEmbedderPolicy: false, // Necessario per alcuni browser
+  hsts: hstsEnabled
 }));
 
 // CORS Configuration
@@ -65,7 +79,7 @@ const corsOptions = {
   origin: function (origin, callback) {
     const corsOrigin = process.env.CORS_ORIGIN || '*';
     
-    // In development o se CORS_ORIGIN è '*', permette tutte le origini
+    // In development o se CORS_ORIGIN ?? '*', permette tutte le origini
     if (NODE_ENV === 'development' || corsOrigin === '*' || !origin) {
       return callback(null, true);
     }
@@ -81,6 +95,18 @@ const corsOptions = {
   optionsSuccessStatus: 200
 };
 app.use(cors(corsOptions));
+
+// Redirect HTTP -> HTTPS when HTTPS is available (avoid mixed content)
+app.use((req, res, next) => {
+  if (!HTTPS_REDIRECT || !httpsServerEnabled) {
+    return next();
+  }
+  if (req.secure || req.headers['x-forwarded-proto'] === 'https') {
+    return next();
+  }
+  const host = req.headers.host || '';
+  return res.redirect(301, `https://${host}${req.originalUrl}`);
+});
 
 // Body parsing
 const uploadMaxSize = process.env.UPLOAD_MAX_SIZE_MB 
@@ -105,8 +131,27 @@ app.use('/api', (req, res, next) => {
 });
 
 // Static files
+const fs = require('fs');
 const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, 'uploads');
 app.use('/uploads', express.static(uploadDir));
+
+// Client static files (build) - per hosting locale senza Vite dev server
+const serveStatic = (process.env.SERVE_STATIC || 'false').toLowerCase() === 'true';
+const clientDist = process.env.CLIENT_DIST || path.join(__dirname, '..', 'gestionale-client', 'dist');
+let resolvedClientDist = clientDist;
+let serveStaticEnabled = false;
+if (serveStatic) {
+  resolvedClientDist = path.isAbsolute(clientDist)
+    ? clientDist
+    : path.join(__dirname, clientDist);
+  const indexPath = path.join(resolvedClientDist, 'index.html');
+  if (fs.existsSync(indexPath)) {
+    app.use(express.static(resolvedClientDist));
+    serveStaticEnabled = true;
+  } else {
+    Logger.warn('Static client non trovato, serveStatic disabilitato', { indexPath });
+  }
+}
 
 // Health check
 app.get('/health', (req, res) => {
@@ -142,6 +187,16 @@ app.use('/api/attivita', require('./routes/attivita')(db));
 app.use('/api/commesse', require('./routes/commesse')(db));
 app.use('/api/note-spese', require('./routes/noteSpese')(db));
 app.use('/api/kanban', require('./routes/kanban')(db));
+
+// SPA fallback (solo se serve static)
+if (serveStaticEnabled) {
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/uploads') || req.path === '/health') {
+      return next();
+    }
+    return res.sendFile(path.join(resolvedClientDist, 'index.html'));
+  });
+}
 
 // Error handling middleware (usa ErrorHandler centralizzato)
 app.use(ErrorHandler.handle);
@@ -179,11 +234,44 @@ if (backupEnabled) {
 const fattureInCloudSync = new FattureInCloudSync(db);
 fattureInCloudSync.start();
 
-// Avvia server
-app.listen(PORT, HOST, () => {
-  Logger.info(`Server avviato su ${HOST}:${PORT}`);
-  Logger.info(`Database: ${DB_PATH}`);
-});
+// Avvia server HTTP (opzionale)
+if (HTTP_ENABLED) {
+  http.createServer(app).listen(PORT, HOST, () => {
+    Logger.info(`Server HTTP avviato su ${HOST}:${PORT}`);
+    Logger.info(`Database: ${DB_PATH}`);
+  });
+} else {
+  Logger.info('Server HTTP disabilitato da configurazione');
+}
+
+// Avvia server HTTPS (opzionale)
+if (HTTPS_ENABLED) {
+  let httpsOptions = null;
+  if (HTTPS_PFX_PATH && fs.existsSync(HTTPS_PFX_PATH)) {
+    httpsOptions = {
+      pfx: fs.readFileSync(HTTPS_PFX_PATH),
+      passphrase: HTTPS_PFX_PASSPHRASE || undefined
+    };
+  } else if (HTTPS_KEY_PATH && HTTPS_CERT_PATH && fs.existsSync(HTTPS_KEY_PATH) && fs.existsSync(HTTPS_CERT_PATH)) {
+    httpsOptions = {
+      key: fs.readFileSync(HTTPS_KEY_PATH),
+      cert: fs.readFileSync(HTTPS_CERT_PATH)
+    };
+  }
+
+  if (httpsOptions) {
+    https.createServer(httpsOptions, app).listen(HTTPS_PORT, HOST, () => {
+      httpsServerEnabled = true;
+      Logger.info(`Server HTTPS avviato su ${HOST}:${HTTPS_PORT}`);
+    });
+  } else {
+    Logger.warn('HTTPS abilitato ma certificato non trovato', {
+      HTTPS_PFX_PATH,
+      HTTPS_KEY_PATH,
+      HTTPS_CERT_PATH
+    });
+  }
+}
 
 // Graceful shutdown
 process.on('SIGINT', () => {
@@ -199,6 +287,7 @@ process.on('SIGTERM', () => {
 });
 
 module.exports = app;
+
 
 
 
