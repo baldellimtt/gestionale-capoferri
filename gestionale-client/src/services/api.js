@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 const TOKEN_STORAGE_KEY = 'gestionale_auth_token';
 const REFRESH_TOKEN_STORAGE_KEY = 'gestionale_refresh_token';
 

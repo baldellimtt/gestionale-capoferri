@@ -337,7 +337,7 @@ function AnagraficaClienti({ clienti, onUpdateClienti, onBack, currentUser, toas
               placeholder="Cerca clienti..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              disabled={loading}
+              aria-busy={loading}
             />
           </div>
           <button 

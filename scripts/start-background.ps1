@@ -21,7 +21,7 @@ if (-not (Test-Path $npm)) {
 if (-not (Test-Path $npm)) {
   throw 'npm.cmd not found. Install Node.js or update the npm path.'
 }
-$clientCommand = 'set NO_COLOR=1&& set FORCE_COLOR=0&& set VITE_PORT=80&& set VITE_HOST=0.0.0.0&& set VITE_API_URL=http://localhost:3001/api&& npm run dev'
+$clientCommand = 'set NO_COLOR=1&& set FORCE_COLOR=0&& set VITE_PORT=80&& set VITE_HOST=0.0.0.0&& set VITE_API_BASE_URL=/api&& set VITE_API_PROXY_TARGET=http://localhost:3001&& npm run dev'
 
 function Write-StartupLog {
   param([string]$Message)

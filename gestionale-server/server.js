@@ -11,6 +11,7 @@ envValidator.validateServerConfig();
 const DatabaseManager = require('./db/database');
 const Logger = require('./utils/loggerWinston');
 const BackupService = require('./services/backup');
+const FattureInCloudSync = require('./services/fattureInCloudSync');
 const authMiddleware = require('./utils/authMiddleware');
 const ErrorHandler = require('./utils/errorHandler');
 const rateLimiter = require('./utils/rateLimiter');
@@ -173,6 +174,10 @@ if (backupEnabled) {
 } else {
   Logger.info('Backup automatico disabilitato');
 }
+
+// Sync automatico anagrafica da Fatture in Cloud (se abilitato)
+const fattureInCloudSync = new FattureInCloudSync(db);
+fattureInCloudSync.start();
 
 // Avvia server
 app.listen(PORT, HOST, () => {

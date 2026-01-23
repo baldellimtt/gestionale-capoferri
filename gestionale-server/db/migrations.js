@@ -444,6 +444,8 @@ class Migrations {
       addColumn('cognome', 'TEXT');
       addColumn('email', 'TEXT');
       addColumn('pec', 'TEXT');
+      addColumn('fatture_in_cloud_id', 'TEXT');
+      addColumn('fatture_in_cloud_updated_at', 'TEXT');
     } catch (error) {
       console.log('[MIGRATIONS] Tabella clienti non ancora creata');
     }

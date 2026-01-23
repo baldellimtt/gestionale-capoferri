@@ -1,3 +1,7 @@
 gestionale-server/logs
 logs/
 node_modules/
+.env
+.env.*
+gestionale-server/.env
+gestionale-client/.env
