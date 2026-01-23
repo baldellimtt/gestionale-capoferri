@@ -17,6 +17,7 @@ const rateLimiter = require('./utils/rateLimiter');
 
 // Usa variabili d'ambiente validate
 const PORT = parseInt(process.env.PORT, 10);
+const HOST = process.env.HOST || '127.0.0.1';
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'data', 'gestionale.db');
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
@@ -174,8 +175,8 @@ if (backupEnabled) {
 }
 
 // Avvia server
-app.listen(PORT, () => {
-  Logger.info(`Server avviato su porta ${PORT}`);
+app.listen(PORT, HOST, () => {
+  Logger.info(`Server avviato su ${HOST}:${PORT}`);
   Logger.info(`Database: ${DB_PATH}`);
 });
 
