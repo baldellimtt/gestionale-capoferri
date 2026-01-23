@@ -22,15 +22,33 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onUsersChanged, onBack
     rimborso_km: ''
   })
 
+  const normalizeErrorPayload = (value) => {
+    if (!value) {
+      return null
+    }
+    if (typeof value === 'string') {
+      return { message: value, details: [], suggestions: [] }
+    }
+    return {
+      message: value.message || 'Errore',
+      details: Array.isArray(value.details) ? value.details : [],
+      suggestions: Array.isArray(value.suggestions) ? value.suggestions : [],
+    }
+  }
+
+  const showError = (value) => {
+    setError(normalizeErrorPayload(value))
+  }
+
   const loadUtenti = async () => {
     try {
       setLoading(true)
-      setError(null)
+      showError(null)
       const data = await api.getUtenti()
       setUtenti(data)
     } catch (err) {
       console.error('Errore caricamento utenti:', err)
-      setError('Errore nel caricamento degli utenti.')
+      showError('Errore nel caricamento degli utenti.')
     } finally {
       setLoading(false)
     }
@@ -63,19 +81,19 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onUsersChanged, onBack
 
   const handleCreate = async () => {
     if (!createData.username || !createData.password) {
-      setError('Username e password sono obbligatori.')
+      showError('Username e password sono obbligatori.')
       return
     }
 
     const rimborso = Number(String(createData.rimborso_km || 0).replace(',', '.'))
     if (!Number.isFinite(rimborso) || rimborso < 0) {
-      setError('Costo km non valido.')
+      showError('Costo km non valido.')
       return
     }
 
     try {
       setSaving(true)
-      setError(null)
+      showError(null)
       const created = await api.createUtente({
         ...createData,
         rimborso_km: rimborso
@@ -99,7 +117,8 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onUsersChanged, onBack
       setShowCreate(false)
     } catch (err) {
       console.error('Errore creazione utente:', err)
-      setError(err.message || 'Errore nella creazione utente.')
+      const message = err.message || 'Errore nella creazione utente.'
+      showError({ ...err, message })
     } finally {
       setSaving(false)
     }
@@ -108,13 +127,13 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onUsersChanged, onBack
   const handleSave = async (id) => {
     const rimborso = Number(String(editData.rimborso_km || 0).replace(',', '.'))
     if (!Number.isFinite(rimborso) || rimborso < 0) {
-      setError('Costo km non valido.')
+      showError('Costo km non valido.')
       return
     }
 
     try {
       setSaving(true)
-      setError(null)
+      showError(null)
       const loadingToastId = toast?.showLoading('Salvataggio in corso...', 'Salvataggio utente')
       
       // IMPORTANTE: Non inviare il campo password se è vuoto
@@ -145,7 +164,7 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onUsersChanged, onBack
     } catch (err) {
       console.error('Errore aggiornamento utente:', err)
       const errorMsg = err.message || 'Errore nel salvataggio utente.'
-      setError(errorMsg)
+      showError(errorMsg)
       toast?.showError(errorMsg, 'Errore salvataggio')
     } finally {
       setSaving(false)
@@ -159,7 +178,7 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onUsersChanged, onBack
 
     try {
       setSaving(true)
-      setError(null)
+      showError(null)
       const loadingToastId = toast?.showLoading('Eliminazione in corso...', 'Eliminazione utente')
       await api.deleteUtente(utente.id)
       setUtenti((prev) => prev.filter((u) => u.id !== utente.id))
@@ -174,7 +193,7 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onUsersChanged, onBack
     } catch (err) {
       console.error('Errore eliminazione utente:', err)
       const errorMsg = err.message || 'Errore nell\'eliminazione utente.'
-      setError(errorMsg)
+      showError(errorMsg)
       toast?.showError(errorMsg, 'Errore eliminazione')
     } finally {
       setSaving(false)
@@ -196,7 +215,21 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onUsersChanged, onBack
 
       {error && (
         <div className="alert alert-warning mb-3">
-          {error}
+          <p className="mb-2 fw-semibold">{error.message}</p>
+          {error.details?.length > 0 && (
+            <ul className="mb-2 ps-3">
+              {error.details.map((detail, index) => (
+                <li key={`error-detail-${index}`} className="small mb-1">
+                  {detail}
+                </li>
+              ))}
+            </ul>
+          )}
+          {error.suggestions?.length > 0 && (
+            <p className="mb-0 small text-muted">
+              Suggerimenti: {error.suggestions.join(', ')}
+            </p>
+          )}
         </div>
       )}
 
