@@ -26,7 +26,7 @@ $buildClientOnStartup = $true
 function Write-StartupLog {
   param([string]$Message)
   $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
-  Add-Content -Path $startupLog -Value "[$timestamp] $Message" -Encoding ASCII
+  Add-Content -Path $startupLog -Value "[$timestamp] $Message" -Encoding UTF8
 }
 
 function Stop-PortListeners {
@@ -60,6 +60,13 @@ $didBuildClient = $false
 while ($true) {
   Stop-PortListeners -Port 80
   Stop-PortListeners -Port 443
+
+  $clientiRoute = Join-Path $serverPath 'routes\clienti.js'
+  if (-not (Test-Path $clientiRoute)) {
+    Write-StartupLog "Errore: file mancante $clientiRoute"
+    Start-Sleep -Seconds 5
+    continue
+  }
   
   if ($buildClientOnStartup -and -not $didBuildClient) {
     $buildProc = Build-Client
