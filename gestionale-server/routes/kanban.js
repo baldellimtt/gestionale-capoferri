@@ -81,6 +81,12 @@ class KanbanController {
           updated_at = datetime('now', 'localtime')
         WHERE id = ?
       `),
+      updateCardInline: this.db.prepare(`
+        UPDATE kanban_card SET
+          data_fine_prevista = ?, priorita = ?,
+          updated_at = datetime('now', 'localtime')
+        WHERE id = ?
+      `),
       moveCard: this.db.prepare(`
         UPDATE kanban_card SET
           colonna_id = ?, ordine = ?,
@@ -518,6 +524,59 @@ class KanbanController {
     }
   }
 
+  updateCardInline(req, res) {
+    try {
+      const { id } = req.params;
+      const { data_fine_prevista, priorita } = req.body;
+
+      if (data_fine_prevista === undefined && priorita === undefined) {
+        return res.status(400).json({ error: 'Nessun campo da aggiornare' });
+      }
+
+      const oldCard = this.stmt.getCardById.get(id);
+      if (!oldCard) {
+        return res.status(404).json({ error: 'Card non trovata' });
+      }
+
+      const nextDataFine =
+        data_fine_prevista === undefined
+          ? oldCard.data_fine_prevista
+          : (data_fine_prevista ? data_fine_prevista : null);
+      const nextPriorita =
+        priorita === undefined
+          ? oldCard.priorita
+          : priorita;
+
+      const result = this.stmt.updateCardInline.run(
+        nextDataFine,
+        nextPriorita || 'media',
+        id
+      );
+
+      if (result.changes === 0) {
+        return res.status(404).json({ error: 'Card non trovata' });
+      }
+
+      const updated = this.stmt.getCardById.get(id);
+
+      if (oldCard.data_fine_prevista !== nextDataFine || oldCard.priorita !== nextPriorita) {
+        this.createNotificationForCard(
+          id,
+          'card_modificata',
+          'Card modificata',
+          `La card "${updated.titolo}" è stata modificata`,
+          req.user?.id
+        );
+      }
+
+      Logger.info(`PATCH /kanban/card/${id}/inline`);
+      res.json(updated);
+    } catch (error) {
+      Logger.error(`Errore PATCH /kanban/card/${req.params.id}/inline`, error);
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
+    }
+  }
+
   moveCard(req, res) {
     try {
       const { id } = req.params;
@@ -950,6 +1009,7 @@ function createRouter(db) {
   router.get('/card/:id', validateRequest(ValidationSchemas.id), (req, res) => controller.getCardById(req, res));
   router.post('/card', validateRequest(ValidationSchemas.kanban.card.create), (req, res) => controller.createCard(req, res));
   router.put('/card/:id', validateRequest(ValidationSchemas.kanban.card.update), (req, res) => controller.updateCard(req, res));
+  router.patch('/card/:id/inline', validateRequest(ValidationSchemas.kanban.card.inline), (req, res) => controller.updateCardInline(req, res));
   router.put('/card/:id/move', validateRequest(ValidationSchemas.kanban.card.move), (req, res) => controller.moveCard(req, res));
   router.delete('/card/:id', validateRequest(ValidationSchemas.id), (req, res) => controller.deleteCard(req, res));
   
@@ -976,4 +1036,3 @@ function createRouter(db) {
 }
 
 module.exports = createRouter;
-

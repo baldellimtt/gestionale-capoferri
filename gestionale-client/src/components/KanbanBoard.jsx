@@ -234,6 +234,24 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
     }
   }
 
+  const handleCardInlineUpdate = async (cardId, changes) => {
+    try {
+      const updated = await api.updateKanbanCardInline(cardId, changes)
+      setCard((prevCards) =>
+        prevCards.map((c) => (c.id === updated.id ? updated : c))
+      )
+      if (selectedCard?.id === updated.id) {
+        setSelectedCard(updated)
+      }
+      toast?.showSuccess('Modifica salvata')
+      return updated
+    } catch (err) {
+      console.error('Errore aggiornamento inline card:', err)
+      toast?.showError('Errore nelle modifiche inline', 'Errore')
+      throw err
+    }
+  }
+
   const handleCardDelete = async (cardId) => {
     if (!window.confirm('Sei sicuro di voler eliminare questa card?')) {
       return
@@ -366,7 +384,7 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
 
             {scadenzeInbox.length === 0 ? (
               <div style={{ color: 'var(--ink-500)', fontSize: '0.9rem' }}>
-                Nessuna scadenza urgente. Ottimo!
+                Nessuna scadenza urgente.
               </div>
             ) : (
               <div className="d-grid gap-2">
@@ -484,6 +502,7 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
               card={card}
               onCardClick={handleCardClick}
               onMoveCard={handleCardMove}
+              onInlineUpdate={handleCardInlineUpdate}
             />
           ))}
         </div>

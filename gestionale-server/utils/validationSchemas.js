@@ -678,6 +678,20 @@ const ValidationSchemas = {
           .withMessage('Tags deve essere un array o JSON valido')
       ],
       update: [], // Sarà popolato dopo la definizione
+      inline: [
+        param('id').isInt({ min: 1 }).withMessage('ID non valido'),
+        body('data_fine_prevista')
+          .optional({ nullable: true, checkFalsy: true })
+          .custom((value) => {
+            if (value === null || value === undefined || value === '') return true;
+            return /^\d{4}-\d{2}-\d{2}$/.test(value) || /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value);
+          })
+          .withMessage('Data fine prevista non valida'),
+        body('priorita')
+          .optional()
+          .isIn(['bassa', 'media', 'alta', 'urgente'])
+          .withMessage('Priorità non valida')
+      ],
       move: [
         param('id').isInt({ min: 1 }).withMessage('ID card non valido'),
         body('colonna_id')
@@ -909,3 +923,7 @@ ValidationSchemas.kanban.card.update = [
 ];
 
 module.exports = ValidationSchemas;
+
+
+
+

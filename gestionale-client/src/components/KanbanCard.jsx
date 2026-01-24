@@ -1,8 +1,14 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
-function KanbanCard({ card, onCardClick }) {
+function KanbanCard({ card, onCardClick, onInlineUpdate }) {
   const [isDragging, setIsDragging] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
+  const [isEditingInline, setIsEditingInline] = useState(false)
+  const [editingPriorita, setEditingPriorita] = useState(false)
+  const [editingDataFine, setEditingDataFine] = useState(false)
+  const [isSavingInline, setIsSavingInline] = useState(false)
+  const [draftPriorita, setDraftPriorita] = useState(card.priorita || 'media')
+  const [draftDataFine, setDraftDataFine] = useState(card.data_fine_prevista || '')
 
   const getPrioritaColor = (priorita) => {
     switch (priorita) {
@@ -29,6 +35,11 @@ function KanbanCard({ card, onCardClick }) {
     return date.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' })
   }
 
+  const toDateInputValue = (dateString) => {
+    if (!dateString) return ''
+    return dateString.length > 10 ? dateString.slice(0, 10) : dateString
+  }
+
   const isScaduta = (dateString) => {
     if (!dateString) return false
     const date = new Date(dateString)
@@ -49,12 +60,16 @@ function KanbanCard({ card, onCardClick }) {
 
   const handleCardClick = (e) => {
     e.stopPropagation()
-    if (onCardClick && !isDragging) {
+    if (onCardClick && !isDragging && !isEditingInline && !editingPriorita && !editingDataFine) {
       onCardClick(card)
     }
   }
 
   const handleDragStart = (e) => {
+    if (isEditingInline) {
+      e.preventDefault()
+      return
+    }
     setIsDragging(true)
     e.dataTransfer.effectAllowed = 'move'
     e.dataTransfer.setData('text/plain', card.id.toString())
@@ -74,15 +89,56 @@ function KanbanCard({ card, onCardClick }) {
     e.dataTransfer.clearData()
   }
 
+  useEffect(() => {
+    if (!isEditingInline) {
+      setDraftPriorita(card.priorita || 'media')
+      setDraftDataFine(toDateInputValue(card.data_fine_prevista))
+    }
+  }, [card.priorita, card.data_fine_prevista, isEditingInline])
+
   const prioritaColor = getPrioritaColor(card.priorita)
   const dataFine = formatDate(card.data_fine_prevista)
   const scaduta = dataFine && isScaduta(card.data_fine_prevista)
   const scadenzaProssima = dataFine && isScadenzaProssima(card.data_fine_prevista)
+  const hasInlineChanges = useMemo(() => {
+    const baseDate = toDateInputValue(card.data_fine_prevista)
+    return (draftPriorita || 'media') !== (card.priorita || 'media') || (draftDataFine || '') !== (baseDate || '')
+  }, [card.data_fine_prevista, card.priorita, draftDataFine, draftPriorita])
+
+  const handleInlineSave = async (e) => {
+    e.stopPropagation()
+    if (!onInlineUpdate || isSavingInline) return
+    if (!hasInlineChanges) {
+      setIsEditingInline(false)
+      return
+    }
+    setIsSavingInline(true)
+    try {
+      await onInlineUpdate(card.id, {
+        priorita: draftPriorita || 'media',
+        data_fine_prevista: draftDataFine || null
+      })
+      setIsEditingInline(false)
+      setEditingPriorita(false)
+      setEditingDataFine(false)
+    } finally {
+      setIsSavingInline(false)
+    }
+  }
+
+  const handleInlineCancel = (e) => {
+    e.stopPropagation()
+    setDraftPriorita(card.priorita || 'media')
+    setDraftDataFine(toDateInputValue(card.data_fine_prevista))
+    setIsEditingInline(false)
+    setEditingPriorita(false)
+    setEditingDataFine(false)
+  }
 
   return (
     <div
       className="kanban-card"
-      draggable
+      draggable={!isEditingInline}
       onClick={handleCardClick}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
@@ -139,23 +195,56 @@ function KanbanCard({ card, onCardClick }) {
         }}>
           {card.titolo}
         </h5>
-        <span
-          style={{
-            fontSize: '0.7rem',
-            fontWeight: 700,
-            padding: '0.25rem 0.6rem',
-            borderRadius: '12px',
-            background: `linear-gradient(135deg, ${prioritaColor}25 0%, ${prioritaColor}15 100%)`,
-            color: prioritaColor,
-            textTransform: 'uppercase',
-            whiteSpace: 'nowrap',
-            border: `1px solid ${prioritaColor}30`,
-            boxShadow: `0 2px 4px ${prioritaColor}15`,
-            transition: 'all 0.2s ease'
-          }}
-        >
-          {getPrioritaLabel(card.priorita)}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+          {editingPriorita ? (
+            <select
+              className="form-select form-select-sm"
+              value={draftPriorita}
+              onClick={(e) => e.stopPropagation()}
+              onChange={(e) => {
+                setDraftPriorita(e.target.value)
+                setIsEditingInline(true)
+              }}
+              onBlur={(e) => {
+                if (!hasInlineChanges) {
+                  setEditingPriorita(false)
+                  setIsEditingInline(false)
+                }
+              }}
+              style={{ minWidth: '110px' }}
+            >
+              <option value="bassa">Bassa</option>
+              <option value="media">Media</option>
+              <option value="alta">Alta</option>
+              <option value="urgente">Urgente</option>
+            </select>
+          ) : (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                setEditingPriorita(true)
+                setIsEditingInline(true)
+              }}
+              style={{
+                fontSize: '0.7rem',
+                fontWeight: 700,
+                padding: '0.25rem 0.6rem',
+                borderRadius: '12px',
+                background: `linear-gradient(135deg, ${prioritaColor}25 0%, ${prioritaColor}15 100%)`,
+                color: prioritaColor,
+                textTransform: 'uppercase',
+                whiteSpace: 'nowrap',
+                border: `1px solid ${prioritaColor}30`,
+                boxShadow: `0 2px 4px ${prioritaColor}15`,
+                transition: 'all 0.2s ease',
+                cursor: 'pointer'
+              }}
+            >
+              {getPrioritaLabel(card.priorita)}
+            </button>
+          )}
+        </div>
       </div>
 
       {card.descrizione && (
@@ -178,12 +267,53 @@ function KanbanCard({ card, onCardClick }) {
             <strong>Cliente:</strong> {card.cliente_nome}
           </div>
         )}
-        {dataFine && (
+        {editingDataFine ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+            <input
+              type="date"
+              className="form-control form-control-sm"
+              value={draftDataFine}
+              onClick={(e) => e.stopPropagation()}
+              onChange={(e) => {
+                setDraftDataFine(e.target.value)
+                setIsEditingInline(true)
+              }}
+              onBlur={() => {
+                if (!hasInlineChanges) {
+                  setEditingDataFine(false)
+                  setIsEditingInline(false)
+                }
+              }}
+            />
+            <span style={{ fontSize: '0.7rem', color: 'var(--ink-500)' }}>
+              Lascia vuoto per rimuovere.
+            </span>
+          </div>
+        ) : dataFine ? (
           <div style={{
             color: scaduta ? '#ef4444' : (scadenzaProssima ? '#f59e0b' : 'var(--ink-600)'),
             fontWeight: scaduta || scadenzaProssima ? 600 : 400
           }}>
-            <strong>Scadenza:</strong> {dataFine}
+            <strong>Scadenza:</strong>{' '}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                setEditingDataFine(true)
+                setIsEditingInline(true)
+              }}
+              style={{
+                background: 'none',
+                border: 'none',
+                padding: 0,
+                margin: 0,
+                color: 'inherit',
+                fontWeight: 'inherit',
+                cursor: 'pointer'
+              }}
+            >
+              {dataFine}
+            </button>
             {scaduta && (
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', marginLeft: '0.25rem' }}>
                 <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
@@ -198,11 +328,66 @@ function KanbanCard({ card, onCardClick }) {
               </svg>
             )}
           </div>
+        ) : (
+          <div style={{ color: 'var(--ink-600)' }}>
+            <strong>Scadenza:</strong>{' '}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                setEditingDataFine(true)
+                setIsEditingInline(true)
+              }}
+              style={{
+                background: 'none',
+                border: 'none',
+                padding: 0,
+                margin: 0,
+                color: 'inherit',
+                fontWeight: 400,
+                cursor: 'pointer'
+              }}
+            >
+              aggiungi
+            </button>
+          </div>
         )}
       </div>
+
+      {isEditingInline && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          style={{
+            marginTop: '0.6rem',
+            paddingTop: '0.6rem',
+            borderTop: '1px dashed var(--border-soft)',
+            display: 'grid',
+            gap: '0.5rem'
+          }}
+        >
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button
+              type="button"
+              className="btn btn-sm btn-primary"
+              onClick={handleInlineSave}
+              disabled={isSavingInline}
+            >
+              {isSavingInline ? 'Salvataggio...' : 'Salva'}
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-secondary"
+              onClick={handleInlineCancel}
+              disabled={isSavingInline}
+            >
+              Annulla
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
 export default KanbanCard
-

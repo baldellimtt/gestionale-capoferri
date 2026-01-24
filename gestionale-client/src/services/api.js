@@ -883,6 +883,13 @@ class ApiService {
     });
   }
 
+  async updateKanbanCardInline(id, payload) {
+    return this.request(`/kanban/card/${id}/inline`, {
+      method: 'PATCH',
+      body: payload,
+    });
+  }
+
   async moveKanbanCard(id, colonna_id, ordine) {
     return this.request(`/kanban/card/${id}/move`, {
       method: 'PUT',

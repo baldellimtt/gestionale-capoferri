@@ -426,6 +426,7 @@ header .logo {
   background: transparent;
   color: var(--ink-600);
   font-weight: 600;
+  font-size: 1.05rem;
   padding: 0.5rem 0.9rem;
   border-radius: var(--radius-sm);
   transition: var(--transition-fast);
@@ -451,7 +452,7 @@ header .logo {
 
   .topbar-link {
     padding: 0.45rem 0.7rem;
-    font-size: 0.85rem;
+    font-size: 1rem;
   }
 }
 
