@@ -22,6 +22,14 @@ class TrackingController {
         WHERE t.commessa_id = ?
         ORDER BY t.start_time DESC, t.id DESC
       `),
+      getEntriesByCommessaPaged: this.db.prepare(`
+        SELECT t.*, u.username, u.nome, u.cognome
+        FROM commesse_ore t
+        LEFT JOIN utenti u ON u.id = t.user_id
+        WHERE t.commessa_id = ?
+        ORDER BY t.start_time DESC, t.id DESC
+        LIMIT ? OFFSET ?
+      `),
       getActiveByUser: this.db.prepare(`
         SELECT t.*, c.titolo as commessa_titolo, c.cliente_nome, c.monte_ore_stimato
         FROM commesse_ore t
@@ -116,7 +124,16 @@ class TrackingController {
       if (!commessa) {
         return res.status(404).json({ error: 'Commessa non trovata' });
       }
-      const entries = this.stmt.getEntriesByCommessa.all(id).map((entry) => this.buildEntryResponse(entry));
+      const limitRaw = req.query?.limit;
+      const offsetRaw = req.query?.offset;
+      const parsedLimit = Number.parseInt(limitRaw, 10);
+      const parsedOffset = Number.parseInt(offsetRaw, 10);
+      const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 500) : null;
+      const offset = Number.isFinite(parsedOffset) && parsedOffset >= 0 ? parsedOffset : 0;
+      const rows = limit
+        ? this.stmt.getEntriesByCommessaPaged.all(id, limit, offset)
+        : this.stmt.getEntriesByCommessa.all(id);
+      const entries = rows.map((entry) => this.buildEntryResponse(entry));
       const total = this.stmt.getTotalMinutesByCommessa.get(id);
       res.json({
         commessa,

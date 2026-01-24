@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import api from '../services/api'
 
 const getTodayDate = () => {
@@ -88,7 +88,7 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
     loadActive()
   }, [])
 
-  const loadEntries = async (commessaId) => {
+  const loadEntries = useCallback(async (commessaId) => {
     if (!commessaId) return
     try {
       setEntriesLoading(true)
@@ -101,7 +101,7 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
     } finally {
       setEntriesLoading(false)
     }
-  }
+  }, [toast])
 
   useEffect(() => {
     if (!selectedId) {
@@ -119,7 +119,7 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
     }
 
     loadEntries(selectedId)
-  }, [selectedId, commesse, toast])
+  }, [selectedId, commesse, loadEntries])
 
   useEffect(() => {
     if (!activeEntry) return undefined
@@ -305,9 +305,13 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
     try {
       setEditingSaving(true)
       const payload = {
-        data: editingEntry.data,
-        ore: editingEntry.ore,
         note: editingEntry.note
+      }
+      if (editingEntry.data) {
+        payload.data = editingEntry.data
+      }
+      if (editingEntry.ore !== '') {
+        payload.ore = editingEntry.ore
       }
       await api.updateTrackingEntry(entryId, payload)
       toast?.showSuccess('Tracking aggiornato', 'Tracking ore')
