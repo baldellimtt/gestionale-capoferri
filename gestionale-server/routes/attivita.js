@@ -249,7 +249,7 @@ class AttivitaController {
 
       const existing = this.stmt.getById.get(id);
       if (!existing) {
-        return res.status(404).json({ error: 'AttivitÃ  non trovata' });
+        return res.status(404).json({ error: 'Attività non trovata' });
       }
       if (req.user?.role !== 'admin' && existing.user_id !== req.user?.id) {
         return res.status(403).json({ error: 'Permesso negato' });
@@ -302,7 +302,7 @@ class AttivitaController {
 
       const existing = this.stmt.getById.get(numericId);
       if (!existing) {
-        return res.status(404).json({ error: 'AttivitÃ  non trovata' });
+        return res.status(404).json({ error: 'Attività non trovata' });
       }
       if (req.user?.role !== 'admin' && existing.user_id !== req.user?.id) {
         return res.status(403).json({ error: 'Permesso negato' });

@@ -200,7 +200,7 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false, targetUse
     if (!effectiveUserId) return
     setLocalAttivita([])
     loadAttivita({}, true).catch(err => {
-      console.error('Errore caricamento attivitÃ  per utente:', err)
+      console.error('Errore caricamento attività per utente:', err)
     })
   }, [effectiveUserId])
 

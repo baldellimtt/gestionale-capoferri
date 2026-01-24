@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import api from '../services/api'
 import KanbanColumn from './KanbanColumn'
 import KanbanCardDetail from './KanbanCardDetail'
@@ -16,6 +16,7 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
   const [selectedCard, setSelectedCard] = useState(null)
   const [showCardDetail, setShowCardDetail] = useState(false)
   const [viewMode, setViewMode] = useState('kanban') // 'kanban' o 'calendar'
+  const [inboxBusyIds, setInboxBusyIds] = useState([])
   const [filters, setFilters] = useState({
     cliente_id: '',
     colonna_id: '',
@@ -90,7 +91,7 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
         // Aggiorna la card nella lista locale senza ricaricare tutto
         setCard((prevCards) => {
           const updated = prevCards.map(c => c.id === refreshedCard.id ? refreshedCard : c)
-          // Se la card non ?? nella lista (potrebbe essere filtrata), aggiungila
+          // Se la card non è nella lista (potrebbe essere filtrata), aggiungila
           if (!updated.find(c => c.id === refreshedCard.id)) {
             return [...updated, refreshedCard]
           }
@@ -109,6 +110,117 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
       setError(errorMsg)
       toast?.showError(errorMsg, 'Errore salvataggio')
       throw err // Rilancia l'errore per gestirlo in KanbanCardDetail
+    }
+  }
+
+  const markInboxBusy = (id, busy) => {
+    setInboxBusyIds((prev) => {
+      if (busy) {
+        return prev.includes(id) ? prev : [...prev, id]
+      }
+      return prev.filter((item) => item !== id)
+    })
+  }
+
+  const parseDateOnly = (dateStr) => {
+    if (!dateStr) return null
+    const clean = dateStr.length > 10 ? dateStr.slice(0, 10) : dateStr
+    return new Date(`${clean}T00:00:00`)
+  }
+
+  const normalizeDate = (date) => new Date(date.getFullYear(), date.getMonth(), date.getDate())
+
+  const addDays = (dateStr, days) => {
+    const base = parseDateOnly(dateStr)
+    if (!base) return dateStr
+    const next = new Date(base)
+    next.setDate(next.getDate() + days)
+    const yyyy = next.getFullYear()
+    const mm = String(next.getMonth() + 1).padStart(2, '0')
+    const dd = String(next.getDate()).padStart(2, '0')
+    return `${yyyy}-${mm}-${dd}`
+  }
+
+  const formatShortDate = (dateStr) => {
+    const date = parseDateOnly(dateStr)
+    if (!date) return ''
+    return date.toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })
+  }
+
+  const scadenzeInbox = useMemo(() => {
+    const today = normalizeDate(new Date())
+    const items = scadenze
+      .filter((s) => !s.completata)
+      .map((s) => {
+        const due = parseDateOnly(s.data_scadenza)
+        if (!due) return null
+        const dueDay = normalizeDate(due)
+        const diffDays = Math.round((dueDay - today) / 86400000)
+        let bucket = null
+        if (diffDays < 0) bucket = 'overdue'
+        if (diffDays === 0) bucket = 'today'
+        if (diffDays === 1) bucket = 'tomorrow'
+        if (!bucket) return null
+        return { scadenza: s, dueDay, diffDays, bucket }
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.dueDay - b.dueDay)
+
+    return items.slice(0, 6)
+  }, [scadenze])
+
+  const openCardFromScadenza = async (scadenza) => {
+    const localCard = card.find((c) => c.id === scadenza.card_id)
+    if (localCard) {
+      handleCardClick(localCard)
+      return
+    }
+    try {
+      const fetched = await api.getKanbanCardById(scadenza.card_id)
+      if (fetched) {
+        setSelectedCard(fetched)
+        setShowCardDetail(true)
+      }
+    } catch (err) {
+      console.error('Errore apertura card da scadenza:', err)
+      toast?.showError('Impossibile aprire la card', 'Errore')
+    }
+  }
+
+  const handleCompleteScadenza = async (scadenza) => {
+    if (inboxBusyIds.includes(scadenza.id)) return
+    markInboxBusy(scadenza.id, true)
+    try {
+      await api.completeKanbanScadenza(scadenza.id)
+      toast?.showSuccess('Scadenza completata')
+      await loadData()
+    } catch (err) {
+      console.error('Errore completamento scadenza:', err)
+      toast?.showError('Errore completamento scadenza', 'Errore')
+    } finally {
+      markInboxBusy(scadenza.id, false)
+    }
+  }
+
+  const handlePostponeScadenza = async (scadenza) => {
+    if (inboxBusyIds.includes(scadenza.id)) return
+    markInboxBusy(scadenza.id, true)
+    try {
+      const updated = {
+        titolo: scadenza.titolo,
+        descrizione: scadenza.descrizione,
+        data_scadenza: addDays(scadenza.data_scadenza, 1),
+        tipo: scadenza.tipo,
+        priorita: scadenza.priorita
+      }
+      await api.updateKanbanScadenza(scadenza.id, updated)
+      toast?.showSuccess('Scadenza rinviata di 1 giorno')
+      await loadData()
+    } catch (err) {
+      console.error('Errore rinvio scadenza:', err)
+      toast?.showError('Errore rinvio scadenza', 'Errore')
+    } finally {
+      markInboxBusy(scadenza.id, false)
     }
   }
 
@@ -231,6 +343,102 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
                 Nuova Card
               </button>
             </div>
+          </div>
+
+          <div
+            className="mb-3 p-3"
+            style={{
+              background: 'linear-gradient(135deg, var(--bg-2) 0%, var(--bg-3) 100%)',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--border-soft)',
+              boxShadow: 'var(--shadow-1)'
+            }}
+          >
+            <div className="d-flex justify-content-between align-items-center mb-2">
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--ink-800)' }}>Inbox giornaliera</div>
+                <div style={{ fontSize: '0.85rem', color: 'var(--ink-600)' }}>Oggi, domani e in ritardo</div>
+              </div>
+              <div style={{ fontSize: '0.85rem', color: 'var(--ink-600)' }}>
+                {scadenzeInbox.length} item
+              </div>
+            </div>
+
+            {scadenzeInbox.length === 0 ? (
+              <div style={{ color: 'var(--ink-500)', fontSize: '0.9rem' }}>
+                Nessuna scadenza urgente. Ottimo!
+              </div>
+            ) : (
+              <div className="d-grid gap-2">
+                {scadenzeInbox.map(({ scadenza, diffDays, bucket }) => {
+                  const label =
+                    bucket === 'overdue'
+                      ? `In ritardo di ${Math.abs(diffDays)}g`
+                      : bucket === 'today'
+                        ? 'Oggi'
+                        : 'Domani'
+                  const badgeColor =
+                    bucket === 'overdue' ? '#ef4444' : bucket === 'today' ? '#f59e0b' : '#3b82f6'
+                  const cardRef = card.find((c) => c.id === scadenza.card_id)
+                  return (
+                    <div
+                      key={scadenza.id}
+                      className="d-flex justify-content-between align-items-center"
+                      style={{
+                        padding: '0.6rem 0.8rem',
+                        borderRadius: 'var(--radius-sm)',
+                        border: '1px solid var(--border-soft)',
+                        background: 'var(--bg-1)'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <span
+                          style={{
+                            fontSize: '0.75rem',
+                            padding: '0.2rem 0.45rem',
+                            borderRadius: '999px',
+                            background: `${badgeColor}20`,
+                            color: badgeColor,
+                            fontWeight: 600
+                          }}
+                        >
+                          {label}
+                        </span>
+                        <div>
+                          <div style={{ fontWeight: 600, color: 'var(--ink-800)' }}>{scadenza.titolo}</div>
+                          <div style={{ fontSize: '0.82rem', color: 'var(--ink-500)' }}>
+                            {cardRef?.titolo || 'Card'} · {formatShortDate(scadenza.data_scadenza)}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="d-flex gap-2">
+                        <button
+                          className="btn btn-sm btn-outline-success"
+                          onClick={() => handleCompleteScadenza(scadenza)}
+                          disabled={inboxBusyIds.includes(scadenza.id)}
+                        >
+                          Segna fatto
+                        </button>
+                        <button
+                          className="btn btn-sm btn-outline-secondary"
+                          onClick={() => handlePostponeScadenza(scadenza)}
+                          disabled={inboxBusyIds.includes(scadenza.id)}
+                        >
+                          Rinvia 1g
+                        </button>
+                        <button
+                          className="btn btn-sm btn-primary"
+                          onClick={() => openCardFromScadenza(scadenza)}
+                        >
+                          Apri
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
 
           <div className="mb-3">

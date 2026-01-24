@@ -168,7 +168,7 @@ function CommessaForm({
                         className="tipologia-tag"
                         onClick={() => toggleTipologia(item)}
                       >
-                        {item} Ã—
+                        {item} ×
                       </button>
                     ))}
                 </div>
@@ -259,7 +259,7 @@ function CommessaForm({
                 }))
               }}
             >
-              <option value="si">SÃ¬</option>
+              <option value="si">Sì</option>
               <option value="no">No</option>
             </select>
           </div>

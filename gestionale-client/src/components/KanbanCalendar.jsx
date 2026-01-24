@@ -155,7 +155,7 @@ function KanbanCalendar({ card, scadenze, colonne, clienti, filters, onCardClick
   const weekDays = useMemo(() => {
     const startOfWeek = new Date(currentDate)
     const day = startOfWeek.getDay()
-    const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1) // Luned??
+    const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1) // Lunedì
     startOfWeek.setDate(diff)
     
     const days = []
@@ -176,7 +176,7 @@ function KanbanCalendar({ card, scadenze, colonne, clienti, filters, onCardClick
     })
   }
 
-  // Colori priorit??
+  // Colori priorità
   const getPrioritaColor = (priorita) => {
     switch (priorita) {
       case 'urgente': return '#ef4444'
@@ -673,7 +673,7 @@ function KanbanCalendar({ card, scadenze, colonne, clienti, filters, onCardClick
             onClick={goToPrevious}
             style={{ minWidth: '40px' }}
           >
-            ???
+            ←
           </button>
           <button
             className="btn btn-sm btn-primary"
@@ -686,7 +686,7 @@ function KanbanCalendar({ card, scadenze, colonne, clienti, filters, onCardClick
             onClick={goToNext}
             style={{ minWidth: '40px' }}
           >
-            ???
+            →
           </button>
           
           <div style={{

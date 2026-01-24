@@ -144,7 +144,7 @@ function DatiAziendali({ onBack, toast, showHeader = true }) {
                     disabled={!formData.ragione_sociale}
                     title="Copia"
                   >
-                    ????
+                    Copia
                   </button>
                 </div>
               </div>
@@ -164,7 +164,7 @@ function DatiAziendali({ onBack, toast, showHeader = true }) {
                     disabled={!formData.partita_iva}
                     title="Copia"
                   >
-                    ????
+                    Copia
                   </button>
                 </div>
               </div>
@@ -184,7 +184,7 @@ function DatiAziendali({ onBack, toast, showHeader = true }) {
                     disabled={!formData.codice_fiscale}
                     title="Copia"
                   >
-                    ????
+                    Copia
                   </button>
                 </div>
               </div>

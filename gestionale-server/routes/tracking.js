@@ -161,7 +161,7 @@ class TrackingController {
 
       const active = this.stmt.getActiveByUser.get(userId);
       if (active) {
-        return res.status(409).json({ error: 'Tracking giÃ  attivo', active: this.buildEntryResponse(active) });
+        return res.status(409).json({ error: 'Tracking già attivo', active: this.buildEntryResponse(active) });
       }
 
       const result = this.stmt.createTimerEntry.run(commessa_id, userId);
@@ -190,7 +190,7 @@ class TrackingController {
         return res.status(403).json({ error: 'Permesso negato' });
       }
       if (existing.end_time) {
-        return res.status(409).json({ error: 'Tracking giÃ  fermato', entry: this.buildEntryResponse(existing) });
+        return res.status(409).json({ error: 'Tracking già fermato', entry: this.buildEntryResponse(existing) });
       }
 
       const result = this.stmt.stopEntry.run(id);

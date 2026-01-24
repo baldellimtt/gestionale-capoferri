@@ -167,7 +167,7 @@ class ApiService {
         try {
           if (this.refreshBlockedUntil && Date.now() < this.refreshBlockedUntil) {
             const retryAfter = Math.ceil((this.refreshBlockedUntil - Date.now()) / 1000);
-            const error = new Error('Troppe richieste, riprova piÃ¹ tardi');
+            const error = new Error('Troppe richieste, riprova più tardi');
             error.status = 429;
             error.retryAfter = retryAfter;
             throw error;
@@ -221,7 +221,7 @@ class ApiService {
 
           return data;
         } catch (refreshError) {
-          // Se il refresh Ã¨ limitato, non fare logout: aspetta il retryAfter
+          // Se il refresh è limitato, non fare logout: aspetta il retryAfter
           if (refreshError.status === 429) {
             const retryAfter = refreshError.retryAfter || 60;
             this.refreshBlockedUntil = Date.now() + retryAfter * 1000;
