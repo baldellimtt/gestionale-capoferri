@@ -45,6 +45,9 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
     note: ''
   })
   const [manualSaving, setManualSaving] = useState(false)
+  const [editingEntryId, setEditingEntryId] = useState(null)
+  const [editingEntry, setEditingEntry] = useState({ data: '', ore: '', note: '' })
+  const [editingSaving, setEditingSaving] = useState(false)
   const [tick, setTick] = useState(0)
 
   useEffect(() => {
@@ -85,11 +88,27 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
     loadActive()
   }, [])
 
+  const loadEntries = async (commessaId) => {
+    if (!commessaId) return
+    try {
+      setEntriesLoading(true)
+      const data = await api.getCommessaTrackingEntries(commessaId)
+      setEntries(data?.entries || [])
+      setTotalMinutes(data?.total_minuti || 0)
+    } catch (err) {
+      console.error('Errore caricamento tracking commessa:', err)
+      toast?.showError('Errore nel caricamento delle ore della commessa', 'Tracking ore')
+    } finally {
+      setEntriesLoading(false)
+    }
+  }
+
   useEffect(() => {
     if (!selectedId) {
       setSelectedCommessa(null)
       setEntries([])
       setTotalMinutes(0)
+      setEditingEntryId(null)
       return
     }
 
@@ -99,20 +118,7 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
       setCommessaSearch(commessa.titolo)
     }
 
-    const loadEntries = async () => {
-      try {
-        setEntriesLoading(true)
-        const data = await api.getCommessaTrackingEntries(selectedId)
-        setEntries(data?.entries || [])
-        setTotalMinutes(data?.total_minuti || 0)
-      } catch (err) {
-        console.error('Errore caricamento tracking commessa:', err)
-        toast?.showError('Errore nel caricamento delle ore della commessa', 'Tracking ore')
-      } finally {
-        setEntriesLoading(false)
-      }
-    }
-    loadEntries()
+    loadEntries(selectedId)
   }, [selectedId, commesse, toast])
 
   useEffect(() => {
@@ -231,9 +237,7 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
       await api.startTracking(selectedId)
       toast?.showSuccess('Tracking avviato', 'Tracking ore')
       await refreshActive()
-      const data = await api.getCommessaTrackingEntries(selectedId)
-      setEntries(data?.entries || [])
-      setTotalMinutes(data?.total_minuti || 0)
+      await loadEntries(selectedId)
     } catch (err) {
       if (err.status === 409) {
         toast?.showError('Hai gia un tracking attivo. Fermalo prima di iniziare un nuovo.', 'Tracking ore')
@@ -253,9 +257,7 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
       setActiveEntry(null)
       await refreshActive()
       if (selectedId) {
-        const data = await api.getCommessaTrackingEntries(selectedId)
-        setEntries(data?.entries || [])
-        setTotalMinutes(data?.total_minuti || 0)
+        await loadEntries(selectedId)
       }
     } catch (err) {
       toast?.showError(err.message || 'Errore nel fermare il tracking', 'Tracking ore')
@@ -274,13 +276,59 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
       await api.addTrackingManual(selectedId, manualForm.data, oreValue, manualForm.note)
       toast?.showSuccess('Ore registrate', 'Tracking ore')
       setManualForm({ data: getTodayDate(), ore: '', note: '' })
-      const data = await api.getCommessaTrackingEntries(selectedId)
-      setEntries(data?.entries || [])
-      setTotalMinutes(data?.total_minuti || 0)
+      await loadEntries(selectedId)
     } catch (err) {
       toast?.showError(err.message || 'Errore nel salvataggio ore', 'Tracking ore')
     } finally {
       setManualSaving(false)
+    }
+  }
+
+  const handleEditEntry = (entry) => {
+    if (!entry?.id) return
+    const minutes = Number.isFinite(entry.durata_minuti) ? entry.durata_minuti : getEntryMinutes(entry)
+    setEditingEntryId(entry.id)
+    setEditingEntry({
+      data: entry.data || getTodayDate(),
+      ore: (minutes / 60).toFixed(2),
+      note: entry.note || ''
+    })
+  }
+
+  const handleCancelEdit = () => {
+    setEditingEntryId(null)
+    setEditingEntry({ data: '', ore: '', note: '' })
+  }
+
+  const handleSaveEdit = async (entryId) => {
+    if (!entryId) return
+    try {
+      setEditingSaving(true)
+      const payload = {
+        data: editingEntry.data,
+        ore: editingEntry.ore,
+        note: editingEntry.note
+      }
+      await api.updateTrackingEntry(entryId, payload)
+      toast?.showSuccess('Tracking aggiornato', 'Tracking ore')
+      handleCancelEdit()
+      await loadEntries(selectedId)
+    } catch (err) {
+      toast?.showError(err.message || 'Errore aggiornamento tracking', 'Tracking ore')
+    } finally {
+      setEditingSaving(false)
+    }
+  }
+
+  const handleDeleteEntry = async (entry) => {
+    if (!entry?.id) return
+    if (!window.confirm('Eliminare questa riga di tracking?')) return
+    try {
+      await api.deleteTrackingEntry(entry.id)
+      toast?.showSuccess('Tracking eliminato', 'Tracking ore')
+      await loadEntries(selectedId)
+    } catch (err) {
+      toast?.showError(err.message || 'Errore eliminazione tracking', 'Tracking ore')
     }
   }
 
@@ -524,16 +572,37 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
                         <th>Note</th>
                         <th>Inizio</th>
                         <th>Fine</th>
+                        <th>Azioni</th>
                       </tr>
                     </thead>
                     <tbody>
                       {entries.map((entry) => (
                         <tr key={entry.id}>
                           <td>
-                            <div className="commessa-title">{formatEntryDate(entry)}</div>
+                            {editingEntryId === entry.id ? (
+                              <input
+                                type="date"
+                                className="form-control form-control-sm"
+                                value={editingEntry.data}
+                                onChange={(e) => setEditingEntry((prev) => ({ ...prev, data: e.target.value }))}
+                              />
+                            ) : (
+                              <div className="commessa-title">{formatEntryDate(entry)}</div>
+                            )}
                           </td>
                           <td>
-                            <div className="commessa-title">{formatEntryHours(entry)} h</div>
+                            {editingEntryId === entry.id ? (
+                              <input
+                                type="number"
+                                className="form-control form-control-sm"
+                                value={editingEntry.ore}
+                                onChange={(e) => setEditingEntry((prev) => ({ ...prev, ore: e.target.value }))}
+                                min="0"
+                                step="0.25"
+                              />
+                            ) : (
+                              <div className="commessa-title">{formatEntryHours(entry)} h</div>
+                            )}
                           </td>
                           <td>
                             <span className="status-badge status-open">
@@ -544,7 +613,16 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
                             <div className="commessa-meta">{getUserLabel(entry)}</div>
                           </td>
                           <td>
-                            <div className="commessa-meta">{entry.note || '-'}</div>
+                            {editingEntryId === entry.id ? (
+                              <input
+                                className="form-control form-control-sm"
+                                value={editingEntry.note}
+                                onChange={(e) => setEditingEntry((prev) => ({ ...prev, note: e.target.value }))}
+                                placeholder="Nota"
+                              />
+                            ) : (
+                              <div className="commessa-meta">{entry.note || '-'}</div>
+                            )}
                           </td>
                           <td>
                             <div className="commessa-meta">{formatDateTime(entry.start_time)}</div>
@@ -552,6 +630,49 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
                           <td>
                             <div className="commessa-meta">
                               {entry.end_time ? formatDateTime(entry.end_time) : 'In corso'}
+                            </div>
+                          </td>
+                          <td>
+                            <div className="d-flex gap-2 justify-content-center">
+                              {editingEntryId === entry.id ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="btn btn-sm btn-primary"
+                                    onClick={() => handleSaveEdit(entry.id)}
+                                    disabled={editingSaving}
+                                  >
+                                    Salva
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn btn-sm btn-secondary"
+                                    onClick={handleCancelEdit}
+                                    disabled={editingSaving}
+                                  >
+                                    Annulla
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="btn btn-sm btn-secondary"
+                                    onClick={() => handleEditEntry(entry)}
+                                    disabled={!entry.end_time}
+                                  >
+                                    Modifica
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn btn-sm btn-danger"
+                                    onClick={() => handleDeleteEntry(entry)}
+                                    disabled={!entry.end_time}
+                                  >
+                                    Elimina
+                                  </button>
+                                </>
+                              )}
                             </div>
                           </td>
                         </tr>

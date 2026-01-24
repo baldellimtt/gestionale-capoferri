@@ -505,6 +505,36 @@ const ValidationSchemas = {
         .isInt({ min: 1 })
         .withMessage('ID tracking non valido')
     ],
+    update: [
+      param('id')
+        .isInt({ min: 1 })
+        .withMessage('ID tracking non valido'),
+      body('data')
+        .optional({ nullable: true, checkFalsy: true })
+        .custom((value) => {
+          if (value === null || value === undefined || value === '') return true;
+          if (typeof value !== 'string') return false;
+          return /^\d{4}-\d{2}-\d{2}$/.test(value);
+        })
+        .withMessage('Data non valida (formato YYYY-MM-DD)'),
+      body('ore')
+        .optional({ nullable: true, checkFalsy: true })
+        .isFloat({ min: 0 })
+        .withMessage('Ore devono essere un numero positivo'),
+      body('note')
+        .optional({ nullable: true, checkFalsy: true })
+        .custom((value) => {
+          if (value === null || value === undefined || value === '') return true;
+          const trimmed = typeof value === 'string' ? value.trim() : String(value);
+          return trimmed.length <= 1000;
+        })
+        .withMessage('Note troppo lunghe (max 1000 caratteri)')
+    ],
+    delete: [
+      param('id')
+        .isInt({ min: 1 })
+        .withMessage('ID tracking non valido')
+    ],
     manual: [
       body('commessa_id')
         .notEmpty()

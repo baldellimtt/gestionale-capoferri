@@ -66,7 +66,7 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false, targetUse
   const [rimborsoKm, setRimborsoKm] = useState(user?.rimborso_km ?? 0)
   const effectiveUserId = targetUserId ?? user?.id ?? null
 
-  const ATTIVITA_OPTIONS = ['SOPRALLUOGO', 'TRASFERTA']
+  const ATTIVITA_OPTIONS = ['SOPRALLUOGO', 'TRASFERTA', 'AMMINISTRAZIONE', 'ALTRO']
 
   const loadSuppressedAutoCreateDates = useCallback(() => {
     try {

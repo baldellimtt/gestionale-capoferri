@@ -591,6 +591,19 @@ class ApiService {
     });
   }
 
+  async updateTrackingEntry(entryId, payload) {
+    return this.request(`/tracking/entries/${entryId}`, {
+      method: 'PUT',
+      body: payload,
+    });
+  }
+
+  async deleteTrackingEntry(entryId) {
+    return this.request(`/tracking/entries/${entryId}`, {
+      method: 'DELETE',
+    });
+  }
+
   async addTrackingManual(commessaId, data, ore, note) {
     return this.request('/tracking/manual', {
       method: 'POST',

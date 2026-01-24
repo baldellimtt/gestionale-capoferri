@@ -77,6 +77,9 @@ function Commesse({ clienti, toast, onOpenTracking }) {
   const [commessaAuditError, setCommessaAuditError] = useState(null)
   const [commessaAuditCommessaId, setCommessaAuditCommessaId] = useState(null)
   const [showCommessaAudit, setShowCommessaAudit] = useState(false)
+  const [commessaTracking, setCommessaTracking] = useState(null)
+  const [commessaTrackingLoading, setCommessaTrackingLoading] = useState(false)
+  const [commessaTrackingError, setCommessaTrackingError] = useState(null)
   const [auditNoteDate, setAuditNoteDate] = useState(() => getTodayDate())
   const [auditNoteText, setAuditNoteText] = useState('')
   const [auditNoteSaving, setAuditNoteSaving] = useState(false)
@@ -159,6 +162,31 @@ function Commesse({ clienti, toast, onOpenTracking }) {
   }, [selectedClienteViewId, toast])
 
   useEffect(() => {
+    if (!showForm || editingId) return
+    const clienteId = formData.cliente_id ? String(formData.cliente_id) : ''
+    if (!clienteId || yearFoldersByCliente[clienteId]) return
+    let isActive = true
+    const loadFolders = async () => {
+      try {
+        const data = await api.getCommesseYearFolders(clienteId)
+        if (!isActive) return
+        const years = Array.isArray(data) ? data.map((item) => String(item.anno)) : []
+        setYearFoldersByCliente((prev) => ({
+          ...prev,
+          [clienteId]: years
+        }))
+      } catch (err) {
+        console.error('Errore caricamento cartelle anno:', err)
+        toast?.showError('Errore nel caricamento delle cartelle anno', 'Cartelle anno')
+      }
+    }
+    loadFolders()
+    return () => {
+      isActive = false
+    }
+  }, [showForm, editingId, formData.cliente_id, yearFoldersByCliente, toast])
+
+  useEffect(() => {
     if (commesse.length === 0) {
       setAllegatiByCommessa({})
       return
@@ -190,6 +218,8 @@ function Commesse({ clienti, toast, onOpenTracking }) {
   useEffect(() => {
     if (!editingId) {
       setSelectedCommessaId('')
+      setCommessaTracking(null)
+      setCommessaTrackingError(null)
     }
   }, [editingId])
 
@@ -617,6 +647,17 @@ function Commesse({ clienti, toast, onOpenTracking }) {
     return date.toLocaleString('it-IT')
   }
 
+  const formatTrackingDate = (value) => {
+    if (!value) return ''
+    const [year, month, day] = value.split('-')
+    return `${day}/${month}/${year}`
+  }
+
+  const formatTrackingHours = (minutes) => {
+    if (!Number.isFinite(minutes)) return '0.00'
+    return (minutes / 60).toFixed(2)
+  }
+
   const formatAuditUser = (entry) => {
     const user = entry?.user
     const fullName = [user?.nome, user?.cognome].filter(Boolean).join(' ').trim()
@@ -652,6 +693,21 @@ function Commesse({ clienti, toast, onOpenTracking }) {
       setCommessaAuditError('Errore nel caricamento della cronologia commessa')
     } finally {
       setCommessaAuditLoading(false)
+    }
+  }
+
+  const loadCommessaTracking = async (commessaId) => {
+    if (!commessaId) return
+    try {
+      setCommessaTrackingLoading(true)
+      setCommessaTrackingError(null)
+      const data = await api.getCommessaTrackingEntries(commessaId)
+      setCommessaTracking(data || null)
+    } catch (err) {
+      console.error('Errore caricamento tracking commessa:', err)
+      setCommessaTrackingError('Errore nel caricamento del tracking ore')
+    } finally {
+      setCommessaTrackingLoading(false)
     }
   }
 
@@ -828,6 +884,12 @@ function Commesse({ clienti, toast, onOpenTracking }) {
   const selectedCommessa = commesse.find((item) => String(item.id) === String(selectedCommessaId))
   const selectedAllegati = selectedCommessa ? (allegatiByCommessa[selectedCommessa.id] || []) : []
   const isClientListView = !showForm && !selectedClienteViewId
+  const selectedClienteFormId = formData.cliente_id ? String(formData.cliente_id) : ''
+  const selectedFormYear = (() => {
+    const match = String(formData.data_inizio || '').match(/^(\d{4})/)
+    return match ? match[1] : ''
+  })()
+  const formYearFolders = selectedClienteFormId ? (yearFoldersByCliente[selectedClienteFormId] || []) : []
   const getUtenteLabel = (utente) => {
     const fullName = [utente?.nome, utente?.cognome].filter(Boolean).join(' ').trim()
     return fullName || utente?.username || ''
@@ -909,6 +971,13 @@ function Commesse({ clienti, toast, onOpenTracking }) {
     return Array.from(years).sort((a, b) => b.localeCompare(a))
   }, [availableYears, selectedClienteViewId, yearFoldersByCliente, yearFilter])
 
+  const formYearFolderOptions = useMemo(() => {
+    if (!formYearFolders.length && !selectedFormYear) return []
+    const years = new Set(formYearFolders)
+    if (selectedFormYear) years.add(selectedFormYear)
+    return Array.from(years).sort((a, b) => b.localeCompare(a))
+  }, [formYearFolders, selectedFormYear])
+
   const handleSelectYearFolder = (year) => {
     setYearFilter(year || '')
   }
@@ -961,6 +1030,11 @@ function Commesse({ clienti, toast, onOpenTracking }) {
     loadCommessaAudit(selectedCommessaId)
   }, [showCommessaAudit, selectedCommessaId])
 
+  useEffect(() => {
+    if (!editingId) return
+    loadCommessaTracking(editingId)
+  }, [editingId])
+
   return (
     <div className="commesse-section">
       {error && (
@@ -999,14 +1073,6 @@ function Commesse({ clienti, toast, onOpenTracking }) {
               >
                 + Nuova Commessa
               </button>
-              {!isClientListView && (
-                <button
-                  className="btn btn-secondary"
-                  onClick={() => setShowYearFolderForm(true)}
-                >
-                  + Nuova cartella
-                </button>
-              )}
             </>
           )}
         </div>
@@ -1253,6 +1319,27 @@ function Commesse({ clienti, toast, onOpenTracking }) {
                   )}
                 </div>
               )}
+              {!editingId && formYearFolderOptions.length > 0 && (
+                <div className="col-md-4">
+                  <label className="form-label">Cartella</label>
+                  <select
+                    className="form-select"
+                    value={selectedFormYear}
+                    onChange={(e) => {
+                      const year = e.target.value
+                      setFormData((prev) => ({
+                        ...prev,
+                        data_inizio: year ? `${year}-01-01` : ''
+                      }))
+                    }}
+                  >
+                    <option value="">Seleziona cartella</option>
+                    {formYearFolderOptions.map((year) => (
+                      <option key={year} value={year}>{year}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="col-md-4">
                 <label className="form-label">Data inizio</label>
                 <input
@@ -1478,6 +1565,76 @@ function Commesse({ clienti, toast, onOpenTracking }) {
       {showForm && editingId && (
         <div className="card mb-4">
           <div className="card-header d-flex justify-content-between align-items-center">
+            <span>Tracking ore commessa</span>
+            {onOpenTracking && (
+              <button
+                type="button"
+                className="btn btn-sm btn-secondary"
+                onClick={() => onOpenTracking(editingId)}
+              >
+                Apri tracking ore
+              </button>
+            )}
+          </div>
+          <div className="card-body">
+            {commessaTrackingError && (
+              <div className="alert alert-warning">{commessaTrackingError}</div>
+            )}
+            {commessaTrackingLoading && (
+              <div className="text-muted">Caricamento tracking...</div>
+            )}
+            {!commessaTrackingLoading && commessaTracking && (
+              <>
+                <div className="d-flex gap-4 flex-wrap mb-2">
+                  <div>
+                    <div className="text-muted" style={{ fontSize: '0.85rem' }}>Ore registrate</div>
+                    <div className="fw-semibold">
+                      {formatTrackingHours(commessaTracking.total_minuti || 0)} h
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-muted" style={{ fontSize: '0.85rem' }}>Voci</div>
+                    <div className="fw-semibold">{(commessaTracking.entries || []).length}</div>
+                  </div>
+                </div>
+                {(commessaTracking.entries || []).length === 0 ? (
+                  <div className="text-muted">Nessuna ora registrata.</div>
+                ) : (
+                  <div className="attivita-table-scroll">
+                    <table className="table table-striped commesse-table">
+                      <thead className="table-dark visually-hidden">
+                        <tr>
+                          <th>Data</th>
+                          <th>Ore</th>
+                          <th>Utente</th>
+                          <th>Note</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {commessaTracking.entries.slice(0, 5).map((entry) => (
+                          <tr key={entry.id}>
+                            <td><div className="commessa-title">{formatTrackingDate(entry.data)}</div></td>
+                            <td><div className="commessa-title">{formatTrackingHours(entry.durata_minuti)} h</div></td>
+                            <td><div className="commessa-meta">{[entry?.nome, entry?.cognome].filter(Boolean).join(' ') || entry?.username || '-'}</div></td>
+                            <td><div className="commessa-meta">{entry.note || '-'}</div></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </>
+            )}
+            {!commessaTrackingLoading && !commessaTracking && !commessaTrackingError && (
+              <div className="text-muted">Nessun dato disponibile.</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {showForm && editingId && (
+        <div className="card mb-4">
+          <div className="card-header d-flex justify-content-between align-items-center">
             <span>Cronologia commessa</span>
             <button
               type="button"
@@ -1647,7 +1804,6 @@ function Commesse({ clienti, toast, onOpenTracking }) {
           <div className="card mb-3">
             <div className="card-body">
               <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
-                <div className="fw-semibold">Cartelle anno</div>
                 {showYearFolderForm ? (
                   <div className="d-flex align-items-center gap-2">
                     <input

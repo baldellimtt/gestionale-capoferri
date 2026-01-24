@@ -52,6 +52,24 @@ class TrackingController {
             updated_at = datetime('now', 'localtime')
         WHERE id = ? AND end_time IS NULL
       `)
+      ,
+      updateEntry: this.db.prepare(`
+        UPDATE commesse_ore
+        SET data = ?,
+            start_time = ?,
+            end_time = ?,
+            durata_minuti = ?,
+            note = ?,
+            updated_at = datetime('now', 'localtime')
+        WHERE id = ?
+      `),
+      updateEntryNoteOnly: this.db.prepare(`
+        UPDATE commesse_ore
+        SET note = ?,
+            updated_at = datetime('now', 'localtime')
+        WHERE id = ?
+      `),
+      deleteEntry: this.db.prepare(`DELETE FROM commesse_ore WHERE id = ?`)
     };
   }
 
@@ -209,6 +227,98 @@ class TrackingController {
       res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
+
+  updateEntry(req, res) {
+    try {
+      const userId = req.user?.id || null;
+      if (!userId) {
+        return res.status(401).json({ error: 'Utente non autenticato' });
+      }
+
+      const { id } = req.params;
+      const existing = this.stmt.getEntryById.get(id);
+      if (!existing) {
+        return res.status(404).json({ error: 'Tracking non trovato' });
+      }
+      if (req.user?.role !== 'admin' && existing.user_id !== userId) {
+        return res.status(403).json({ error: 'Permesso negato' });
+      }
+      if (!existing.end_time) {
+        return res.status(409).json({ error: 'Tracking attivo non modificabile' });
+      }
+
+      const { data, ore, note } = req.body || {};
+      const hasData = data !== undefined && data !== null && String(data).trim() !== '';
+      const hasOre = ore !== undefined && ore !== null && String(ore).trim() !== '';
+      const hasNote = note !== undefined;
+
+      if (!hasData && !hasOre && !hasNote) {
+        return res.status(400).json({ error: 'Nessun campo da aggiornare' });
+      }
+
+      const nextData = hasData ? String(data).trim() : existing.data;
+      let nextDuration = existing.durata_minuti;
+      let nextStart = existing.start_time;
+      let nextEnd = existing.end_time;
+
+      if (hasOre) {
+        const oreValue = this.parseFloatValue(ore);
+        if (!Number.isFinite(oreValue) || oreValue < 0) {
+          return res.status(400).json({ error: 'Ore non valide' });
+        }
+        nextDuration = Math.round(oreValue * 60);
+      }
+
+      if (hasData || hasOre) {
+        const startTime = `${nextData} 00:00:00`;
+        nextStart = startTime;
+        nextEnd = startTime;
+      }
+
+      const nextNote = hasNote
+        ? (note ? String(note).trim() : null)
+        : existing.note;
+
+      if (!hasData && !hasOre) {
+        this.stmt.updateEntryNoteOnly.run(nextNote, id);
+      } else {
+        this.stmt.updateEntry.run(nextData, nextStart, nextEnd, nextDuration, nextNote, id);
+      }
+
+      const updated = this.stmt.getEntryById.get(id);
+      res.json(this.buildEntryResponse(updated));
+    } catch (error) {
+      Logger.error('Errore PUT /tracking/entries/:id', error);
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
+    }
+  }
+
+  deleteEntry(req, res) {
+    try {
+      const userId = req.user?.id || null;
+      if (!userId) {
+        return res.status(401).json({ error: 'Utente non autenticato' });
+      }
+
+      const { id } = req.params;
+      const existing = this.stmt.getEntryById.get(id);
+      if (!existing) {
+        return res.status(404).json({ error: 'Tracking non trovato' });
+      }
+      if (req.user?.role !== 'admin' && existing.user_id !== userId) {
+        return res.status(403).json({ error: 'Permesso negato' });
+      }
+      if (!existing.end_time) {
+        return res.status(409).json({ error: 'Tracking attivo non eliminabile' });
+      }
+
+      this.stmt.deleteEntry.run(id);
+      res.json({ success: true });
+    } catch (error) {
+      Logger.error('Errore DELETE /tracking/entries/:id', error);
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
+    }
+  }
 }
 
 function createRouter(db) {
@@ -218,6 +328,8 @@ function createRouter(db) {
   router.get('/commesse/:id/entries', validateRequest(ValidationSchemas.tracking.commessa), (req, res) => controller.getEntriesByCommessa(req, res));
   router.post('/start', validateRequest(ValidationSchemas.tracking.start), (req, res) => controller.startTracking(req, res));
   router.put('/entries/:id/stop', validateRequest(ValidationSchemas.tracking.stop), (req, res) => controller.stopTracking(req, res));
+  router.put('/entries/:id', validateRequest(ValidationSchemas.tracking.update), (req, res) => controller.updateEntry(req, res));
+  router.delete('/entries/:id', validateRequest(ValidationSchemas.tracking.delete), (req, res) => controller.deleteEntry(req, res));
   router.post('/manual', validateRequest(ValidationSchemas.tracking.manual), (req, res) => controller.addManualEntry(req, res));
 
   return router;
