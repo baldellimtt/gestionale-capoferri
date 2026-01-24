@@ -113,6 +113,7 @@ class Migrations {
         avanzamento_lavori INTEGER DEFAULT 0,
         monte_ore_stimato REAL,
         responsabile TEXT,
+        ubicazione TEXT,
         data_inizio TEXT,
         data_fine TEXT,
         note TEXT,
@@ -120,6 +121,17 @@ class Migrations {
         created_at TEXT DEFAULT (datetime('now', 'localtime')),
         updated_at TEXT DEFAULT (datetime('now', 'localtime')),
         FOREIGN KEY (cliente_id) REFERENCES clienti(id) ON DELETE SET NULL
+      );
+
+      -- Tabella Cartelle Anno Commesse (per cliente)
+      CREATE TABLE IF NOT EXISTS commesse_cartelle_anni (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cliente_id INTEGER NOT NULL,
+        anno INTEGER NOT NULL,
+        created_at TEXT DEFAULT (datetime('now', 'localtime')),
+        updated_at TEXT DEFAULT (datetime('now', 'localtime')),
+        UNIQUE(cliente_id, anno),
+        FOREIGN KEY (cliente_id) REFERENCES clienti(id) ON DELETE CASCADE
       );
 
       -- Tabella Note Spese
@@ -190,6 +202,8 @@ class Migrations {
 
       CREATE INDEX IF NOT EXISTS idx_commesse_audit_commessa_id ON commesse_audit(commessa_id);
       CREATE INDEX IF NOT EXISTS idx_commesse_audit_created_at ON commesse_audit(created_at);
+      CREATE INDEX IF NOT EXISTS idx_commesse_cartelle_cliente_id ON commesse_cartelle_anni(cliente_id);
+      CREATE INDEX IF NOT EXISTS idx_commesse_cartelle_anno ON commesse_cartelle_anni(anno);
 
       -- Tabella Dati Aziendali (singola riga)
       CREATE TABLE IF NOT EXISTS dati_aziendali (
@@ -495,6 +509,7 @@ class Migrations {
     addColumn('avanzamento_lavori', 'INTEGER', 0);
     addColumn('monte_ore_stimato', 'REAL');
     addColumn('responsabile', 'TEXT');
+    addColumn('ubicazione', 'TEXT');
     addColumn('data_inizio', 'TEXT');
     addColumn('data_fine', 'TEXT');
     addColumn('note', 'TEXT');

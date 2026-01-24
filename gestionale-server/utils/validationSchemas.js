@@ -167,6 +167,39 @@ const ValidationSchemas = {
     update: [] // Sarà popolato dopo la definizione
   },
 
+  // Validazione Cartelle Anno Commesse
+  commessaYearFolder: {
+    list: [
+      query('clienteId')
+        .optional({ nullable: true, checkFalsy: true })
+        .isInt({ min: 1 })
+        .withMessage('ID cliente non valido'),
+      query('cliente_id')
+        .optional({ nullable: true, checkFalsy: true })
+        .isInt({ min: 1 })
+        .withMessage('ID cliente non valido')
+    ],
+    create: [
+      body('cliente_id')
+        .optional({ nullable: true, checkFalsy: true })
+        .isInt({ min: 1 })
+        .withMessage('ID cliente non valido'),
+      body('clienteId')
+        .optional({ nullable: true, checkFalsy: true })
+        .isInt({ min: 1 })
+        .withMessage('ID cliente non valido'),
+      body('anno')
+        .notEmpty()
+        .withMessage('Anno obbligatorio')
+        .custom((value) => {
+          if (value === null || value === undefined || value === '') return false;
+          const text = String(value).trim();
+          return /^\\d{4}$/.test(text);
+        })
+        .withMessage('Anno non valido')
+    ]
+  },
+
   commessaAuditNote: [
     param('id')
       .isInt({ min: 1 })
@@ -419,6 +452,11 @@ const ValidationSchemas = {
         .trim()
         .isLength({ max: 100 })
         .withMessage('Responsabile troppo lungo'),
+      body('ubicazione')
+        .optional({ nullable: true, checkFalsy: true })
+        .trim()
+        .isLength({ max: 255 })
+        .withMessage('Ubicazione troppo lunga (max 255 caratteri)'),
       body('data_inizio')
         .optional({ nullable: true, checkFalsy: true })
         .custom((value) => {

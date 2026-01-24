@@ -496,6 +496,23 @@ class ApiService {
     return this.commessePromise;
   }
 
+  async getCommesseYearFolders(clienteId) {
+    if (!clienteId) return [];
+    const params = new URLSearchParams();
+    params.append('clienteId', clienteId);
+    return this.request(`/commesse/cartelle-anni?${params.toString()}`);
+  }
+
+  async createCommessaYearFolder(clienteId, anno) {
+    return this.request('/commesse/cartelle-anni', {
+      method: 'POST',
+      body: {
+        cliente_id: clienteId,
+        anno
+      }
+    });
+  }
+
   async createCommessa(payload) {
     const result = await this.request('/commesse', {
       method: 'POST',

@@ -31,6 +31,7 @@ const createEmptyForm = () => ({
   avanzamento_lavori: 0,
   monte_ore_stimato: '',
   responsabile: '',
+  ubicazione: '',
   data_inizio: '',
   data_fine: '',
   note: '',
@@ -55,6 +56,7 @@ function Commesse({ clienti, toast, onOpenTracking }) {
   const [showClienteFilterAutocomplete, setShowClienteFilterAutocomplete] = useState(false)
   const [clienteFormInput, setClienteFormInput] = useState('')
   const [showClienteFormAutocomplete, setShowClienteFormAutocomplete] = useState(false)
+  const [allowClienteEdit, setAllowClienteEdit] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [formTab, setFormTab] = useState('essenziali')
   const [editingId, setEditingId] = useState(null)
@@ -79,6 +81,10 @@ function Commesse({ clienti, toast, onOpenTracking }) {
   const [auditNoteText, setAuditNoteText] = useState('')
   const [auditNoteSaving, setAuditNoteSaving] = useState(false)
   const [sortByLatest, setSortByLatest] = useState(false)
+  const [yearFoldersByCliente, setYearFoldersByCliente] = useState({})
+  const [yearFoldersLoading, setYearFoldersLoading] = useState(false)
+  const [showYearFolderForm, setShowYearFolderForm] = useState(false)
+  const [newYearFolder, setNewYearFolder] = useState('')
 
   const loadCommesse = async (nextFilters = filters) => {
     try {
@@ -120,6 +126,37 @@ function Commesse({ clienti, toast, onOpenTracking }) {
       setFormData((prev) => ({ ...prev, sotto_stato: [], sotto_stato_custom: '' }))
     }
   }, [formData.stato, formData.sotto_stato])
+
+  useEffect(() => {
+    setShowYearFolderForm(false)
+    setNewYearFolder('')
+  }, [selectedClienteViewId])
+
+  useEffect(() => {
+    if (!selectedClienteViewId) return
+    let isActive = true
+    const loadFolders = async () => {
+      try {
+        setYearFoldersLoading(true)
+        const data = await api.getCommesseYearFolders(selectedClienteViewId)
+        if (!isActive) return
+        const years = Array.isArray(data) ? data.map((item) => String(item.anno)) : []
+        setYearFoldersByCliente((prev) => ({
+          ...prev,
+          [selectedClienteViewId]: years
+        }))
+      } catch (err) {
+        console.error('Errore caricamento cartelle anno:', err)
+        toast?.showError('Errore nel caricamento delle cartelle anno', 'Cartelle anno')
+      } finally {
+        if (isActive) setYearFoldersLoading(false)
+      }
+    }
+    loadFolders()
+    return () => {
+      isActive = false
+    }
+  }, [selectedClienteViewId, toast])
 
   useEffect(() => {
     if (commesse.length === 0) {
@@ -226,6 +263,39 @@ function Commesse({ clienti, toast, onOpenTracking }) {
     setSelectedCommessaId('')
     setClienteFormInput('')
     setShowClienteFormAutocomplete(false)
+    setAllowClienteEdit(false)
+    setCommessaAudit([])
+    setCommessaAuditError(null)
+    setCommessaAuditCommessaId(null)
+    setShowCommessaAudit(false)
+    setAuditNoteDate(getTodayDate())
+    setAuditNoteText('')
+    setAuditNoteSaving(false)
+  }
+
+  const startNewCommessa = (options = {}) => {
+    const empty = createEmptyForm()
+    const selectedCliente = selectedClienteViewId
+      ? clienti.find((cliente) => String(cliente.id) === String(selectedClienteViewId))
+      : null
+    if (selectedCliente) {
+      empty.cliente_id = selectedCliente.id
+      empty.cliente_nome = selectedCliente.denominazione || ''
+    }
+    const year = options.year || (selectedClienteViewId ? yearFilter : '')
+    if (year) {
+      empty.data_inizio = `${year}-01-01`
+    }
+    setFormData(empty)
+    setInitialFormData(empty)
+    setInitialAllegati([])
+    setEditingId(null)
+    setShowForm(true)
+    setFormTab('essenziali')
+    setSelectedCommessaId('')
+    setClienteFormInput(selectedCliente?.denominazione || '')
+    setShowClienteFormAutocomplete(false)
+    setAllowClienteEdit(!selectedCliente)
     setCommessaAudit([])
     setCommessaAuditError(null)
     setCommessaAuditCommessaId(null)
@@ -399,6 +469,7 @@ function Commesse({ clienti, toast, onOpenTracking }) {
       avanzamento_lavori: commessa.avanzamento_lavori ?? 0,
       monte_ore_stimato: commessa.monte_ore_stimato ?? '',
       responsabile: commessa.responsabile || '',
+      ubicazione: commessa.ubicazione || '',
       data_inizio: commessa.data_inizio || '',
       data_fine: commessa.data_fine || '',
       note: commessa.note || '',
@@ -433,6 +504,7 @@ function Commesse({ clienti, toast, onOpenTracking }) {
     }
     setInitialAllegati(JSON.parse(JSON.stringify(currentAllegati)))
     setClienteFormInput(nextForm.cliente_nome || '')
+    setAllowClienteEdit(true)
   }
 
   const auditFieldLabels = {
@@ -448,6 +520,7 @@ function Commesse({ clienti, toast, onOpenTracking }) {
     avanzamento_lavori: 'Avanzamento lavori',
     monte_ore_stimato: 'Monte ore stimato',
     responsabile: 'Responsabile',
+    ubicazione: 'Ubicazione',
     data_inizio: 'Data inizio',
     data_fine: 'Data fine',
     note: 'Note'
@@ -459,6 +532,7 @@ function Commesse({ clienti, toast, onOpenTracking }) {
     sotto_stato: 'Cambio tipologia di lavoro',
     cliente_nome: 'Cambio cliente',
     responsabile: 'Cambio responsabile',
+    ubicazione: 'Cambio ubicazione',
     titolo: 'Modifica titolo',
     importo_preventivo: 'Modifica importo preventivo',
     importo_totale: 'Modifica importo totale',
@@ -737,10 +811,17 @@ function Commesse({ clienti, toast, onOpenTracking }) {
   }, [clienti])
 
   const clientiList = useMemo(() => {
-    if (!clienteFilterInput) return clientiSorted
+    const clientiWithCommesse = new Set(
+      filteredCommesse
+        .map((commessa) => commessa?.cliente_id)
+        .filter((value) => value != null)
+        .map((value) => String(value))
+    )
+    const availableClienti = clientiSorted.filter((cliente) => clientiWithCommesse.has(String(cliente.id)))
+    if (!clienteFilterInput) return availableClienti
     const search = clienteFilterInput.toLowerCase()
-    return clientiSorted.filter((cliente) => cliente.denominazione?.toLowerCase().includes(search))
-  }, [clientiSorted, clienteFilterInput])
+    return availableClienti.filter((cliente) => cliente.denominazione?.toLowerCase().includes(search))
+  }, [clientiSorted, clienteFilterInput, filteredCommesse])
 
 
   const uploadsBase = api.baseURL.replace(/\/api\/?$/, '') + '/uploads'
@@ -776,6 +857,7 @@ function Commesse({ clienti, toast, onOpenTracking }) {
       importo_pagato: Number(String(data.importo_pagato ?? 0).replace(',', '.')) || 0,
       avanzamento_lavori: Number.parseInt(data.avanzamento_lavori ?? 0, 10) || 0,
       responsabile: data.responsabile || '',
+      ubicazione: data.ubicazione || '',
       data_inizio: data.data_inizio || '',
       data_fine: data.data_fine || '',
       note: data.note || '',
@@ -818,6 +900,49 @@ function Commesse({ clienti, toast, onOpenTracking }) {
     })
     return Array.from(years).sort((a, b) => b.localeCompare(a))
   }, [commesse])
+
+  const selectedClienteYearFolders = useMemo(() => {
+    if (!selectedClienteViewId) return []
+    const custom = yearFoldersByCliente[selectedClienteViewId] || []
+    const years = new Set([...availableYears, ...custom])
+    if (yearFilter) years.add(yearFilter)
+    return Array.from(years).sort((a, b) => b.localeCompare(a))
+  }, [availableYears, selectedClienteViewId, yearFoldersByCliente, yearFilter])
+
+  const handleSelectYearFolder = (year) => {
+    setYearFilter(year || '')
+  }
+
+  const handleCreateYearFolder = async () => {
+    const year = newYearFolder.trim()
+    if (!/^\d{4}$/.test(year)) {
+      toast?.showError('Inserisci un anno valido (es. 2026).', 'Nuova cartella')
+      return
+    }
+    if (!selectedClienteViewId) return
+    try {
+      setYearFoldersLoading(true)
+      const created = await api.createCommessaYearFolder(selectedClienteViewId, year)
+      const createdYear = created?.anno ? String(created.anno) : year
+      setYearFoldersByCliente((prev) => {
+        const existing = prev[selectedClienteViewId] || []
+        if (existing.includes(createdYear)) return prev
+        return {
+          ...prev,
+          [selectedClienteViewId]: [...existing, createdYear]
+        }
+      })
+      setNewYearFolder('')
+      setShowYearFolderForm(false)
+      setYearFilter(createdYear)
+      startNewCommessa({ year: createdYear })
+    } catch (err) {
+      console.error('Errore creazione cartella anno:', err)
+      toast?.showError('Errore nella creazione della cartella', 'Nuova cartella')
+    } finally {
+      setYearFoldersLoading(false)
+    }
+  }
 
   const truncate = (value, max = 80) => {
     if (!value) return ''
@@ -869,20 +994,19 @@ function Commesse({ clienti, toast, onOpenTracking }) {
               <button
                 className="btn btn-secondary"
                 onClick={() => {
-                  const empty = createEmptyForm()
-                  setFormData(empty)
-                  setInitialFormData(empty)
-                  setInitialAllegati([])
-                  setEditingId(null)
-                  setShowForm(true)
-                  setFormTab('essenziali')
-                  setSelectedCommessaId('')
-                  setClienteFormInput('')
-                  setShowClienteFormAutocomplete(false)
+                  startNewCommessa()
                 }}
               >
                 + Nuova Commessa
               </button>
+              {!isClientListView && (
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setShowYearFolderForm(true)}
+                >
+                  + Nuova cartella
+                </button>
+              )}
             </>
           )}
         </div>
@@ -939,18 +1063,22 @@ function Commesse({ clienti, toast, onOpenTracking }) {
               <option key={stato} value={stato}>{stato}</option>
             ))}
           </select>
-          <label>Anno:</label>
-          <select
-            className="form-select"
-            value={yearFilter}
-            onChange={(e) => setYearFilter(e.target.value)}
-            style={{ width: 'auto' }}
-          >
-            <option value="">Tutti</option>
-            {availableYears.map((year) => (
-              <option key={year} value={year}>{year}</option>
-            ))}
-          </select>
+          {isClientListView && (
+            <>
+              <label>Anno:</label>
+              <select
+                className="form-select"
+                value={yearFilter}
+                onChange={(e) => setYearFilter(e.target.value)}
+                style={{ width: 'auto' }}
+              >
+                <option value="">Tutti</option>
+                {availableYears.map((year) => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
+            </>
+          )}
           <label>Tipologia di lavoro:</label>
           <select
             className="form-select"
@@ -1021,7 +1149,18 @@ function Commesse({ clienti, toast, onOpenTracking }) {
                 />
               </div>
               <div className={`col-md-3 importo-pagato-row ${isConsuntivoPagamenti ? 'is-consuntivo' : ''}`}>
-                <label className="form-label">Cliente</label>
+                <div className="d-flex align-items-center justify-content-between">
+                  <label className="form-label mb-0">Cliente</label>
+                  {!allowClienteEdit && (
+                    <button
+                      type="button"
+                      className="btn btn-link btn-sm p-0"
+                      onClick={() => setAllowClienteEdit(true)}
+                    >
+                      Cambia cliente
+                    </button>
+                  )}
+                </div>
                 <div className="autocomplete-container">
                   <input
                     className="form-control"
@@ -1035,6 +1174,8 @@ function Commesse({ clienti, toast, onOpenTracking }) {
                       setTimeout(() => setShowClienteFormAutocomplete(false), 200)
                     }}
                     placeholder="Cerca cliente..."
+                    disabled={!allowClienteEdit}
+                    style={!allowClienteEdit ? { backgroundColor: '#f1f3f5', color: '#6c757d' } : undefined}
                   />
                   {showClienteFormAutocomplete && filteredClientiForm.length > 0 && (
                     <div className="autocomplete-list">
@@ -1147,6 +1288,15 @@ function Commesse({ clienti, toast, onOpenTracking }) {
                     )
                   })}
                 </select>
+              </div>
+              <div className="col-md-4">
+                <label className="form-label">Ubicazione</label>
+                <input
+                  className="form-control"
+                  value={formData.ubicazione}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, ubicazione: e.target.value }))}
+                  placeholder="Es. Via Roma, Milano"
+                />
               </div>
               </>
               )}
@@ -1493,7 +1643,81 @@ function Commesse({ clienti, toast, onOpenTracking }) {
       )}
 
       {!showForm && !isClientListView && (
-        <div className="attivita-table-container">
+        <>
+          <div className="card mb-3">
+            <div className="card-body">
+              <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                <div className="fw-semibold">Cartelle anno</div>
+                {showYearFolderForm ? (
+                  <div className="d-flex align-items-center gap-2">
+                    <input
+                      className="form-control form-control-sm"
+                      style={{ width: '6.5rem' }}
+                      value={newYearFolder}
+                      onChange={(e) => setNewYearFolder(e.target.value)}
+                      placeholder="2026"
+                      inputMode="numeric"
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      onClick={handleCreateYearFolder}
+                    >
+                      Crea
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => {
+                        setShowYearFolderForm(false)
+                        setNewYearFolder('')
+                      }}
+                    >
+                      Annulla
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => setShowYearFolderForm(true)}
+                  >
+                    Nuova cartella
+                  </button>
+                )}
+              </div>
+              <div className="d-flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className={`btn btn-sm ${!yearFilter ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => handleSelectYearFolder('')}
+                >
+                  Tutte
+                </button>
+                {yearFoldersLoading ? (
+                  <span className="text-muted" style={{ fontSize: '0.9rem' }}>
+                    Caricamento cartelle...
+                  </span>
+                ) : selectedClienteYearFolders.length === 0 ? (
+                  <span className="text-muted" style={{ fontSize: '0.9rem' }}>
+                    Nessuna cartella disponibile.
+                  </span>
+                ) : (
+                  selectedClienteYearFolders.map((year) => (
+                    <button
+                      key={year}
+                      type="button"
+                      className={`btn btn-sm ${yearFilter === year ? 'btn-primary' : 'btn-secondary'}`}
+                      onClick={() => handleSelectYearFolder(year)}
+                    >
+                      {year}
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="attivita-table-container">
           {loading ? (
             <div className="text-center py-5">
               <div className="spinner-border" role="status">
@@ -1559,7 +1783,8 @@ function Commesse({ clienti, toast, onOpenTracking }) {
               </table>
             </div>
           )}
-        </div>
+          </div>
+        </>
       )}
 
       <ConfirmDeleteModal

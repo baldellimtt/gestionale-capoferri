@@ -98,9 +98,9 @@ class CommesseController {
         INSERT INTO commesse (
           titolo, cliente_id, cliente_nome, stato, sotto_stato, stato_pagamenti,
           preventivo, importo_preventivo, importo_totale, importo_pagato,
-          avanzamento_lavori, monte_ore_stimato, responsabile,
+          avanzamento_lavori, monte_ore_stimato, responsabile, ubicazione,
           data_inizio, data_fine, note, allegati
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `),
       update: this.db.prepare(`
         UPDATE commesse SET
@@ -117,6 +117,7 @@ class CommesseController {
           avanzamento_lavori = ?,
           monte_ore_stimato = ?,
           responsabile = ?,
+          ubicazione = ?,
           data_inizio = ?,
           data_fine = ?,
           note = ?,
@@ -178,6 +179,22 @@ class CommesseController {
       `),
       getKanbanCardsByCommessa: this.db.prepare(`
         SELECT id FROM kanban_card WHERE commessa_id = ? ORDER BY id ASC
+      `),
+      getYearFoldersByCliente: this.db.prepare(`
+        SELECT id, cliente_id, anno, created_at, updated_at
+        FROM commesse_cartelle_anni
+        WHERE cliente_id = ?
+        ORDER BY anno DESC, id DESC
+      `),
+      getYearFolderByClienteYear: this.db.prepare(`
+        SELECT id, cliente_id, anno, created_at, updated_at
+        FROM commesse_cartelle_anni
+        WHERE cliente_id = ? AND anno = ?
+        LIMIT 1
+      `),
+      createYearFolder: this.db.prepare(`
+        INSERT INTO commesse_cartelle_anni (cliente_id, anno)
+        VALUES (?, ?)
       `)
     };
   }
@@ -258,6 +275,7 @@ class CommesseController {
       'avanzamento_lavori',
       'monte_ore_stimato',
       'responsabile',
+      'ubicazione',
       'data_inizio',
       'data_fine',
       'note'
@@ -435,6 +453,7 @@ class CommesseController {
         avanzamento_lavori,
         monte_ore_stimato,
         responsabile,
+        ubicazione,
         data_inizio,
         data_fine,
         note,
@@ -457,6 +476,7 @@ class CommesseController {
           this.parseIntValue(avanzamento_lavori, 0),
           this.parseNullableNumber(monte_ore_stimato),
           responsabile || null,
+          ubicazione || null,
           data_inizio || null,
           data_fine || null,
           note || null,
@@ -502,6 +522,7 @@ class CommesseController {
         avanzamento_lavori,
         monte_ore_stimato,
         responsabile,
+        ubicazione,
         data_inizio,
         data_fine,
         note,
@@ -527,6 +548,7 @@ class CommesseController {
         avanzamento_lavori: this.parseIntValue(avanzamento_lavori, 0),
         monte_ore_stimato: this.parseNullableNumber(monte_ore_stimato),
         responsabile: responsabile || null,
+        ubicazione: ubicazione || null,
         data_inizio: data_inizio || null,
         data_fine: data_fine || null,
         note: note || null,
@@ -547,6 +569,7 @@ class CommesseController {
         nextValues.avanzamento_lavori,
         nextValues.monte_ore_stimato,
         nextValues.responsabile,
+        nextValues.ubicazione,
         nextValues.data_inizio,
         nextValues.data_fine,
         nextValues.note,
@@ -832,11 +855,66 @@ class CommesseController {
       res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
+
+  getYearFolders(req, res) {
+    try {
+      const { clienteId, cliente_id } = req.query;
+      const selectedClienteId = clienteId || cliente_id;
+      if (!selectedClienteId) {
+        return res.status(400).json({ error: 'clienteId obbligatorio' });
+      }
+      const folders = this.stmt.getYearFoldersByCliente.all(selectedClienteId);
+      res.json(folders);
+    } catch (error) {
+      Logger.error('Errore GET /commesse/cartelle-anni', error);
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
+    }
+  }
+
+  createYearFolder(req, res) {
+    try {
+      const payload = req.body || {};
+      const clienteId = payload.cliente_id || payload.clienteId;
+      const annoValue = payload.anno;
+      if (!clienteId) {
+        return res.status(400).json({ error: 'clienteId obbligatorio' });
+      }
+      const annoText = String(annoValue || '').trim();
+      if (!/^\d{4}$/.test(annoText)) {
+        return res.status(400).json({ error: 'Anno non valido' });
+      }
+      const anno = Number.parseInt(annoText, 10);
+      if (!Number.isFinite(anno)) {
+        return res.status(400).json({ error: 'Anno non valido' });
+      }
+
+      const existing = this.stmt.getYearFolderByClienteYear.get(clienteId, anno);
+      if (existing) {
+        return res.status(200).json(existing);
+      }
+
+      const result = this.stmt.createYearFolder.run(clienteId, anno);
+      const created = this.stmt.getYearFolderByClienteYear.get(clienteId, anno) || {
+        id: result.lastInsertRowid,
+        cliente_id: clienteId,
+        anno
+      };
+      res.status(201).json(created);
+    } catch (error) {
+      if (String(error.message || '').includes('UNIQUE')) {
+        return res.status(409).json({ error: 'Cartella già presente' });
+      }
+      Logger.error('Errore POST /commesse/cartelle-anni', error);
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
+    }
+  }
 }
 
 function createRouter(db) {
   const controller = new CommesseController(db);
 
+  router.get('/cartelle-anni', validateRequest(ValidationSchemas.commessaYearFolder.list), (req, res) => controller.getYearFolders(req, res));
+  router.post('/cartelle-anni', validateRequest(ValidationSchemas.commessaYearFolder.create), (req, res) => controller.createYearFolder(req, res));
   router.get('/:id/allegati', validateRequest(ValidationSchemas.id), (req, res) => controller.getAllegati(req, res));
   router.get('/:id/audit', validateRequest(ValidationSchemas.id), (req, res) => controller.getAudit(req, res));
   router.post('/:id/audit', validateRequest(ValidationSchemas.commessaAuditNote), (req, res) => controller.addAuditNote(req, res));
