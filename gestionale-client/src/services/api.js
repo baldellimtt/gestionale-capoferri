@@ -552,6 +552,40 @@ class ApiService {
     });
   }
 
+  // Tracking ore commesse
+  async getTrackingActive() {
+    return this.request('/tracking/active');
+  }
+
+  async getCommessaTrackingEntries(commessaId) {
+    return this.request(`/tracking/commesse/${commessaId}/entries`);
+  }
+
+  async startTracking(commessaId) {
+    return this.request('/tracking/start', {
+      method: 'POST',
+      body: { commessa_id: commessaId },
+    });
+  }
+
+  async stopTracking(entryId) {
+    return this.request(`/tracking/entries/${entryId}/stop`, {
+      method: 'PUT',
+    });
+  }
+
+  async addTrackingManual(commessaId, data, ore, note) {
+    return this.request('/tracking/manual', {
+      method: 'POST',
+      body: {
+        commessa_id: commessaId,
+        data,
+        ore,
+        note
+      },
+    });
+  }
+
   // Clienti API
   async getClienti(search = '', forceRefresh = false) {
     const endpoint = search ? `/clienti?search=${encodeURIComponent(search)}` : '/clienti';

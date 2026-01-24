@@ -410,6 +410,10 @@ const ValidationSchemas = {
         .optional({ nullable: true, checkFalsy: true })
         .isInt({ min: 0, max: 100 })
         .withMessage('Avanzamento lavori deve essere tra 0 e 100'),
+      body('monte_ore_stimato')
+        .optional({ nullable: true, checkFalsy: true })
+        .isFloat({ min: 0 })
+        .withMessage('Monte ore stimato deve essere un numero positivo'),
       body('responsabile')
         .optional({ nullable: true, checkFalsy: true })
         .trim()
@@ -442,6 +446,55 @@ const ValidationSchemas = {
         .withMessage('Note troppo lunghe (max 2000 caratteri)')
     ],
     update: [] // Sarà popolato dopo la definizione
+  },
+
+  // Validazione Tracking ore commesse
+  tracking: {
+    commessa: [
+      param('id')
+        .isInt({ min: 1 })
+        .withMessage('ID commessa non valido')
+    ],
+    start: [
+      body('commessa_id')
+        .notEmpty()
+        .withMessage('commessa_id obbligatorio')
+        .isInt({ min: 1 })
+        .withMessage('ID commessa non valido')
+    ],
+    stop: [
+      param('id')
+        .isInt({ min: 1 })
+        .withMessage('ID tracking non valido')
+    ],
+    manual: [
+      body('commessa_id')
+        .notEmpty()
+        .withMessage('commessa_id obbligatorio')
+        .isInt({ min: 1 })
+        .withMessage('ID commessa non valido'),
+      body('data')
+        .notEmpty()
+        .withMessage('Data obbligatoria')
+        .custom((value) => {
+          if (typeof value !== 'string') return false;
+          return /^\d{4}-\d{2}-\d{2}$/.test(value);
+        })
+        .withMessage('Data non valida (formato YYYY-MM-DD)'),
+      body('ore')
+        .notEmpty()
+        .withMessage('Ore obbligatorie')
+        .isFloat({ min: 0 })
+        .withMessage('Ore devono essere un numero positivo'),
+      body('note')
+        .optional({ nullable: true, checkFalsy: true })
+        .custom((value) => {
+          if (value === null || value === undefined || value === '') return true;
+          const trimmed = typeof value === 'string' ? value.trim() : String(value);
+          return trimmed.length <= 1000;
+        })
+        .withMessage('Note troppo lunghe (max 1000 caratteri)')
+    ]
   },
 
   // Validazione Kanban

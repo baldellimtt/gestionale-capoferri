@@ -98,9 +98,9 @@ class CommesseController {
         INSERT INTO commesse (
           titolo, cliente_id, cliente_nome, stato, sotto_stato, stato_pagamenti,
           preventivo, importo_preventivo, importo_totale, importo_pagato,
-          avanzamento_lavori, responsabile,
+          avanzamento_lavori, monte_ore_stimato, responsabile,
           data_inizio, data_fine, note, allegati
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `),
       update: this.db.prepare(`
         UPDATE commesse SET
@@ -115,6 +115,7 @@ class CommesseController {
           importo_totale = ?,
           importo_pagato = ?,
           avanzamento_lavori = ?,
+          monte_ore_stimato = ?,
           responsabile = ?,
           data_inizio = ?,
           data_fine = ?,
@@ -187,6 +188,12 @@ class CommesseController {
     return Number.isFinite(parsed) ? parsed : NaN;
   }
 
+  parseNullableNumber(value) {
+    if (value == null || value === '') return null;
+    const parsed = Number(String(value).replace(',', '.'));
+    return Number.isFinite(parsed) ? parsed : NaN;
+  }
+
   parseIntValue(value, fallback = 0) {
     if (value == null || value === '') return fallback;
     const parsed = Number.parseInt(value, 10);
@@ -249,6 +256,7 @@ class CommesseController {
       'importo_totale',
       'importo_pagato',
       'avanzamento_lavori',
+      'monte_ore_stimato',
       'responsabile',
       'data_inizio',
       'data_fine',
@@ -277,7 +285,8 @@ class CommesseController {
       importo_preventivo,
       importo_totale,
       importo_pagato,
-      avanzamento_lavori
+      avanzamento_lavori,
+      monte_ore_stimato
     } = payload;
 
     if (!titolo || String(titolo).trim() === '') {
@@ -316,6 +325,11 @@ class CommesseController {
     const avanzamentoValue = this.parseIntValue(avanzamento_lavori, 0);
     if (!Number.isFinite(avanzamentoValue) || avanzamentoValue < 0 || avanzamentoValue > 100) {
       return 'Avanzamento lavori non valido';
+    }
+
+    const monteOreValue = this.parseNullableNumber(monte_ore_stimato);
+    if (monteOreValue !== null && (!Number.isFinite(monteOreValue) || monteOreValue < 0)) {
+      return 'Monte ore stimato non valido';
     }
 
     return null;
@@ -419,6 +433,7 @@ class CommesseController {
         importo_totale,
         importo_pagato,
         avanzamento_lavori,
+        monte_ore_stimato,
         responsabile,
         data_inizio,
         data_fine,
@@ -440,6 +455,7 @@ class CommesseController {
           this.parseNumber(importo_totale, 0),
           this.parseNumber(importo_pagato, 0),
           this.parseIntValue(avanzamento_lavori, 0),
+          this.parseNullableNumber(monte_ore_stimato),
           responsabile || null,
           data_inizio || null,
           data_fine || null,
@@ -484,6 +500,7 @@ class CommesseController {
         importo_totale,
         importo_pagato,
         avanzamento_lavori,
+        monte_ore_stimato,
         responsabile,
         data_inizio,
         data_fine,
@@ -508,6 +525,7 @@ class CommesseController {
         importo_totale: this.parseNumber(importo_totale, 0),
         importo_pagato: this.parseNumber(importo_pagato, 0),
         avanzamento_lavori: this.parseIntValue(avanzamento_lavori, 0),
+        monte_ore_stimato: this.parseNullableNumber(monte_ore_stimato),
         responsabile: responsabile || null,
         data_inizio: data_inizio || null,
         data_fine: data_fine || null,
@@ -527,6 +545,7 @@ class CommesseController {
         nextValues.importo_totale,
         nextValues.importo_pagato,
         nextValues.avanzamento_lavori,
+        nextValues.monte_ore_stimato,
         nextValues.responsabile,
         nextValues.data_inizio,
         nextValues.data_fine,

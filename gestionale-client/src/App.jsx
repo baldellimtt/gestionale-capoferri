@@ -13,6 +13,7 @@ const Commesse = lazy(() => import('./components/Commesse'))
 const Consuntivi = lazy(() => import('./components/Consuntivi'))
 const AnagraficaClienti = lazy(() => import('./components/AnagraficaClienti'))
 const KanbanBoard = lazy(() => import('./components/KanbanBoard'))
+const TrackingOre = lazy(() => import('./components/TrackingOre'))
 const Home = lazy(() => import('./components/Home'))
 const Team = lazy(() => import('./components/Team'))
 const DatiAziendali = lazy(() => import('./components/DatiAziendali'))
@@ -34,6 +35,7 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [user, setUser] = useState(null)
+  const [trackingCommessaId, setTrackingCommessaId] = useState(null)
   const [authChecking, setAuthChecking] = useState(true)
   const [authLoading, setAuthLoading] = useState(false)
   const [authError, setAuthError] = useState(null)
@@ -151,6 +153,7 @@ function App() {
       api.clearTokens()
       setUser(null)
       setClienti([])
+      setTrackingCommessaId(null)
       setActiveView('home')
     }
   }
@@ -228,6 +231,13 @@ function App() {
                 Commesse
               </button>
               <button
+                className={`topbar-link ${activeView === 'tracking' ? 'active' : ''}`}
+                onClick={() => setActiveView('tracking')}
+                type="button"
+              >
+                Tracking ore
+              </button>
+              <button
                 className={`topbar-link ${activeView === 'consuntivi' ? 'active' : ''}`}
                 onClick={() => setActiveView('consuntivi')}
                 type="button"
@@ -265,10 +275,26 @@ function App() {
                         <TabellaAttivita key="attivita" clienti={clienti} user={user} toast={toast} />
                       )}
                       {activeView === 'commesse' && (
-                        <Commesse clienti={clienti} toast={toast} />
+                        <Commesse
+                          clienti={clienti}
+                          toast={toast}
+                          onOpenTracking={(commessaId) => {
+                            setTrackingCommessaId(commessaId)
+                            setActiveView('tracking')
+                          }}
+                        />
                       )}
                       {activeView === 'consuntivi' && (
                         <Consuntivi />
+                      )}
+                      {activeView === 'tracking' && (
+                        <TrackingOre
+                          clienti={clienti}
+                          user={user}
+                          toast={toast}
+                          selectedCommessaId={trackingCommessaId}
+                          onSelectCommessa={setTrackingCommessaId}
+                        />
                       )}
                       {activeView === 'team' && (
                         <Team

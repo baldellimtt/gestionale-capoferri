@@ -29,6 +29,7 @@ const createEmptyForm = () => ({
   importo_totale: '',
   importo_pagato: '',
   avanzamento_lavori: 0,
+  monte_ore_stimato: '',
   responsabile: '',
   data_inizio: '',
   data_fine: '',
@@ -44,7 +45,7 @@ const getTodayDate = () => {
   return `${year}-${month}-${day}`
 }
 
-function Commesse({ clienti, toast }) {
+function Commesse({ clienti, toast, onOpenTracking }) {
   const [commesse, setCommesse] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -307,9 +308,15 @@ function Commesse({ clienti, toast }) {
     const importoPreventivo = parseNumber(formData.importo_preventivo)
     const importoTotale = parseNumber(formData.importo_totale)
     const importoPagato = parseNumber(formData.importo_pagato)
+    const monteOreStimato = formData.monte_ore_stimato === '' ? null : parseNumber(formData.monte_ore_stimato)
 
     if ([importoPreventivo, importoTotale, importoPagato].some((value) => !Number.isFinite(value) || value < 0)) {
       setError('Importi non validi.')
+      return
+    }
+
+    if (monteOreStimato !== null && (!Number.isFinite(monteOreStimato) || monteOreStimato < 0)) {
+      setError('Monte ore stimato non valido.')
       return
     }
 
@@ -332,6 +339,7 @@ function Commesse({ clienti, toast }) {
       importo_totale: importoTotale,
       importo_pagato: importoPagato,
       avanzamento_lavori: clampPercent(formData.avanzamento_lavori),
+      monte_ore_stimato: monteOreStimato,
       data_inizio: formData.data_inizio && typeof formData.data_inizio === 'string' && formData.data_inizio.trim() ? formData.data_inizio.trim() : null,
       data_fine: formData.data_fine && typeof formData.data_fine === 'string' && formData.data_fine.trim() ? formData.data_fine.trim() : null,
       note: formData.note && typeof formData.note === 'string' && formData.note.trim() ? formData.note.trim() : null,
@@ -389,6 +397,7 @@ function Commesse({ clienti, toast }) {
       importo_totale: commessa.importo_totale ?? 0,
       importo_pagato: commessa.importo_pagato ?? 0,
       avanzamento_lavori: commessa.avanzamento_lavori ?? 0,
+      monte_ore_stimato: commessa.monte_ore_stimato ?? '',
       responsabile: commessa.responsabile || '',
       data_inizio: commessa.data_inizio || '',
       data_fine: commessa.data_fine || '',
@@ -437,6 +446,7 @@ function Commesse({ clienti, toast }) {
     importo_totale: 'Importo totale',
     importo_pagato: 'Importo pagato',
     avanzamento_lavori: 'Avanzamento lavori',
+    monte_ore_stimato: 'Monte ore stimato',
     responsabile: 'Responsabile',
     data_inizio: 'Data inizio',
     data_fine: 'Data fine',
@@ -454,6 +464,7 @@ function Commesse({ clienti, toast }) {
     importo_totale: 'Modifica importo totale',
     importo_pagato: 'Modifica importo pagato',
     avanzamento_lavori: 'Aggiornamento avanzamento lavori',
+    monte_ore_stimato: 'Modifica monte ore stimato',
     preventivo: 'Cambio preventivo',
     data_inizio: 'Cambio data inizio',
     data_fine: 'Cambio data fine',
@@ -969,8 +980,17 @@ function Commesse({ clienti, toast }) {
 
       {showForm && (
         <div className="card mb-4">
-          <div className="card-header">
-            {editingId ? 'Scheda Commessa' : 'Nuova commessa'}
+          <div className="card-header d-flex justify-content-between align-items-center">
+            <span>{editingId ? 'Scheda Commessa' : 'Nuova commessa'}</span>
+            {editingId && onOpenTracking && (
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => onOpenTracking(editingId)}
+              >
+                Tracking ore
+              </button>
+            )}
           </div>
           <div className="card-body">
             <div className="commessa-form-tabs">
@@ -1180,6 +1200,19 @@ function Commesse({ clienti, toast }) {
                   inputMode="decimal"
                   placeholder="0.00"
                   disabled={isConsuntivoPagamenti}
+                />
+              </div>
+              <div className="col-md-3">
+                <label className="form-label">Monte ore stimato</label>
+                <input
+                  type="number"
+                  className="form-control"
+                  value={formData.monte_ore_stimato}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, monte_ore_stimato: e.target.value }))}
+                  inputMode="decimal"
+                  min="0"
+                  step="0.25"
+                  placeholder="Es. 40"
                 />
               </div>
               <div className="col-md-3">

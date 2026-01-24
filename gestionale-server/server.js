@@ -185,6 +185,7 @@ app.use('/api/impostazioni', (req, res, next) => {
 app.use('/api/clienti', require('./routes/clienti')(db));
 app.use('/api/attivita', require('./routes/attivita')(db));
 app.use('/api/commesse', require('./routes/commesse')(db));
+app.use('/api/tracking', require('./routes/tracking')(db));
 app.use('/api/note-spese', require('./routes/noteSpese')(db));
 app.use('/api/kanban', require('./routes/kanban')(db));
 

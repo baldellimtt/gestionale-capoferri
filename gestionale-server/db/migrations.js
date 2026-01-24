@@ -111,6 +111,7 @@ class Migrations {
         importo_totale REAL DEFAULT 0,
         importo_pagato REAL DEFAULT 0,
         avanzamento_lavori INTEGER DEFAULT 0,
+        monte_ore_stimato REAL,
         responsabile TEXT,
         data_inizio TEXT,
         data_fine TEXT,
@@ -166,6 +167,23 @@ class Migrations {
         changes_json TEXT,
         kanban_card_ids TEXT,
         created_at TEXT DEFAULT (datetime('now', 'localtime')),
+        FOREIGN KEY (commessa_id) REFERENCES commesse(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES utenti(id) ON DELETE SET NULL
+      );
+
+      -- Tabella Tracking Ore Commesse
+      CREATE TABLE IF NOT EXISTS commesse_ore (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        commessa_id INTEGER NOT NULL,
+        user_id INTEGER,
+        data TEXT NOT NULL,
+        start_time TEXT NOT NULL,
+        end_time TEXT,
+        durata_minuti INTEGER DEFAULT 0,
+        note TEXT,
+        source TEXT DEFAULT 'timer',
+        created_at TEXT DEFAULT (datetime('now', 'localtime')),
+        updated_at TEXT DEFAULT (datetime('now', 'localtime')),
         FOREIGN KEY (commessa_id) REFERENCES commesse(id) ON DELETE CASCADE,
         FOREIGN KEY (user_id) REFERENCES utenti(id) ON DELETE SET NULL
       );
@@ -308,6 +326,10 @@ class Migrations {
       CREATE INDEX IF NOT EXISTS idx_commesse_stato_pagamenti ON commesse(stato_pagamenti);
       CREATE INDEX IF NOT EXISTS idx_commesse_stato ON commesse(stato);
       CREATE INDEX IF NOT EXISTS idx_commesse_cliente_id ON commesse(cliente_id);
+      CREATE INDEX IF NOT EXISTS idx_commesse_ore_commessa_id ON commesse_ore(commessa_id);
+      CREATE INDEX IF NOT EXISTS idx_commesse_ore_user_id ON commesse_ore(user_id);
+      CREATE INDEX IF NOT EXISTS idx_commesse_ore_data ON commesse_ore(data);
+      CREATE INDEX IF NOT EXISTS idx_commesse_ore_end_time ON commesse_ore(end_time);
 
       -- Indici per performance Note Spese
       CREATE INDEX IF NOT EXISTS idx_note_spese_user_id ON note_spese(user_id);
@@ -471,6 +493,7 @@ class Migrations {
     addColumn('importo_totale', 'REAL', 0);
     addColumn('importo_pagato', 'REAL', 0);
     addColumn('avanzamento_lavori', 'INTEGER', 0);
+    addColumn('monte_ore_stimato', 'REAL');
     addColumn('responsabile', 'TEXT');
     addColumn('data_inizio', 'TEXT');
     addColumn('data_fine', 'TEXT');
