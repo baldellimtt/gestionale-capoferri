@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import api from '../services/api'
 import ConfirmDeleteModal from './ConfirmDeleteModal'
+import CommessaTrackingPanel from './commesse/CommessaTrackingPanel'
+import CommessaAuditPanel from './commesse/CommessaAuditPanel'
+import CommessaAttachmentsPanel from './commesse/CommessaAttachmentsPanel'
+import CommessaFilters from './commesse/CommessaFilters'
+import CommessaForm from './commesse/CommessaForm'
 
 const STATI_COMMESSA = ['In corso', 'Preventivato', 'In attesa di approvazione', 'Richieste integrazioni', 'Personalizzato', 'Conclusa']
 const STATI_PAGAMENTI = ['Non iniziato', 'Parziale', 'Consuntivo con altre commesse', 'Saldo']
@@ -647,17 +652,6 @@ function Commesse({ clienti, toast, onOpenTracking }) {
     return date.toLocaleString('it-IT')
   }
 
-  const formatTrackingDate = (value) => {
-    if (!value) return ''
-    const [year, month, day] = value.split('-')
-    return `${day}/${month}/${year}`
-  }
-
-  const formatTrackingHours = (minutes) => {
-    if (!Number.isFinite(minutes)) return '0.00'
-    return (minutes / 60).toFixed(2)
-  }
-
   const formatAuditUser = (entry) => {
     const user = entry?.user
     const fullName = [user?.nome, user?.cognome].filter(Boolean).join(' ').trim()
@@ -1079,674 +1073,103 @@ function Commesse({ clienti, toast, onOpenTracking }) {
       </div>
 
       {!showForm && (
-        <div className="filters-section">
-          <button
-            type="button"
-            className={`btn btn-sm ${sortByLatest ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={() => setSortByLatest((prev) => !prev)}
-          >
-            Ultime modifiche
-          </button>
-          <label>Cliente:</label>
-          <div className="autocomplete-container" style={{ width: 'auto' }}>
-            <input
-              className="form-control"
-              value={clienteFilterInput}
-              onChange={(e) => handleClienteFilterChange(e.target.value)}
-              onFocus={() => setShowClienteFilterAutocomplete(true)}
-              onBlur={() => {
-                setTimeout(() => setShowClienteFilterAutocomplete(false), 200)
-              }}
-              placeholder="Cerca cliente..."
-              style={{ width: 'auto' }}
-            />
-            {showClienteFilterAutocomplete && filteredClienti.length > 0 && (
-              <div className="autocomplete-list">
-                {filteredClienti.map((cliente) => (
-                  <div
-                    key={cliente.id}
-                    className="autocomplete-item"
-                    onMouseDown={(e) => {
-                      e.preventDefault()
-                      selectClienteForView(cliente)
-                    }}
-                  >
-                    {cliente.denominazione}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          <label>Stato:</label>
-          <select
-            className="form-select"
-            value={filters.stato}
-            onChange={(e) => setFilters((prev) => ({ ...prev, stato: e.target.value }))}
-            style={{ width: 'auto' }}
-          >
-            <option value="">Tutti</option>
-            {STATI_COMMESSA.map((stato) => (
-              <option key={stato} value={stato}>{stato}</option>
-            ))}
-          </select>
-          {isClientListView && (
-            <>
-              <label>Anno:</label>
-              <select
-                className="form-select"
-                value={yearFilter}
-                onChange={(e) => setYearFilter(e.target.value)}
-                style={{ width: 'auto' }}
-              >
-                <option value="">Tutti</option>
-                {availableYears.map((year) => (
-                  <option key={year} value={year}>{year}</option>
-                ))}
-              </select>
-            </>
-          )}
-          <label>Tipologia di lavoro:</label>
-          <select
-            className="form-select"
-            value={filters.sottoStato}
-            onChange={(e) => setFilters((prev) => ({ ...prev, sottoStato: e.target.value }))}
-            style={{ width: 'auto' }}
-          >
-            <option value="">Tutti</option>
-            {TIPI_LAVORO.map((stato) => (
-              <option key={stato} value={stato}>{stato}</option>
-            ))}
-          </select>
-          <label>Stato pagamenti:</label>
-          <select
-            className={`form-select stato-pagamenti-select ${getStatoPagamentiClass(filters.statoPagamenti)}`}
-            value={filters.statoPagamenti}
-            onChange={(e) => setFilters((prev) => ({ ...prev, statoPagamenti: e.target.value }))}
-            style={{ width: 'auto' }}
-          >
-            <option value="">Tutti</option>
-            {STATI_PAGAMENTI.map((stato) => (
-              <option key={stato} value={stato}>{stato}</option>
-            ))}
-          </select>
-        </div>
+        <CommessaFilters
+          sortByLatest={sortByLatest}
+          onToggleSort={() => setSortByLatest((prev) => !prev)}
+          clienteFilterInput={clienteFilterInput}
+          onClienteFilterChange={handleClienteFilterChange}
+          showClienteFilterAutocomplete={showClienteFilterAutocomplete}
+          setShowClienteFilterAutocomplete={setShowClienteFilterAutocomplete}
+          filteredClienti={filteredClienti}
+          onSelectClienteForView={selectClienteForView}
+          filters={filters}
+          setFilters={setFilters}
+          isClientListView={isClientListView}
+          yearFilter={yearFilter}
+          setYearFilter={setYearFilter}
+          availableYears={availableYears}
+          statiCommessa={STATI_COMMESSA}
+          statiPagamenti={STATI_PAGAMENTI}
+          tipiLavoro={TIPI_LAVORO}
+          getStatoPagamentiClass={getStatoPagamentiClass}
+        />
       )}
 
       {showForm && (
-        <div className="card mb-4">
-          <div className="card-header d-flex justify-content-between align-items-center">
-            <span>{editingId ? 'Scheda Commessa' : 'Nuova commessa'}</span>
-            {editingId && onOpenTracking && (
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => onOpenTracking(editingId)}
-              >
-                Tracking ore
-              </button>
-            )}
-          </div>
-          <div className="card-body">
-            <div className="commessa-form-tabs">
-              <button
-                type="button"
-                className={`btn btn-sm ${formTab === 'essenziali' ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => setFormTab('essenziali')}
-              >
-                Essenziali
-              </button>
-              <button
-                type="button"
-                className={`btn btn-sm ${formTab === 'dettagli' ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => setFormTab('dettagli')}
-              >
-                Dettagli
-              </button>
-            </div>
-            <div className="row g-3">
-              {formTab === 'essenziali' && (
-              <>
-                <div className="col-md-6">
-                <label className="form-label">Titolo commessa</label>
-                <input
-                  className="form-control"
-                  value={formData.titolo}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, titolo: e.target.value }))}
-                />
-              </div>
-              <div className={`col-md-3 importo-pagato-row ${isConsuntivoPagamenti ? 'is-consuntivo' : ''}`}>
-                <div className="d-flex align-items-center justify-content-between">
-                  <label className="form-label mb-0">Cliente</label>
-                  {!allowClienteEdit && (
-                    <button
-                      type="button"
-                      className="btn btn-link btn-sm p-0"
-                      onClick={() => setAllowClienteEdit(true)}
-                    >
-                      Cambia cliente
-                    </button>
-                  )}
-                </div>
-                <div className="autocomplete-container">
-                  <input
-                    className="form-control"
-                    value={clienteFormInput}
-                    onChange={(e) => {
-                      handleClienteFormInputChange(e.target.value)
-                      setShowClienteFormAutocomplete(true)
-                    }}
-                    onFocus={() => setShowClienteFormAutocomplete(true)}
-                    onBlur={() => {
-                      setTimeout(() => setShowClienteFormAutocomplete(false), 200)
-                    }}
-                    placeholder="Cerca cliente..."
-                    disabled={!allowClienteEdit}
-                    style={!allowClienteEdit ? { backgroundColor: '#f1f3f5', color: '#6c757d' } : undefined}
-                  />
-                  {showClienteFormAutocomplete && filteredClientiForm.length > 0 && (
-                    <div className="autocomplete-list">
-                      {filteredClientiForm.map((cliente) => (
-                        <div
-                          key={cliente.id}
-                          className="autocomplete-item"
-                          onMouseDown={(e) => {
-                            e.preventDefault()
-                            handleClienteChange(cliente.id)
-                            setShowClienteFormAutocomplete(false)
-                          }}
-                        >
-                          {cliente.denominazione}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="col-md-3">
-                <label className="form-label">Stato</label>
-                <select
-                  className={`form-select stato-select ${getStatoClass(formData.stato)}`}
-                  value={formData.stato}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, stato: e.target.value }))}
-                >
-                  {STATI_COMMESSA.map((stato) => (
-                    <option key={stato} value={stato}>{stato}</option>
-                  ))}
-                </select>
-              </div>
-              {formData.stato !== 'Conclusa' && (
-                <div className="col-12">
-                  <label className="form-label">Tipologia di lavoro</label>
-                  <div className="tipologie-lavoro-grid">
-                    {TIPI_LAVORO.map((tipologia) => (
-                      <label key={tipologia} className="form-check form-check-inline tipologia-item">
-                        <input
-                          type="checkbox"
-                          className="form-check-input"
-                          checked={formData.sotto_stato.includes(tipologia)}
-                          onChange={() => toggleTipologia(tipologia)}
-                        />
-                        <span className="form-check-label">{tipologia}</span>
-                      </label>
-                    ))}
-                  </div>
-                  <div className="tipologia-custom-row">
-                    <input
-                      className="form-control"
-                      value={formData.sotto_stato_custom}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, sotto_stato_custom: e.target.value }))}
-                      placeholder="Aggiungi tipologia personalizzata"
-                    />
-                    <button type="button" className="btn btn-secondary" onClick={addCustomTipologia}>
-                      Aggiungi
-                    </button>
-                  </div>
-                  {formData.sotto_stato.some((item) => !TIPI_LAVORO.includes(item)) && (
-                    <div className="tipologia-custom-tags">
-                      {formData.sotto_stato
-                        .filter((item) => !TIPI_LAVORO.includes(item))
-                        .map((item) => (
-                          <button
-                            key={item}
-                            type="button"
-                            className="tipologia-tag"
-                            onClick={() => toggleTipologia(item)}
-                          >
-                            {item} ×
-                          </button>
-                        ))}
-                    </div>
-                  )}
-                </div>
-              )}
-              {!editingId && formYearFolderOptions.length > 0 && (
-                <div className="col-md-4">
-                  <label className="form-label">Cartella</label>
-                  <select
-                    className="form-select"
-                    value={selectedFormYear}
-                    onChange={(e) => {
-                      const year = e.target.value
-                      setFormData((prev) => ({
-                        ...prev,
-                        data_inizio: year ? `${year}-01-01` : ''
-                      }))
-                    }}
-                  >
-                    <option value="">Seleziona cartella</option>
-                    {formYearFolderOptions.map((year) => (
-                      <option key={year} value={year}>{year}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              <div className="col-md-4">
-                <label className="form-label">Data inizio</label>
-                <input
-                  type="date"
-                  className="form-control"
-                  value={formData.data_inizio}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, data_inizio: e.target.value }))}
-                />
-              </div>
-              <div className="col-md-4">
-                <label className="form-label">Data fine</label>
-                <input
-                  type="date"
-                  className="form-control"
-                  value={formData.data_fine}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, data_fine: e.target.value }))}
-                />
-              </div>
-              <div className="col-md-4">
-                <label className="form-label">Responsabile</label>
-                <select
-                  className="form-select"
-                  value={formData.responsabile}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, responsabile: e.target.value }))}
-                >
-                  <option value="">Seleziona responsabile</option>
-                  {utenti.map((utente) => {
-                    const label = getUtenteLabel(utente)
-                    return (
-                      <option key={utente.id} value={label}>
-                        {label}
-                      </option>
-                    )
-                  })}
-                </select>
-              </div>
-              <div className="col-md-4">
-                <label className="form-label">Ubicazione</label>
-                <input
-                  className="form-control"
-                  value={formData.ubicazione}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, ubicazione: e.target.value }))}
-                  placeholder="Es. Via Roma, Milano"
-                />
-              </div>
-              </>
-              )}
-              {formTab === 'dettagli' && (
-              <>
-              <div className="col-md-3">
-                <label className="form-label">Preventivo</label>
-                <select
-                  className="form-select"
-                  value={formData.preventivo ? 'si' : 'no'}
-                  onChange={(e) => {
-                    const isPreventivo = e.target.value === 'si'
-                    setFormData((prev) => ({
-                      ...prev,
-                      preventivo: isPreventivo,
-                      importo_preventivo: isPreventivo ? prev.importo_preventivo : ''
-                    }))
-                  }}
-                >
-                  <option value="si">Sì</option>
-                  <option value="no">No</option>
-                </select>
-              </div>
-              <div className="col-md-3">
-                <label className="form-label">Importo preventivo (€)</label>
-                <input
-                  className="form-control"
-                  value={formData.importo_preventivo}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, importo_preventivo: e.target.value }))}
-                  inputMode="decimal"
-                  placeholder="0.00"
-                  disabled={!formData.preventivo}
-                />
-              </div>
-              <div className="col-md-3">
-                <label className="form-label">Importo totale (€)</label>
-                <input
-                  className="form-control"
-                  value={formData.importo_totale}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, importo_totale: e.target.value }))}
-                  inputMode="decimal"
-                  placeholder="0.00"
-                />
-              </div>
-              <div className="col-md-3">
-                <label className="form-label">Importo pagato (€)</label>
-                <input
-                  className="form-control"
-                  value={formData.importo_pagato}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, importo_pagato: e.target.value }))}
-                  inputMode="decimal"
-                  placeholder="0.00"
-                  disabled={isConsuntivoPagamenti}
-                />
-              </div>
-              <div className="col-md-3">
-                <label className="form-label">Monte ore stimato</label>
-                <input
-                  type="number"
-                  className="form-control"
-                  value={formData.monte_ore_stimato}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, monte_ore_stimato: e.target.value }))}
-                  inputMode="decimal"
-                  min="0"
-                  step="0.25"
-                  placeholder="Es. 40"
-                />
-              </div>
-              <div className="col-md-3">
-                <label className="form-label">Stato pagamenti</label>
-                <select
-                  className={`form-select stato-pagamenti-select ${getStatoPagamentiClass(formData.stato_pagamenti)}`}
-                  value={formData.stato_pagamenti}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, stato_pagamenti: e.target.value }))}
-                >
-                  {STATI_PAGAMENTI.map((stato) => (
-                    <option key={stato} value={stato}>{stato}</option>
-                  ))}
-                </select>
-              </div>
-              </>
-              )}
-            </div>
-            <div className="row g-3 mt-3">
-              <div className="col-md-6">
-                <label className="form-label">Note</label>
-                <textarea
-                  className="form-control"
-                  rows="3"
-                  value={formData.note}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, note: e.target.value }))}
-                />
-              </div>
-              <div className="col-md-6">
-                <label className="form-label">Riferimenti (link o note extra)</label>
-                <textarea
-                  className="form-control"
-                  rows="3"
-                  value={formData.allegati}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, allegati: e.target.value }))}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
+        <CommessaForm
+          editingId={editingId}
+          onOpenTracking={onOpenTracking}
+          formTab={formTab}
+          setFormTab={setFormTab}
+          formData={formData}
+          setFormData={setFormData}
+          allowClienteEdit={allowClienteEdit}
+          setAllowClienteEdit={setAllowClienteEdit}
+          clienteFormInput={clienteFormInput}
+          showClienteFormAutocomplete={showClienteFormAutocomplete}
+          setShowClienteFormAutocomplete={setShowClienteFormAutocomplete}
+          filteredClientiForm={filteredClientiForm}
+          handleClienteFormInputChange={handleClienteFormInputChange}
+          handleClienteChange={handleClienteChange}
+          statiCommessa={STATI_COMMESSA}
+          statiPagamenti={STATI_PAGAMENTI}
+          tipiLavoro={TIPI_LAVORO}
+          toggleTipologia={toggleTipologia}
+          addCustomTipologia={addCustomTipologia}
+          getStatoClass={getStatoClass}
+          getStatoPagamentiClass={getStatoPagamentiClass}
+          utenti={utenti}
+          getUtenteLabel={getUtenteLabel}
+          isConsuntivoPagamenti={isConsuntivoPagamenti}
+          formYearFolderOptions={formYearFolderOptions}
+          selectedFormYear={selectedFormYear}
+        />
       )}
 
       {showForm && editingId && (
-        <div className="card mb-4">
-          <div className="card-header">Allegati commessa</div>
-          <div className="card-body">
-            {!selectedCommessa ? (
-              <div className="alert alert-info">Seleziona una commessa per vedere gli allegati.</div>
-            ) : (
-              <>
-                <div className="row g-3 align-items-end">
-                  <div className="col-md-12">
-                    <label className="form-label">Carica nuovo allegato</label>
-                    <div className="commessa-attachment-actions">
-                      <input
-                        id="commessa-file-global"
-                        type="file"
-                        className="commessa-file-input"
-                        onChange={(e) => handleUpload(selectedCommessaId, e.target.files?.[0])}
-                        disabled={!selectedCommessaId || uploading[selectedCommessaId]}
-                      />
-                      <label
-                        className="btn btn-secondary btn-sm btn-icon"
-                        htmlFor="commessa-file-global"
-                        title="Carica allegato"
-                      >
-                        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M21 10.5V16a5 5 0 0 1-5 5H8a5 5 0 0 1 0-10h8a3 3 0 0 1 0 6H9a1 1 0 0 1 0-2h7" />
-                        </svg>
-                      </label>
-                      {uploading[selectedCommessaId] && (
-                        <span className="commessa-meta">Caricamento...</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="commessa-attachments mt-4">
-                  <div className="commessa-meta">
-                    Allegati per: {selectedCommessa.titolo}
-                  </div>
-                  {selectedAllegati.length === 0 && (
-                    <div className="commessa-meta">Nessun allegato presente.</div>
-                  )}
-                  {selectedAllegati.length > 0 && (
-                    <ul className="commessa-attachments-list">
-                      {selectedAllegati.map((allegato) => (
-                        <li key={allegato.id}>
-                          <a
-                            href={`${uploadsBase}/${allegato.file_path}`}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            {allegato.original_name}
-                          </a>
-                          <button
-                            type="button"
-                            className="btn btn-secondary btn-sm"
-                            onClick={() => handleDeleteAllegato(selectedCommessa.id, allegato.id)}
-                          >
-                            Rimuovi
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
+        <CommessaAttachmentsPanel
+          selectedCommessa={selectedCommessa}
+          selectedCommessaId={selectedCommessaId}
+          selectedAllegati={selectedAllegati}
+          uploading={uploading}
+          uploadsBase={uploadsBase}
+          onUpload={handleUpload}
+          onDeleteAllegato={handleDeleteAllegato}
+        />
       )}
 
       {showForm && editingId && (
-        <div className="card mb-4">
-          <div className="card-header d-flex justify-content-between align-items-center">
-            <span>Tracking ore commessa</span>
-            {onOpenTracking && (
-              <button
-                type="button"
-                className="btn btn-sm btn-secondary"
-                onClick={() => onOpenTracking(editingId)}
-              >
-                Apri tracking ore
-              </button>
-            )}
-          </div>
-          <div className="card-body">
-            {commessaTrackingError && (
-              <div className="alert alert-warning">{commessaTrackingError}</div>
-            )}
-            {commessaTrackingLoading && (
-              <div className="text-muted">Caricamento tracking...</div>
-            )}
-            {!commessaTrackingLoading && commessaTracking && (
-              <>
-                <div className="d-flex gap-4 flex-wrap mb-2">
-                  <div>
-                    <div className="text-muted" style={{ fontSize: '0.85rem' }}>Ore registrate</div>
-                    <div className="fw-semibold">
-                      {formatTrackingHours(commessaTracking.total_minuti || 0)} h
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-muted" style={{ fontSize: '0.85rem' }}>Voci</div>
-                    <div className="fw-semibold">{(commessaTracking.entries || []).length}</div>
-                  </div>
-                </div>
-                {(commessaTracking.entries || []).length === 0 ? (
-                  <div className="text-muted">Nessuna ora registrata.</div>
-                ) : (
-                  <div className="attivita-table-scroll">
-                    <table className="table table-striped commesse-table">
-                      <thead className="table-dark visually-hidden">
-                        <tr>
-                          <th>Data</th>
-                          <th>Ore</th>
-                          <th>Utente</th>
-                          <th>Note</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {commessaTracking.entries.slice(0, 5).map((entry) => (
-                          <tr key={entry.id}>
-                            <td><div className="commessa-title">{formatTrackingDate(entry.data)}</div></td>
-                            <td><div className="commessa-title">{formatTrackingHours(entry.durata_minuti)} h</div></td>
-                            <td><div className="commessa-meta">{[entry?.nome, entry?.cognome].filter(Boolean).join(' ') || entry?.username || '-'}</div></td>
-                            <td><div className="commessa-meta">{entry.note || '-'}</div></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </>
-            )}
-            {!commessaTrackingLoading && !commessaTracking && !commessaTrackingError && (
-              <div className="text-muted">Nessun dato disponibile.</div>
-            )}
-          </div>
-        </div>
+        <CommessaTrackingPanel
+          tracking={commessaTracking}
+          loading={commessaTrackingLoading}
+          error={commessaTrackingError}
+          onOpenTracking={onOpenTracking}
+          editingId={editingId}
+        />
       )}
 
       {showForm && editingId && (
-        <div className="card mb-4">
-          <div className="card-header d-flex justify-content-between align-items-center">
-            <span>Cronologia commessa</span>
-            <button
-              type="button"
-              className="btn btn-sm btn-secondary"
-              onClick={() => setShowCommessaAudit((prev) => !prev)}
-              disabled={!selectedCommessaId}
-            >
-              {showCommessaAudit ? 'Nascondi' : 'Mostra'}
-            </button>
-          </div>
-          <div className="card-body">
-            {!selectedCommessaId && (
-              <div className="alert alert-info mb-0">Seleziona una commessa per vedere la cronologia.</div>
-            )}
-            {selectedCommessaId && showCommessaAudit && (
-              <>
-                <div className="row g-2 align-items-end mb-3">
-                  <div className="col-md-3">
-                    <label className="form-label">Data</label>
-                    <input
-                      type="date"
-                      className="form-control"
-                      value={auditNoteDate}
-                      onChange={(e) => setAuditNoteDate(e.target.value)}
-                    />
-                  </div>
-                  <div className="col-md-7">
-                    <label className="form-label">Nota</label>
-                    <input
-                      className="form-control"
-                      value={auditNoteText}
-                      onChange={(e) => setAuditNoteText(e.target.value)}
-                      placeholder="Es. relazione inviata"
-                    />
-                  </div>
-                  <div className="col-md-2 d-grid">
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      onClick={handleAddAuditNote}
-                      disabled={auditNoteSaving}
-                    >
-                      {auditNoteSaving ? 'Salvataggio...' : 'Aggiungi'}
-                    </button>
-                  </div>
-                </div>
-                {commessaAuditLoading && (
-                  <div className="text-muted" style={{ fontSize: '0.85rem' }}>
-                    Caricamento cronologia...
-                  </div>
-                )}
-                {commessaAuditError && (
-                  <div className="alert alert-warning mb-0">
-                    {commessaAuditError}
-                  </div>
-                )}
-                {!commessaAuditLoading && !commessaAuditError && commessaAudit.length === 0 && (
-                  <div className="text-muted" style={{ fontSize: '0.85rem' }}>
-                    Nessuna modifica registrata.
-                  </div>
-                )}
-                {!commessaAuditLoading && !commessaAuditError && commessaAudit.length > 0 && (
-                  <div className="audit-list">
-                    {commessaAudit.map((entry) => (
-                      <div key={entry.id} className="audit-item card">
-                        <div className="audit-header">
-                          <div>
-                            <div className="audit-title">{formatAuditAction(entry)}</div>
-                            <div className="audit-meta d-flex align-items-center gap-2 flex-wrap">
-                              <span>Da:</span>
-                              <span className="badge-chip audit-user-badge" style={getAuditUserBadgeStyle(entry)}>
-                                {formatAuditUser(entry)}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="audit-meta">{formatAuditDate(entry.created_at)}</div>
-                        </div>
-                        {entry.action === 'note' && entry.changes && typeof entry.changes === 'object' && (
-                          <div className="audit-changes">
-                            {entry.changes.date && (
-                              <div>Data nota: {formatAuditDate(entry.changes.date)}</div>
-                            )}
-                            <div>{entry.changes.note || entry.changes.nota || '-'}</div>
-                          </div>
-                        )}
-                        {getAuditChangeList(entry).length > 0 && (
-                          <div className="audit-changes">
-                            {getAuditChangeList(entry).map((change, idx) => (
-                              <div key={`${entry.id}-change-${idx}`}>
-                                {formatFieldLabel(change.field)}: {formatChangeValue(change.from, change.field)}
-                                {' -> '}
-                                {formatChangeValue(change.to, change.field)}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        {!Array.isArray(entry.changes) && entry.changes && entry.action?.startsWith('attachment') && (
-                          <div className="audit-changes">
-                            <div>Allegato: {entry.changes.original_name || 'N/D'}</div>
-                            {entry.changes.version && (
-                              <div>Versione: {entry.changes.version}</div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </div>
+        <CommessaAuditPanel
+          selectedCommessaId={selectedCommessaId}
+          showCommessaAudit={showCommessaAudit}
+          onToggle={() => setShowCommessaAudit((prev) => !prev)}
+          auditNoteDate={auditNoteDate}
+          onChangeDate={setAuditNoteDate}
+          auditNoteText={auditNoteText}
+          onChangeText={setAuditNoteText}
+          onAddNote={handleAddAuditNote}
+          auditNoteSaving={auditNoteSaving}
+          commessaAuditLoading={commessaAuditLoading}
+          commessaAuditError={commessaAuditError}
+          commessaAudit={commessaAudit}
+          formatAuditAction={formatAuditAction}
+          formatAuditUser={formatAuditUser}
+          getAuditUserBadgeStyle={getAuditUserBadgeStyle}
+          formatAuditDate={formatAuditDate}
+          getAuditChangeList={getAuditChangeList}
+          formatFieldLabel={formatFieldLabel}
+          formatChangeValue={formatChangeValue}
+        />
       )}
 
       {showForm && (
