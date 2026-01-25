@@ -22,6 +22,7 @@ function Consuntivi() {
   const [error, setError] = useState(null)
   const [consuntivoIds, setConsuntivoIds] = useState([])
   const [consuntivoSconto, setConsuntivoSconto] = useState('')
+  const [consuntivoScontoTipo, setConsuntivoScontoTipo] = useState('percent')
   const [filters, setFilters] = useState({ clienteId: '', stato: '', sottoStato: '', statoPagamenti: '' })
   const [yearFilter, setYearFilter] = useState('')
   const [clienteFilterInput, setClienteFilterInput] = useState('')
@@ -179,9 +180,11 @@ function Consuntivi() {
     }, 0),
     [consuntivoCommesse]
   )
-  const consuntivoScontoPercent = Math.max(0, parseNumber(consuntivoSconto) || 0)
-  const consuntivoScontoValue = (consuntivoTotale * consuntivoScontoPercent) / 100
-  const consuntivoFinale = consuntivoTotale - consuntivoScontoValue
+  const consuntivoScontoRaw = Math.max(0, parseNumber(consuntivoSconto) || 0)
+  const consuntivoScontoValue = consuntivoScontoTipo === 'percent'
+    ? (consuntivoTotale * consuntivoScontoRaw) / 100
+    : Math.min(consuntivoTotale, consuntivoScontoRaw)
+  const consuntivoFinale = Math.max(0, consuntivoTotale - consuntivoScontoValue)
 
   return (
     <div className="consuntivi-section">
@@ -307,7 +310,17 @@ function Consuntivi() {
                   <strong>€ {consuntivoTotale.toFixed(2)}</strong>
                 </div>
                 <div className="consuntivo-row">
-                  <label className="form-label mb-1">Sconto (%)</label>
+                  <label className="form-label mb-1">Sconto</label>
+                  <div className="d-flex gap-2 align-items-center">
+                    <select
+                      className="form-select"
+                      value={consuntivoScontoTipo}
+                      onChange={(e) => setConsuntivoScontoTipo(e.target.value)}
+                      style={{ width: 'auto' }}
+                    >
+                      <option value="percent">%</option>
+                      <option value="value">€</option>
+                    </select>
                   <input
                     className="form-control"
                     value={consuntivoSconto}
@@ -315,6 +328,7 @@ function Consuntivi() {
                     inputMode="decimal"
                     placeholder="0"
                   />
+                  </div>
                 </div>
                 <div className="consuntivo-row">
                   <span>Sconto applicato</span>
@@ -330,6 +344,7 @@ function Consuntivi() {
                   onClick={() => {
                     setConsuntivoIds([])
                     setConsuntivoSconto('')
+                    setConsuntivoScontoTipo('percent')
                   }}
                 >
                   Reset selezione
