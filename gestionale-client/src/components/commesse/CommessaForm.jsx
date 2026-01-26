@@ -264,7 +264,7 @@ function CommessaForm({
             </select>
           </div>
           <div className="col-md-3">
-            <label className="form-label">Importo preventivo (â‚¬)</label>
+            <label className="form-label">Importo preventivo (€)</label>
             <input
               className="form-control"
               value={formData.importo_preventivo}
@@ -275,7 +275,7 @@ function CommessaForm({
             />
           </div>
           <div className="col-md-3">
-            <label className="form-label">Importo totale (â‚¬)</label>
+            <label className="form-label">Importo totale (€)</label>
             <input
               className="form-control"
               value={formData.importo_totale}
@@ -285,7 +285,7 @@ function CommessaForm({
             />
           </div>
           <div className="col-md-3">
-            <label className="form-label">Importo pagato (â‚¬)</label>
+            <label className="form-label">Importo pagato (€)</label>
             <input
               className="form-control"
               value={formData.importo_pagato}

@@ -20,6 +20,12 @@ const TIPI_LAVORO = [
   'Documentazione per pratica strutturale',
   'Documentazione per pratica edilizia'
 ]
+const DEFAULT_FILTERS = {
+  clienteId: '',
+  stato: '',
+  sottoStato: '',
+  statoPagamenti: ''
+}
 
 const createEmptyForm = () => ({
   titolo: '',
@@ -51,11 +57,11 @@ const getTodayDate = () => {
   return `${year}-${month}-${day}`
 }
 
-function Commesse({ clienti, toast, onOpenTracking }) {
+function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommessaHandled }) {
   const [commesse, setCommesse] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [filters, setFilters] = useState({ clienteId: '', stato: '', sottoStato: '', statoPagamenti: '' })
+  const [filters, setFilters] = useState({ ...DEFAULT_FILTERS })
   const [yearFilter, setYearFilter] = useState('')
   const [clienteFilterInput, setClienteFilterInput] = useState('')
   const [showClienteFilterAutocomplete, setShowClienteFilterAutocomplete] = useState(false)
@@ -115,6 +121,42 @@ function Commesse({ clienti, toast, onOpenTracking }) {
   useEffect(() => {
     loadCommesse(filters)
   }, [filters])
+
+  useEffect(() => {
+    if (!openCommessaId) return
+    const openId = String(openCommessaId)
+    if (editingId && String(editingId) === openId) {
+      onOpenCommessaHandled?.()
+      return
+    }
+    const commessa = commesse.find((item) => String(item.id) === openId)
+    if (commessa) {
+      void handleEdit(commessa)
+      onOpenCommessaHandled?.()
+      return
+    }
+    const hasActiveFilters = Boolean(
+      filters.clienteId ||
+      filters.stato ||
+      filters.sottoStato ||
+      filters.statoPagamenti ||
+      yearFilter ||
+      selectedClienteViewId
+    )
+    if (hasActiveFilters) {
+      setLoading(true)
+      setFilters({ ...DEFAULT_FILTERS })
+      setYearFilter('')
+      setSelectedClienteViewId('')
+      setClienteFilterInput('')
+      setShowForm(false)
+      return
+    }
+    if (!loading) {
+      toast?.showError('Commessa non trovata.', 'Commesse')
+      onOpenCommessaHandled?.()
+    }
+  }, [openCommessaId, editingId, commesse, filters, yearFilter, selectedClienteViewId, loading, toast, onOpenCommessaHandled])
 
   useEffect(() => {
     const loadUtenti = async () => {
@@ -811,8 +853,11 @@ function Commesse({ clienti, toast, onOpenTracking }) {
   }
 
   const commesseSorted = useMemo(() => {
-    const compareValues = (first, second) => {
-      return String(first || '').localeCompare(String(second || ''), 'it', { sensitivity: 'base' })
+    const compareValues = (first, second, options = {}) => {
+      return String(first || '').localeCompare(String(second || ''), 'it', {
+        sensitivity: 'base',
+        ...options
+      })
     }
     const getUpdatedTimestamp = (commessa) => {
       const value = commessa?.updated_at || commessa?.created_at
@@ -827,7 +872,7 @@ function Commesse({ clienti, toast, onOpenTracking }) {
       }
       const clienteCompare = compareValues(a.cliente_nome, b.cliente_nome)
       if (clienteCompare !== 0) return clienteCompare
-      const titoloCompare = compareValues(a.titolo, b.titolo)
+      const titoloCompare = compareValues(a.titolo, b.titolo, { numeric: true })
       if (titoloCompare !== 0) return titoloCompare
       return Number(a.id) - Number(b.id)
     })

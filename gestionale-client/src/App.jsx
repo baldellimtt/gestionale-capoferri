@@ -36,6 +36,7 @@ function App() {
   const [error, setError] = useState(null)
   const [user, setUser] = useState(null)
   const [trackingCommessaId, setTrackingCommessaId] = useState(null)
+  const [commessaOpenId, setCommessaOpenId] = useState(null)
   const [authChecking, setAuthChecking] = useState(true)
   const [authLoading, setAuthLoading] = useState(false)
   const [authError, setAuthError] = useState(null)
@@ -154,6 +155,7 @@ function App() {
       setUser(null)
       setClienti([])
       setTrackingCommessaId(null)
+      setCommessaOpenId(null)
       setActiveView('home')
     }
   }
@@ -278,6 +280,8 @@ function App() {
                         <Commesse
                           clienti={clienti}
                           toast={toast}
+                          openCommessaId={commessaOpenId}
+                          onOpenCommessaHandled={() => setCommessaOpenId(null)}
                           onOpenTracking={(commessaId) => {
                             setTrackingCommessaId(commessaId)
                             setActiveView('tracking')
@@ -294,6 +298,10 @@ function App() {
                           toast={toast}
                           selectedCommessaId={trackingCommessaId}
                           onSelectCommessa={setTrackingCommessaId}
+                          onOpenCommessa={(commessaId) => {
+                            setCommessaOpenId(commessaId)
+                            setActiveView('commesse')
+                          }}
                         />
                       )}
                       {activeView === 'team' && (

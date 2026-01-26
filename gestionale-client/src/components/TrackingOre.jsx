@@ -23,7 +23,12 @@ const parseDateTime = (value) => {
   return Number.isNaN(parsed.getTime()) ? null : parsed
 }
 
-function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommessa }) {
+const roundUpToHalfHour = (hoursValue) => {
+  if (!Number.isFinite(hoursValue) || hoursValue <= 0) return 0
+  return Math.ceil(hoursValue * 2) / 2
+}
+
+function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommessa, onOpenCommessa }) {
   const [commesse, setCommesse] = useState([])
   const [selectedId, setSelectedId] = useState(selectedCommessaId ? String(selectedCommessaId) : '')
   const [selectedCommessa, setSelectedCommessa] = useState(null)
@@ -32,7 +37,7 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
   const [loading, setLoading] = useState(true)
   const [entriesLoading, setEntriesLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [activeEntry, setActiveEntry] = useState(null)
+  const [activeEntries, setActiveEntries] = useState([])
   const [showActiveModal, setShowActiveModal] = useState(false)
   const [clienteFilterInput, setClienteFilterInput] = useState('')
   const [showClienteAutocomplete, setShowClienteAutocomplete] = useState(false)
@@ -75,12 +80,9 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
     const loadActive = async () => {
       try {
         const active = await api.getTrackingActive()
-        if (active && active.id) {
-          setActiveEntry(active)
-          setShowActiveModal(true)
-        } else {
-          setActiveEntry(null)
-        }
+        const list = Array.isArray(active) ? active : (active && active.id ? [active] : [])
+        setActiveEntries(list)
+        setShowActiveModal(list.length > 0)
       } catch (err) {
         console.error('Errore caricamento tracking attivo:', err)
       }
@@ -122,12 +124,12 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
   }, [selectedId, commesse, loadEntries])
 
   useEffect(() => {
-    if (!activeEntry) return undefined
+    if (!activeEntries.length) return undefined
     const interval = setInterval(() => {
       setTick((prev) => prev + 1)
     }, 1000)
     return () => clearInterval(interval)
-  }, [activeEntry])
+  }, [activeEntries])
 
   const filteredClienti = useMemo(() => {
     if (!clienteFilterInput) return clienti || []
@@ -158,11 +160,12 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
   }
 
   const totalTrackedHours = useMemo(() => {
-    const runningMinutes = activeEntry && String(activeEntry.commessa_id) === String(selectedId)
-      ? getEntryMinutes(activeEntry)
+    const runningEntry = activeEntries.find((entry) => String(entry.commessa_id) === String(selectedId))
+    const runningMinutes = runningEntry
+      ? getEntryMinutes(runningEntry)
       : 0
     return (totalMinutes + runningMinutes) / 60
-  }, [activeEntry, selectedId, totalMinutes, tick])
+  }, [activeEntries, selectedId, totalMinutes, tick])
 
   const estimatedHours = useMemo(() => {
     const value = selectedCommessa?.monte_ore_stimato
@@ -206,6 +209,11 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
     }
   }
 
+  const handleOpenCommessa = () => {
+    if (!selectedCommessa?.id || !onOpenCommessa) return
+    onOpenCommessa(selectedCommessa.id)
+  }
+
   const handleClienteSelect = (cliente) => {
     if (!cliente?.id) return
     setSelectedClienteId(String(cliente.id))
@@ -225,7 +233,8 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
   const refreshActive = async () => {
     try {
       const active = await api.getTrackingActive()
-      setActiveEntry(active && active.id ? active : null)
+      const list = Array.isArray(active) ? active : (active && active.id ? [active] : [])
+      setActiveEntries(list)
     } catch (err) {
       console.error('Errore refresh tracking attivo:', err)
     }
@@ -240,7 +249,7 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
       await loadEntries(selectedId)
     } catch (err) {
       if (err.status === 409) {
-        toast?.showError('Hai gia un tracking attivo. Fermalo prima di iniziare un nuovo.', 'Tracking ore')
+        toast?.showError(err.message || 'Tracking già attivo su questa commessa.', 'Tracking ore')
         await refreshActive()
         setShowActiveModal(true)
       } else {
@@ -249,12 +258,15 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
     }
   }
 
-  const handleStop = async () => {
-    if (!activeEntry?.id) return
+  const handleStopEntry = async (entry) => {
+    if (!entry?.id) return
+    const roundedStopHours = roundUpToHalfHour(getEntryMinutes(entry) / 60)
     try {
-      await api.stopTracking(activeEntry.id)
+      await api.stopTracking(entry.id)
+      if (roundedStopHours > 0) {
+        await api.updateTrackingEntry(entry.id, { ore: roundedStopHours.toFixed(2) })
+      }
       toast?.showSuccess('Tracking fermato', 'Tracking ore')
-      setActiveEntry(null)
       await refreshActive()
       if (selectedId) {
         await loadEntries(selectedId)
@@ -271,9 +283,10 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
       toast?.showError('Inserisci un numero di ore valido', 'Tracking ore')
       return
     }
+    const roundedHours = roundUpToHalfHour(oreValue)
     try {
       setManualSaving(true)
-      await api.addTrackingManual(selectedId, manualForm.data, oreValue, manualForm.note)
+      await api.addTrackingManual(selectedId, manualForm.data, roundedHours, manualForm.note)
       toast?.showSuccess('Ore registrate', 'Tracking ore')
       setManualForm({ data: getTodayDate(), ore: '', note: '' })
       await loadEntries(selectedId)
@@ -311,7 +324,8 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
         payload.data = editingEntry.data
       }
       if (editingEntry.ore !== '') {
-        payload.ore = editingEntry.ore
+        const oreValue = Number(String(editingEntry.ore || '').replace(',', '.'))
+        payload.ore = roundUpToHalfHour(oreValue).toFixed(2)
       }
       await api.updateTrackingEntry(entryId, payload)
       toast?.showSuccess('Tracking aggiornato', 'Tracking ore')
@@ -336,17 +350,17 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
     }
   }
 
-  const activeOnSelected = activeEntry && String(activeEntry.commessa_id) === String(selectedId)
-  const activeElapsed = activeEntry ? formatMinutes(getEntryMinutes(activeEntry)) : ''
+  const activeOnSelected = activeEntries.find((entry) => String(entry.commessa_id) === String(selectedId))
+  const activeElapsed = activeOnSelected ? formatMinutes(getEntryMinutes(activeOnSelected)) : ''
 
   return (
     <div className="tracking-section">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h2 className="section-title mb-0 no-title-line">Tracking ore</h2>
-        {activeEntry && (
+        {activeEntries.length > 0 && (
           <div className="tracking-active-pill">
-            <span>Tracking attivo</span>
-            <strong>{activeElapsed}</strong>
+            <span>Tracking attivi</span>
+            <strong>{activeEntries.length}</strong>
           </div>
         )}
       </div>
@@ -441,7 +455,22 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
               </div>
               {selectedCommessa && (
                 <div className="tracking-summary">
-                  <div className="tracking-summary-title">{selectedCommessa.titolo}</div>
+                  <div
+                    className="tracking-summary-title"
+                    role={onOpenCommessa ? 'button' : undefined}
+                    tabIndex={onOpenCommessa ? 0 : undefined}
+                    style={onOpenCommessa ? { cursor: 'pointer' } : undefined}
+                    onClick={handleOpenCommessa}
+                    onKeyDown={(event) => {
+                      if (!onOpenCommessa) return
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        handleOpenCommessa()
+                      }
+                    }}
+                  >
+                    {selectedCommessa.titolo}
+                  </div>
                   <div className="tracking-summary-meta">
                     <span>{selectedCommessa.cliente_nome || 'Cliente non indicato'}</span>
                   </div>
@@ -474,6 +503,15 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
                       Inserisci il monte ore stimato per vedere l\'avanzamento.
                     </div>
                   )}
+                  {onOpenCommessa && (
+                    <button
+                      type="button"
+                      className="btn btn-link p-0 mt-2"
+                      onClick={handleOpenCommessa}
+                    >
+                      Apri scheda commessa
+                    </button>
+                  )}
                 </div>
               )}
               <div className="tracking-actions">
@@ -481,22 +519,40 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
                   type="button"
                   className="btn btn-primary"
                   onClick={handleStart}
-                  disabled={!selectedId || (activeEntry && !activeOnSelected)}
+                  disabled={!selectedId || !!activeOnSelected}
                 >
                   Avvia tracking
                 </button>
                 <button
                   type="button"
                   className="btn btn-secondary"
-                  onClick={handleStop}
+                  onClick={() => handleStopEntry(activeOnSelected)}
                   disabled={!activeOnSelected}
                 >
                   Ferma tracking
                 </button>
               </div>
-              {activeEntry && !activeOnSelected && (
-                <div className="alert alert-info mt-3">
-                  Tracking attivo su un\'altra commessa. Ferma prima di iniziarne uno nuovo.
+              {activeEntries.length > 0 && (
+                <div className="tracking-active-summary mt-3">
+                  <div className="fw-semibold mb-2">Tracking attivi</div>
+                  {activeEntries.map((entry) => (
+                    <div key={entry.id} className="d-flex justify-content-between align-items-center mb-2">
+                      <div>
+                        <div><strong>{entry.commessa_titolo || `#${entry.commessa_id}`}</strong></div>
+                        {entry.cliente_nome && (
+                          <div className="commessa-meta">{entry.cliente_nome}</div>
+                        )}
+                        <div className="commessa-meta">In corso da {formatMinutes(getEntryMinutes(entry))}</div>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-secondary"
+                        onClick={() => handleStopEntry(entry)}
+                      >
+                        Ferma
+                      </button>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
@@ -690,7 +746,7 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
         </div>
       </div>
 
-      {showActiveModal && activeEntry && (
+      {showActiveModal && activeEntries.length > 0 && (
         <div
           className="modal fade show d-block"
           tabIndex="-1"
@@ -714,15 +770,18 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
                 <button type="button" className="btn-close" onClick={() => setShowActiveModal(false)} />
               </div>
               <div className="modal-body">
-                <p>
-                  Hai un tracking in corso da {activeElapsed}.
-                </p>
+                <p>Hai {activeEntries.length} tracking attivi.</p>
                 <div className="tracking-active-summary">
-                  <div><strong>Commessa:</strong> {activeEntry.commessa_titolo || `#${activeEntry.commessa_id}`}</div>
-                  {activeEntry.cliente_nome && (
-                    <div><strong>Cliente:</strong> {activeEntry.cliente_nome}</div>
-                  )}
-                  <div><strong>Inizio:</strong> {formatDateTime(activeEntry.start_time)}</div>
+                  {activeEntries.map((entry) => (
+                    <div key={entry.id} className="mb-3">
+                      <div><strong>Commessa:</strong> {entry.commessa_titolo || `#${entry.commessa_id}`}</div>
+                      {entry.cliente_nome && (
+                        <div><strong>Cliente:</strong> {entry.cliente_nome}</div>
+                      )}
+                      <div><strong>Inizio:</strong> {formatDateTime(entry.start_time)}</div>
+                      <div><strong>In corso da:</strong> {formatMinutes(getEntryMinutes(entry))}</div>
+                    </div>
+                  ))}
                 </div>
               </div>
               <div className="modal-footer">
@@ -733,26 +792,30 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
                 >
                   Lascia attivo
                 </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => {
-                    handleSelectCommessa(activeEntry.commessa_id)
-                    setShowActiveModal(false)
-                  }}
-                >
-                  Vai alla commessa
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={async () => {
-                    await handleStop()
-                    setShowActiveModal(false)
-                  }}
-                >
-                  Ferma ora
-                </button>
+                {activeEntries.length === 1 && (
+                  <>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => {
+                        handleSelectCommessa(activeEntries[0].commessa_id)
+                        setShowActiveModal(false)
+                      }}
+                    >
+                      Vai alla commessa
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={async () => {
+                        await handleStopEntry(activeEntries[0])
+                        setShowActiveModal(false)
+                      }}
+                    >
+                      Ferma ora
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           </div>

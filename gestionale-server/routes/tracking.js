@@ -38,6 +38,21 @@ class TrackingController {
         ORDER BY t.start_time DESC, t.id DESC
         LIMIT 1
       `),
+      getActiveByUserAll: this.db.prepare(`
+        SELECT t.*, c.titolo as commessa_titolo, c.cliente_nome, c.monte_ore_stimato
+        FROM commesse_ore t
+        LEFT JOIN commesse c ON c.id = t.commessa_id
+        WHERE t.user_id = ? AND t.end_time IS NULL
+        ORDER BY t.start_time DESC, t.id DESC
+      `),
+      getActiveByUserAndCommessa: this.db.prepare(`
+        SELECT t.*, c.titolo as commessa_titolo, c.cliente_nome, c.monte_ore_stimato
+        FROM commesse_ore t
+        LEFT JOIN commesse c ON c.id = t.commessa_id
+        WHERE t.user_id = ? AND t.commessa_id = ? AND t.end_time IS NULL
+        ORDER BY t.start_time DESC, t.id DESC
+        LIMIT 1
+      `),
       getTotalMinutesByCommessa: this.db.prepare(`
         SELECT SUM(durata_minuti) as total_minuti
         FROM commesse_ore
@@ -109,8 +124,8 @@ class TrackingController {
       if (!userId) {
         return res.status(401).json({ error: 'Utente non autenticato' });
       }
-      const active = this.stmt.getActiveByUser.get(userId);
-      res.json(this.buildEntryResponse(active));
+      const active = this.stmt.getActiveByUserAll.all(userId);
+      res.json(active.map((entry) => this.buildEntryResponse(entry)));
     } catch (error) {
       Logger.error('Errore GET /tracking/active', error);
       res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
@@ -159,9 +174,9 @@ class TrackingController {
         return res.status(404).json({ error: 'Commessa non trovata' });
       }
 
-      const active = this.stmt.getActiveByUser.get(userId);
-      if (active) {
-        return res.status(409).json({ error: 'Tracking già attivo', active: this.buildEntryResponse(active) });
+      const activeSame = this.stmt.getActiveByUserAndCommessa.get(userId, commessa_id);
+      if (activeSame) {
+        return res.status(409).json({ error: 'Tracking già attivo su questa commessa', active: this.buildEntryResponse(activeSame) });
       }
 
       const result = this.stmt.createTimerEntry.run(commessa_id, userId);
@@ -353,3 +368,4 @@ function createRouter(db) {
 }
 
 module.exports = createRouter;
+
