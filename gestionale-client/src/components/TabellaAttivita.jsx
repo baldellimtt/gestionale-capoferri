@@ -686,6 +686,35 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false, targetUse
       clearEditingTimeoutRef.current = null
     }, 300)
   }
+
+  const handleGroupDateChange = useCallback((oldDate, newDate) => {
+    if (!newDate || newDate === oldDate) return
+
+    const rowsForDate = attivita.filter((row) => row?.data === oldDate)
+    if (rowsForDate.length === 0) return
+
+    rowsForDate.forEach((row) => {
+      const isTempRow = row?.isTemporary || (typeof row?.id === 'string' && row.id.startsWith('temp-'))
+      if (isTempRow) {
+        setAttivita((prev) =>
+          prev.map((item) => {
+            if (item !== row) return item
+            const nextId = typeof item.id === 'string' && item.id.startsWith('temp-')
+              ? `temp-${newDate}`
+              : item.id
+            return {
+              ...item,
+              id: nextId,
+              data: newDate
+            }
+          })
+        )
+        return
+      }
+
+      updateRow(row.id, 'data', newDate)
+    })
+  }, [attivita, setAttivita, updateRow])
   
   // Cleanup timeout al unmount
   useEffect(() => {
@@ -1166,7 +1195,6 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false, targetUse
             <table className="table table-dark attivita-table">
               <thead>
                 <tr>
-                  <th>Data</th>
                   <th>Destinazione</th>
                   <th>Attività</th>
                   <th>KM</th>
@@ -1179,37 +1207,36 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false, targetUse
                 {visibleDates.map((date) => {
                   const rows = getRowsForDate(date)
                   if (rows.length === 0) return null
+                  const tripCount = rows.length
+                  const tripLabel = `${tripCount} ${tripCount === 1 ? 'viaggio' : 'viaggi'}`
 
                   return (
                     <React.Fragment key={date}>
+                      <tr className="attivita-day-row">
+                        <td colSpan="6">
+                          <div className="attivita-day-bar">
+                            <input
+                              type="date"
+                              className="attivita-day-date-input"
+                              value={date}
+                              onChange={(e) => handleGroupDateChange(date, e.target.value)}
+                            />
+                            <span className="attivita-day-meta">{tripLabel}</span>
+                          </div>
+                        </td>
+                      </tr>
                       {rows.length > 0 ? rows.map((row) => {
                         const rowId = row.id ? Number(row.id) : null
                         if (rowId && deletedIds.has(rowId)) {
                           return null
                         }
 
-                        const isToday = row.data === todayDate
                         const validation = getRowValidation(row)
                         const isIncomplete = !validation.isComplete
                         const isTemporary = row.isTemporary
 
                         return (
                           <tr key={row.id} className={isIncomplete ? 'row-incomplete' : ''}>
-                            <td className={isIncomplete ? 'row-incomplete-cell' : ''}>
-                              <input
-                                type="date"
-                                className="form-control"
-                                value={row.data}
-                                onChange={(e) => {
-                                  if (!isTemporary) {
-                                    updateRow(row.id, 'data', e.target.value)
-                                  }
-                                }}
-                                onFocus={() => setEditingRow(row.id)}
-                                onBlur={clearEditingRow}
-                                disabled={isToday}
-                              />
-                            </td>
                             <td className={isIncomplete ? 'row-incomplete-cell' : ''}>
                               <div className="autocomplete-container">
                                 <input

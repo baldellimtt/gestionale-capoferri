@@ -305,11 +305,23 @@ function AnagraficaClienti({ clienti, onUpdateClienti, onBack, currentUser, toas
   }, [formData, initialFormData, contatti, initialContatti])
   
   const canSave = isDirty && formData.denominazione.trim() !== '' && !loading
+  const clientiCount = filteredClienti.length
+  const totalClienti = clienti.length
+  const countLabel = searchTerm ? `Mostrati ${clientiCount} su ${totalClienti}` : `${clientiCount}`
 
   return (
     <div key={`anagrafica-${showForm}`}>
       <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2 className="section-title mb-0 no-title-line">Clienti</h2>
+        <div className="d-flex align-items-center gap-2">
+          <h2 className="section-title mb-0 no-title-line">Clienti</h2>
+          <span
+            className="badge bg-secondary"
+            style={{ fontSize: '0.8rem' }}
+            title={searchTerm ? 'Clienti filtrati sul totale' : 'Numero clienti'}
+          >
+            {countLabel}
+          </span>
+        </div>
         <div className="d-flex gap-2">
           {onBack && (
             <button 

@@ -1,14 +1,14 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
-function KanbanCard({ card, onCardClick, onInlineUpdate }) {
+function KanbanCard({ card, onCardClick, onQuickUpdate }) {
   const [isDragging, setIsDragging] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
-  const [isEditingInline, setIsEditingInline] = useState(false)
-  const [editingPriorita, setEditingPriorita] = useState(false)
-  const [editingDataFine, setEditingDataFine] = useState(false)
-  const [isSavingInline, setIsSavingInline] = useState(false)
-  const [draftPriorita, setDraftPriorita] = useState(card.priorita || 'media')
-  const [draftDataFine, setDraftDataFine] = useState(card.data_fine_prevista || '')
+  const [isEditingTitle, setIsEditingTitle] = useState(false)
+  const [titleDraft, setTitleDraft] = useState(card.titolo || '')
+  const [isEditingPriorita, setIsEditingPriorita] = useState(false)
+  const [isEditingDueDate, setIsEditingDueDate] = useState(false)
+  const [dueDateDraft, setDueDateDraft] = useState('')
+  const suppressClickUntilRef = useRef(0)
 
   const getPrioritaColor = (priorita) => {
     switch (priorita) {
@@ -40,6 +40,11 @@ function KanbanCard({ card, onCardClick, onInlineUpdate }) {
     return dateString.length > 10 ? dateString.slice(0, 10) : dateString
   }
 
+  useEffect(() => {
+    setTitleDraft(card.titolo || '')
+    setDueDateDraft(toDateInputValue(card.data_fine_prevista))
+  }, [card.id, card.titolo, card.data_fine_prevista])
+
   const isScaduta = (dateString) => {
     if (!dateString) return false
     const date = new Date(dateString)
@@ -60,13 +65,16 @@ function KanbanCard({ card, onCardClick, onInlineUpdate }) {
 
   const handleCardClick = (e) => {
     e.stopPropagation()
-    if (onCardClick && !isDragging && !isEditingInline && !editingPriorita && !editingDataFine) {
+    if (Date.now() < suppressClickUntilRef.current) {
+      return
+    }
+    if (onCardClick && !isDragging && !isEditingTitle && !isEditingPriorita && !isEditingDueDate) {
       onCardClick(card)
     }
   }
 
   const handleDragStart = (e) => {
-    if (isEditingInline) {
+    if (isEditingTitle || isEditingPriorita || isEditingDueDate) {
       e.preventDefault()
       return
     }
@@ -74,7 +82,6 @@ function KanbanCard({ card, onCardClick, onInlineUpdate }) {
     e.dataTransfer.effectAllowed = 'move'
     e.dataTransfer.setData('text/plain', card.id.toString())
     e.dataTransfer.setData('application/json', JSON.stringify(card))
-    // Crea un'immagine personalizzata per il drag
     const dragImage = e.currentTarget.cloneNode(true)
     dragImage.style.opacity = '0.8'
     dragImage.style.transform = 'rotate(3deg)'
@@ -89,56 +96,63 @@ function KanbanCard({ card, onCardClick, onInlineUpdate }) {
     e.dataTransfer.clearData()
   }
 
-  useEffect(() => {
-    if (!isEditingInline) {
-      setDraftPriorita(card.priorita || 'media')
-      setDraftDataFine(toDateInputValue(card.data_fine_prevista))
+  const cancelTitleEdit = () => {
+    setTitleDraft(card.titolo || '')
+    setIsEditingTitle(false)
+  }
+
+  const commitTitleEdit = async () => {
+    const nextTitle = titleDraft.trim()
+    if (!nextTitle) {
+      cancelTitleEdit()
+      return
     }
-  }, [card.priorita, card.data_fine_prevista, isEditingInline])
+    if (nextTitle === card.titolo) {
+      setIsEditingTitle(false)
+      return
+    }
+    try {
+      await onQuickUpdate?.(card.id, { titolo: nextTitle })
+    } finally {
+      setIsEditingTitle(false)
+    }
+  }
+
+  const commitPrioritaEdit = async (next) => {
+    if (!next || next === card.priorita) {
+      setIsEditingPriorita(false)
+      return
+    }
+    try {
+      await onQuickUpdate?.(card.id, { priorita: next })
+    } finally {
+      setIsEditingPriorita(false)
+    }
+  }
+
+  const commitDueDateEdit = async () => {
+    const next = dueDateDraft || null
+    const current = toDateInputValue(card.data_fine_prevista)
+    if (next === current) {
+      setIsEditingDueDate(false)
+      return
+    }
+    try {
+      await onQuickUpdate?.(card.id, { data_fine_prevista: next })
+    } finally {
+      setIsEditingDueDate(false)
+    }
+  }
 
   const prioritaColor = getPrioritaColor(card.priorita)
   const dataFine = formatDate(card.data_fine_prevista)
   const scaduta = dataFine && isScaduta(card.data_fine_prevista)
   const scadenzaProssima = dataFine && isScadenzaProssima(card.data_fine_prevista)
-  const hasInlineChanges = useMemo(() => {
-    const baseDate = toDateInputValue(card.data_fine_prevista)
-    return (draftPriorita || 'media') !== (card.priorita || 'media') || (draftDataFine || '') !== (baseDate || '')
-  }, [card.data_fine_prevista, card.priorita, draftDataFine, draftPriorita])
-
-  const handleInlineSave = async (e) => {
-    e.stopPropagation()
-    if (!onInlineUpdate || isSavingInline) return
-    if (!hasInlineChanges) {
-      setIsEditingInline(false)
-      return
-    }
-    setIsSavingInline(true)
-    try {
-      await onInlineUpdate(card.id, {
-        priorita: draftPriorita || 'media',
-        data_fine_prevista: draftDataFine || null
-      })
-      setIsEditingInline(false)
-      setEditingPriorita(false)
-      setEditingDataFine(false)
-    } finally {
-      setIsSavingInline(false)
-    }
-  }
-
-  const handleInlineCancel = (e) => {
-    e.stopPropagation()
-    setDraftPriorita(card.priorita || 'media')
-    setDraftDataFine(toDateInputValue(card.data_fine_prevista))
-    setIsEditingInline(false)
-    setEditingPriorita(false)
-    setEditingDataFine(false)
-  }
 
   return (
     <div
       className="kanban-card"
-      draggable={!isEditingInline}
+      draggable={!isEditingTitle && !isEditingPriorita && !isEditingDueDate}
       onClick={handleCardClick}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
@@ -150,26 +164,25 @@ function KanbanCard({ card, onCardClick, onInlineUpdate }) {
         borderRadius: 'var(--radius-sm)',
         padding: '0.75rem',
         marginBottom: '0.5rem',
-        cursor: isDragging ? 'grabbing' : 'grab',
-        transition: isDragging 
-          ? 'none' 
+        cursor: isDragging ? 'grabbing' : (isEditingTitle || isEditingPriorita || isEditingDueDate ? 'default' : 'grab'),
+        transition: isDragging
+          ? 'none'
           : 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-        boxShadow: isDragging 
+        boxShadow: isDragging
           ? '0 8px 24px rgba(0, 0, 0, 0.2), 0 0 0 2px ' + prioritaColor + '40'
-          : isHovered 
+          : isHovered
             ? '0 4px 12px rgba(0, 0, 0, 0.15), 0 0 0 1px ' + prioritaColor + '30'
             : 'var(--shadow-1)',
         opacity: isDragging ? 0.5 : 1,
-        transform: isDragging 
-          ? 'scale(0.98) rotate(2deg)' 
-          : isHovered 
-            ? 'translateY(-2px) scale(1.01)' 
+        transform: isDragging
+          ? 'scale(0.98) rotate(2deg)'
+          : isHovered
+            ? 'translateY(-2px) scale(1.01)'
             : 'translateY(0) scale(1)',
         position: 'relative',
         overflow: 'hidden'
       }}
     >
-      {/* Glow effect on hover */}
       {isHovered && !isDragging && (
         <div
           style={{
@@ -185,47 +198,66 @@ function KanbanCard({ card, onCardClick, onInlineUpdate }) {
         />
       )}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
-        <h5 style={{ 
-          margin: 0, 
-          fontSize: '0.9rem', 
-          fontWeight: 600, 
-          color: 'var(--ink-800)',
-          flex: 1,
-          marginRight: '0.5rem'
-        }}>
-          {card.titolo}
-        </h5>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-          {editingPriorita ? (
-            <select
-              className="form-select form-select-sm"
-              value={draftPriorita}
-              onClick={(e) => e.stopPropagation()}
-              onChange={(e) => {
-                setDraftPriorita(e.target.value)
-                setIsEditingInline(true)
+        {isEditingTitle ? (
+          <input
+            className="form-control form-control-sm"
+            value={titleDraft}
+            autoFocus
+            onChange={(e) => setTitleDraft(e.target.value)}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                commitTitleEdit()
+              }
+              if (e.key === 'Escape') {
+                cancelTitleEdit()
+              }
+            }}
+            onBlur={commitTitleEdit}
+            style={{ fontSize: '0.85rem', marginRight: '0.5rem' }}
+          />
+        ) : (
+          <div style={{ flex: 1, marginRight: '0.5rem' }}>
+            <h5
+              onDoubleClick={(e) => {
+                e.stopPropagation()
+                suppressClickUntilRef.current = Date.now() + 400
+                setIsEditingTitle(true)
               }}
-              onBlur={(e) => {
-                if (!hasInlineChanges) {
-                  setEditingPriorita(false)
-                  setIsEditingInline(false)
-                }
+              style={{
+                margin: 0,
+                fontSize: '0.9rem',
+                fontWeight: 600,
+                color: 'var(--ink-800)'
               }}
-              style={{ minWidth: '110px' }}
             >
-              <option value="bassa">Bassa</option>
-              <option value="media">Media</option>
-              <option value="alta">Alta</option>
-              <option value="urgente">Urgente</option>
-            </select>
-          ) : (
-            <button
-              type="button"
+              {card.titolo}
+            </h5>
+          </div>
+        )}
+
+        {isEditingPriorita ? (
+          <select
+            className="form-select form-select-sm"
+            value={card.priorita || 'media'}
+            onChange={(e) => commitPrioritaEdit(e.target.value)}
+            onClick={(e) => e.stopPropagation()}
+            onBlur={() => setIsEditingPriorita(false)}
+            style={{ fontSize: '0.75rem', minWidth: '110px' }}
+          >
+            <option value="bassa">Bassa</option>
+            <option value="media">Media</option>
+            <option value="alta">Alta</option>
+            <option value="urgente">Urgente</option>
+          </select>
+        ) : (
+          <div style={{ textAlign: 'right' }}>
+            <span
               onClick={(e) => {
                 e.stopPropagation()
-                setEditingPriorita(true)
-                setIsEditingInline(true)
+                setIsEditingPriorita(true)
               }}
+              title="Click per modificare priorità"
               style={{
                 fontSize: '0.7rem',
                 fontWeight: 700,
@@ -238,13 +270,19 @@ function KanbanCard({ card, onCardClick, onInlineUpdate }) {
                 border: `1px solid ${prioritaColor}30`,
                 boxShadow: `0 2px 4px ${prioritaColor}15`,
                 transition: 'all 0.2s ease',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                display: 'inline-block'
               }}
             >
               {getPrioritaLabel(card.priorita)}
-            </button>
-          )}
-        </div>
+            </span>
+            {isHovered && (
+              <div style={{ fontSize: '0.7rem', color: 'var(--ink-500)', marginTop: '0.2rem' }}>
+                Click per modificare
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {card.descrizione && (
@@ -267,53 +305,32 @@ function KanbanCard({ card, onCardClick, onInlineUpdate }) {
             <strong>Cliente:</strong> {card.cliente_nome}
           </div>
         )}
-        {editingDataFine ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-            <input
-              type="date"
-              className="form-control form-control-sm"
-              value={draftDataFine}
-              onClick={(e) => e.stopPropagation()}
-              onChange={(e) => {
-                setDraftDataFine(e.target.value)
-                setIsEditingInline(true)
-              }}
-              onBlur={() => {
-                if (!hasInlineChanges) {
-                  setEditingDataFine(false)
-                  setIsEditingInline(false)
-                }
-              }}
-            />
-            <span style={{ fontSize: '0.7rem', color: 'var(--ink-500)' }}>
-              Lascia vuoto per rimuovere.
-            </span>
-          </div>
-        ) : dataFine ? (
+        {dataFine && !isEditingDueDate ? (
           <div style={{
             color: scaduta ? '#ef4444' : (scadenzaProssima ? '#f59e0b' : 'var(--ink-600)'),
-            fontWeight: scaduta || scadenzaProssima ? 600 : 400
+            fontWeight: scaduta || scadenzaProssima ? 600 : 400,
+            cursor: 'pointer'
           }}>
-            <strong>Scadenza:</strong>{' '}
-            <button
-              type="button"
+            <strong onClick={(e) => {
+              e.stopPropagation()
+              setIsEditingDueDate(true)
+            }} title="Click per modificare">
+              Scadenza:
+            </strong>{' '}
+            <span
               onClick={(e) => {
                 e.stopPropagation()
-                setEditingDataFine(true)
-                setIsEditingInline(true)
+                setIsEditingDueDate(true)
               }}
-              style={{
-                background: 'none',
-                border: 'none',
-                padding: 0,
-                margin: 0,
-                color: 'inherit',
-                fontWeight: 'inherit',
-                cursor: 'pointer'
-              }}
+              title="Click per modificare"
             >
               {dataFine}
-            </button>
+            </span>
+            {isHovered && (
+              <span style={{ fontSize: '0.7rem', color: 'var(--ink-500)', marginLeft: '0.4rem' }}>
+                Click per modificare
+              </span>
+            )}
             {scaduta && (
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', marginLeft: '0.25rem' }}>
                 <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
@@ -335,8 +352,7 @@ function KanbanCard({ card, onCardClick, onInlineUpdate }) {
               type="button"
               onClick={(e) => {
                 e.stopPropagation()
-                setEditingDataFine(true)
-                setIsEditingInline(true)
+                setIsEditingDueDate(true)
               }}
               style={{
                 background: 'none',
@@ -352,40 +368,46 @@ function KanbanCard({ card, onCardClick, onInlineUpdate }) {
             </button>
           </div>
         )}
-      </div>
-
-      {isEditingInline && (
-        <div
-          onClick={(e) => e.stopPropagation()}
-          onMouseDown={(e) => e.stopPropagation()}
-          style={{
-            marginTop: '0.6rem',
-            paddingTop: '0.6rem',
-            borderTop: '1px dashed var(--border-soft)',
-            display: 'grid',
-            gap: '0.5rem'
-          }}
-        >
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button
-              type="button"
-              className="btn btn-sm btn-primary"
-              onClick={handleInlineSave}
-              disabled={isSavingInline}
-            >
-              {isSavingInline ? 'Salvataggio...' : 'Salva'}
-            </button>
-            <button
-              type="button"
-              className="btn btn-sm btn-outline-secondary"
-              onClick={handleInlineCancel}
-              disabled={isSavingInline}
-            >
-              Annulla
-            </button>
+        {!dataFine && !isEditingDueDate && (
+          <div
+            onClick={(e) => {
+              e.stopPropagation()
+              setIsEditingDueDate(true)
+            }}
+            title="Click per aggiungere scadenza"
+            style={{ color: 'var(--ink-500)', cursor: 'pointer' }}
+          >
+            <strong>Scadenza:</strong> -
+            {isHovered && (
+              <span style={{ fontSize: '0.7rem', color: 'var(--ink-500)', marginLeft: '0.4rem' }}>
+                Click per aggiungere
+              </span>
+            )}
           </div>
-        </div>
-      )}
+        )}
+        {isEditingDueDate && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <strong style={{ color: 'var(--ink-600)' }}>Scadenza:</strong>
+            <input
+              type="date"
+              className="form-control form-control-sm"
+              value={dueDateDraft}
+              onChange={(e) => setDueDateDraft(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  commitDueDateEdit()
+                }
+                if (e.key === 'Escape') {
+                  setIsEditingDueDate(false)
+                }
+              }}
+              onBlur={commitDueDateEdit}
+              style={{ maxWidth: '150px' }}
+            />
+          </div>
+        )}
+      </div>
     </div>
   )
 }

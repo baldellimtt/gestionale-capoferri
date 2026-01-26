@@ -224,6 +224,53 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
     }
   }
 
+  const normalizeTags = (value) => {
+    if (!value) return null
+    if (Array.isArray(value)) return value
+    if (typeof value === 'string') {
+      try {
+        return JSON.parse(value)
+      } catch {
+        return [value]
+      }
+    }
+    return null
+  }
+
+  const handleQuickUpdate = async (cardId, patch) => {
+    const existing = card.find((item) => item.id === cardId)
+    if (!existing) return
+    const payload = {
+      commessa_id: existing.commessa_id || null,
+      titolo: patch.titolo ?? existing.titolo,
+      descrizione: patch.descrizione ?? existing.descrizione,
+      colonna_id: patch.colonna_id ?? existing.colonna_id,
+      priorita: patch.priorita ?? existing.priorita,
+      responsabile_id: patch.responsabile_id ?? existing.responsabile_id,
+      cliente_id: patch.cliente_id ?? existing.cliente_id,
+      cliente_nome: patch.cliente_nome ?? existing.cliente_nome,
+      ordine: patch.ordine ?? existing.ordine,
+      avanzamento: patch.avanzamento ?? existing.avanzamento,
+      data_inizio: patch.data_inizio ?? existing.data_inizio,
+      data_fine_prevista: patch.data_fine_prevista ?? existing.data_fine_prevista,
+      data_fine_effettiva: patch.data_fine_effettiva ?? existing.data_fine_effettiva,
+      budget: patch.budget ?? existing.budget,
+      tags: patch.tags ?? normalizeTags(existing.tags)
+    }
+    try {
+      const updated = await api.updateKanbanCard(cardId, payload)
+      setCard((prev) => prev.map((item) => (item.id === cardId ? updated : item)))
+      if (selectedCard?.id === cardId) {
+        setSelectedCard(updated)
+      }
+      return updated
+    } catch (err) {
+      console.error('Errore quick update card:', err)
+      toast?.showError('Errore aggiornamento rapido', 'Errore')
+      throw err
+    }
+  }
+
   const handleCardMove = async (cardId, newColonnaId, newOrdine) => {
     try {
       await api.moveKanbanCard(cardId, newColonnaId, newOrdine)
@@ -231,24 +278,6 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
     } catch (err) {
       console.error('Errore spostamento card:', err)
       setError('Errore nello spostamento della card')
-    }
-  }
-
-  const handleCardInlineUpdate = async (cardId, changes) => {
-    try {
-      const updated = await api.updateKanbanCardInline(cardId, changes)
-      setCard((prevCards) =>
-        prevCards.map((c) => (c.id === updated.id ? updated : c))
-      )
-      if (selectedCard?.id === updated.id) {
-        setSelectedCard(updated)
-      }
-      toast?.showSuccess('Modifica salvata')
-      return updated
-    } catch (err) {
-      console.error('Errore aggiornamento inline card:', err)
-      toast?.showError('Errore nelle modifiche inline', 'Errore')
-      throw err
     }
   }
 
@@ -398,6 +427,10 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
                   const badgeColor =
                     bucket === 'overdue' ? '#ef4444' : bucket === 'today' ? '#f59e0b' : '#3b82f6'
                   const cardRef = card.find((c) => c.id === scadenza.card_id)
+                  const commessaRef = commesse.find((c) => String(c.id) === String(cardRef?.commessa_id))
+                  const clienteLabel = commessaRef?.cliente_nome || cardRef?.cliente_nome || 'Cliente'
+                  const commessaLabel = commessaRef?.titolo || (cardRef?.commessa_id ? `Commessa #${cardRef.commessa_id}` : 'Commessa')
+                  const metaLabel = `${clienteLabel} - ${commessaLabel}`
                   return (
                     <div
                       key={scadenza.id}
@@ -425,7 +458,7 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
                         <div>
                           <div style={{ fontWeight: 600, color: 'var(--ink-800)' }}>{scadenza.titolo}</div>
                           <div style={{ fontSize: '0.82rem', color: 'var(--ink-500)' }}>
-                            {cardRef?.titolo || 'Card'} · {formatShortDate(scadenza.data_scadenza)}
+                            {metaLabel} · {formatShortDate(scadenza.data_scadenza)}
                           </div>
                         </div>
                       </div>
@@ -502,7 +535,7 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
               card={card}
               onCardClick={handleCardClick}
               onMoveCard={handleCardMove}
-              onInlineUpdate={handleCardInlineUpdate}
+              onQuickUpdate={handleQuickUpdate}
             />
           ))}
         </div>

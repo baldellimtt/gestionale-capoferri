@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import KanbanCard from './KanbanCard'
 
-function KanbanColumn({ colonna, card, onCardClick, onMoveCard, onInlineUpdate }) {
+function KanbanColumn({ colonna, card, onCardClick, onMoveCard, onQuickUpdate }) {
   const [dragOver, setDragOver] = useState(false)
   
   const cardInColonna = card.filter(c => c.colonna_id === colonna.id)
@@ -171,7 +171,7 @@ function KanbanColumn({ colonna, card, onCardClick, onMoveCard, onInlineUpdate }
               key={cardItem.id}
               card={cardItem}
               onCardClick={onCardClick}
-              onInlineUpdate={onInlineUpdate}
+              onQuickUpdate={onQuickUpdate}
             />
           ))
         )}

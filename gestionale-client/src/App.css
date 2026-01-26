@@ -790,6 +790,53 @@ header .logo {
   background: #f1e8dd;
 }
 
+.attivita-day-row td {
+  background: #efe2d4;
+  color: var(--ink-800);
+  font-weight: 700;
+  text-align: left;
+  border-bottom: 1px solid var(--border-soft);
+  border-top: 1px solid var(--border-soft);
+  padding: 0.6rem 1rem;
+}
+
+.attivita-day-row:hover td {
+  background: #efe2d4;
+}
+
+.attivita-day-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.attivita-day-date-input {
+  border: 1px solid var(--border-soft);
+  background: #fbfcff;
+  color: var(--ink-800);
+  font-weight: 700;
+  padding: 0.35rem 0.6rem;
+  border-radius: var(--radius-sm);
+}
+
+.attivita-day-date-input:focus {
+  outline: none;
+  border-color: var(--brand-500);
+  box-shadow: var(--glow);
+}
+
+.attivita-day-date {
+  font-size: 0.95rem;
+}
+
+.attivita-day-meta {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-600);
+}
+
 .attivita-table tbody tr.row-incomplete td {
   background: #fff3cd !important;
 }
@@ -839,30 +886,25 @@ header .logo {
 
 .attivita-table th:nth-child(1),
 .attivita-table td:nth-child(1) {
-  width: 110px;
+  min-width: 280px;
 }
 
 .attivita-table th:nth-child(2),
 .attivita-table td:nth-child(2) {
-  min-width: 280px;
-}
-
-.attivita-table th:nth-child(3),
-.attivita-table td:nth-child(3) {
   width: 180px;
 }
 
-.attivita-table td:nth-child(3) select {
+.attivita-table td:nth-child(2) select {
   text-align: center;
   text-align-last: center;
 }
 
-.attivita-table th:nth-child(4),
-.attivita-table td:nth-child(4) {
+.attivita-table th:nth-child(3),
+.attivita-table td:nth-child(3) {
   width: 100px;
 }
 
-.attivita-table td:nth-child(4) input {
+.attivita-table td:nth-child(3) input {
   width: 100%;
 }
 
@@ -871,13 +913,13 @@ header .logo {
   text-align: center;
 }
 
-.attivita-table th:nth-child(5),
-.attivita-table td:nth-child(5) {
+.attivita-table th:nth-child(4),
+.attivita-table td:nth-child(4) {
   width: 90px;
 }
 
-.attivita-table th:nth-child(6),
-.attivita-table td:nth-child(6) {
+.attivita-table th:nth-child(5),
+.attivita-table td:nth-child(5) {
   width: 110px;
 }
 
