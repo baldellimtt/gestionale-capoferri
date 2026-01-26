@@ -1231,6 +1231,7 @@ header .logo {
   border-radius: var(--radius-md);
   border: 1px solid var(--border-soft);
   background: var(--bg-3);
+  align-self: start;
 }
 
 .consuntivo-row {
@@ -1242,6 +1243,18 @@ header .logo {
 
 .consuntivo-final {
   font-size: 1.05rem;
+}
+
+.consuntivo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-start;
+}
+
+.consuntivo-actions .btn {
+  width: auto;
+  justify-self: start;
 }
 
 @media (max-width: 900px) {

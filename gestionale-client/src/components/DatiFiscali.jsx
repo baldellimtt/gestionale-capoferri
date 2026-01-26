@@ -261,16 +261,6 @@ function DatiFiscali({ onBack, toast, showHeader = true }) {
                   ))}
                 </select>
               </div>
-              <div className="col-md-4">
-                <label className="form-label">Ufficio IVA</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  value={formData.ufficio_iva}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, ufficio_iva: e.target.value }))}
-                  placeholder="Es. Ufficio IVA di..."
-                />
-              </div>
             </div>
           </div>
         </div>
@@ -315,23 +305,37 @@ function DatiFiscali({ onBack, toast, showHeader = true }) {
             <div className="row g-3">
               <div className="col-md-4">
                 <label className="form-label">Ritenuta d'Acconto (%)</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  value={formData.ritenuta_acconto}
-                  onChange={(e) => {
-                    const value = e.target.value.replace(',', '.')
-                    if (value === '' || /^\d*\.?\d*$/.test(value)) {
-                      setFormData((prev) => ({ ...prev, ritenuta_acconto: value }))
-                    }
-                  }}
-                  inputMode="decimal"
-                  placeholder="0.00"
-                />
-                <small className="form-text text-muted">Percentuale ritenuta d'acconto</small>
+                <div className="d-flex gap-2">
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={formData.ritenuta_acconto}
+                    onChange={(e) => {
+                      const raw = e.target.value
+                      if (raw.trim().toLowerCase() === 'non prevista') {
+                        setFormData((prev) => ({ ...prev, ritenuta_acconto: 'NON PREVISTA' }))
+                        return
+                      }
+                      const value = raw.replace(',', '.')
+                      if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                        setFormData((prev) => ({ ...prev, ritenuta_acconto: value }))
+                      }
+                    }}
+                    inputMode="decimal"
+                    placeholder="0.00"
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary"
+                    onClick={() => setFormData((prev) => ({ ...prev, ritenuta_acconto: 'NON PREVISTA' }))}
+                  >
+                    Non prevista
+                  </button>
+                </div>
+                <small className="form-text text-muted">Percentuale ritenuta d'acconto o NON PREVISTA</small>
               </div>
               <div className="col-md-4">
-                <label className="form-label">Rivalsa INPS (%)</label>
+                <label className="form-label">Rivalsa Previdenza (%)</label>
                 <input
                   type="text"
                   className="form-control"
@@ -345,7 +349,7 @@ function DatiFiscali({ onBack, toast, showHeader = true }) {
                   inputMode="decimal"
                   placeholder="0.00"
                 />
-                <small className="form-text text-muted">Percentuale rivalsa INPS</small>
+                <small className="form-text text-muted">Percentuale rivalsa previdenza</small>
               </div>
               <div className="col-md-4">
                 <label className="form-label">Cassa Previdenziale</label>
