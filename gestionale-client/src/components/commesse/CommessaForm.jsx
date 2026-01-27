@@ -176,25 +176,60 @@ function CommessaForm({
             </div>
           )}
           {!editingId && formYearFolderOptions.length > 0 && (
-            <div className="col-md-4">
-              <label className="form-label">Cartella</label>
-              <select
-                className="form-select"
-                value={selectedFormYear}
-                onChange={(e) => {
-                  const year = e.target.value
-                  setFormData((prev) => ({
-                    ...prev,
-                    data_inizio: year ? `${year}-01-01` : ''
-                  }))
-                }}
-              >
-                <option value="">Seleziona cartella</option>
-                {formYearFolderOptions.map((year) => (
-                  <option key={year} value={year}>{year}</option>
-                ))}
-              </select>
-            </div>
+            <>
+              <div className="col-md-4">
+                <label className="form-label">Cartella</label>
+                <select
+                  className="form-select"
+                  value={selectedFormYear}
+                  onChange={(e) => {
+                    const year = e.target.value
+                    setFormData((prev) => ({
+                      ...prev,
+                      data_inizio: year ? `${year}-01-01` : ''
+                    }))
+                  }}
+                >
+                  <option value="">Seleziona cartella</option>
+                  {formYearFolderOptions.map((year) => (
+                    <option key={year} value={year}>{year}</option>
+                  ))}
+                </select>
+              </div>
+              {(formData.parent_commessa_id || formData.is_struttura) && (
+                <div className="col-12">
+                  {formData.parent_commessa_id && (
+                    <div className="alert alert-info d-flex justify-content-between align-items-center mb-2">
+                      <span>
+                        Sottocommessa di <strong>{formData.parent_commessa_title || 'Commessa padre'}</strong>
+                      </span>
+                      <button
+                        type="button"
+                        className="btn btn-link btn-sm p-0"
+                        onClick={() => setFormData((prev) => ({ ...prev, parent_commessa_id: '', parent_commessa_title: '' }))}
+                      >
+                        Rimuovi
+                      </button>
+                    </div>
+                  )}
+                  <div className="form-check form-switch">
+                    <input
+                      id="commessa-structure-switch"
+                      type="checkbox"
+                      className="form-check-input"
+                      checked={!!formData.is_struttura}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, is_struttura: e.target.checked }))}
+                    />
+                    <label className="form-check-label" htmlFor="commessa-structure-switch">
+                      Usa come struttura di sottocommesse
+                    </label>
+                  </div>
+                  <div className="text-muted" style={{ fontSize: '0.85rem' }}>
+                    Attiva per aprire una lista di sottocommesse quando clicchi sulla riga nella lista.
+                  </div>
+                </div>
+              )}
+            </>
           )}
           <div className="col-md-4">
             <label className="form-label">Data inizio</label>

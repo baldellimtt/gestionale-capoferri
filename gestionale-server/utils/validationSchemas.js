@@ -481,7 +481,33 @@ const ValidationSchemas = {
           const trimmed = value.trim();
           return trimmed.length <= 2000;
         })
-        .withMessage('Note troppo lunghe (max 2000 caratteri)')
+        .withMessage('Note troppo lunghe (max 2000 caratteri)'),
+      body('parent_commessa_id')
+        .optional({ nullable: true, checkFalsy: true })
+        .isInt({ min: 1 })
+        .withMessage('ID commessa padre non valido'),
+      body('parentCommessaId')
+        .optional({ nullable: true, checkFalsy: true })
+        .isInt({ min: 1 })
+        .withMessage('ID commessa padre non valido'),
+      body('is_struttura')
+        .optional({ nullable: true, checkFalsy: true })
+        .custom((value) => {
+          if (value === null || value === undefined || value === '') return true;
+          if (typeof value === 'boolean') return true;
+          const normalized = String(value).toLowerCase();
+          return ['0', '1', 'true', 'false'].includes(normalized);
+        })
+        .withMessage('Valore struttura non valido'),
+      body('isStruttura')
+        .optional({ nullable: true, checkFalsy: true })
+        .custom((value) => {
+          if (value === null || value === undefined || value === '') return true;
+          if (typeof value === 'boolean') return true;
+          const normalized = String(value).toLowerCase();
+          return ['0', '1', 'true', 'false'].includes(normalized);
+        })
+        .withMessage('Valore struttura non valido')
     ],
     update: [] // Sarà popolato dopo la definizione
   },

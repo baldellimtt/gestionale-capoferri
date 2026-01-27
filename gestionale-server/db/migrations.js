@@ -118,9 +118,12 @@ class Migrations {
         data_fine TEXT,
         note TEXT,
         allegati TEXT,
+        parent_commessa_id INTEGER,
+        is_struttura INTEGER DEFAULT 0,
         created_at TEXT DEFAULT (datetime('now', 'localtime')),
         updated_at TEXT DEFAULT (datetime('now', 'localtime')),
-        FOREIGN KEY (cliente_id) REFERENCES clienti(id) ON DELETE SET NULL
+        FOREIGN KEY (cliente_id) REFERENCES clienti(id) ON DELETE SET NULL,
+        FOREIGN KEY (parent_commessa_id) REFERENCES commesse(id) ON DELETE SET NULL
       );
 
       -- Tabella Cartelle Anno Commesse (per cliente)
@@ -514,6 +517,15 @@ class Migrations {
     addColumn('data_fine', 'TEXT');
     addColumn('note', 'TEXT');
     addColumn('allegati', 'TEXT');
+    addColumn('parent_commessa_id', 'INTEGER');
+    addColumn('is_struttura', 'INTEGER', 0);
+    try {
+      db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_commesse_parent ON commesse(parent_commessa_id);
+      `);
+    } catch (error) {
+      console.log('[MIGRATIONS] Non è stato possibile creare idx_commesse_parent:', error.message);
+    }
   }
 
   ensureCommesseAllegatiColumns(db) {

@@ -46,7 +46,10 @@ const createEmptyForm = () => ({
   data_inizio: '',
   data_fine: '',
   note: '',
-  allegati: ''
+  allegati: '',
+  parent_commessa_id: '',
+  parent_commessa_title: '',
+  is_struttura: false
 })
 
 const getTodayDate = () => {
@@ -99,6 +102,7 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
   const [yearFoldersLoading, setYearFoldersLoading] = useState(false)
   const [showYearFolderForm, setShowYearFolderForm] = useState(false)
   const [newYearFolder, setNewYearFolder] = useState('')
+  const [structureParentId, setStructureParentId] = useState(null)
 
   const loadCommesse = async (nextFilters = filters) => {
     try {
@@ -351,6 +355,9 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
   }
 
   const startNewCommessa = (options = {}) => {
+    if (!options.parentCommessa) {
+      setStructureParentId(null)
+    }
     const empty = createEmptyForm()
     const selectedCliente = selectedClienteViewId
       ? clienti.find((cliente) => String(cliente.id) === String(selectedClienteViewId))
@@ -363,6 +370,15 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
     if (year) {
       empty.data_inizio = `${year}-01-01`
     }
+    if (options.parentCommessa) {
+      const parent = options.parentCommessa
+      empty.parent_commessa_id = parent.id || ''
+      empty.parent_commessa_title = parent.titolo || ''
+      if (parent.cliente_id) {
+        empty.cliente_id = parent.cliente_id
+        empty.cliente_nome = parent.cliente_nome || ''
+      }
+    }
     setFormData(empty)
     setInitialFormData(empty)
     setInitialAllegati([])
@@ -372,7 +388,7 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
     setSelectedCommessaId('')
     setClienteFormInput(selectedCliente?.denominazione || '')
     setShowClienteFormAutocomplete(false)
-    setAllowClienteEdit(!selectedCliente)
+    setAllowClienteEdit(!selectedCliente && !options.parentCommessa)
     setCommessaAudit([])
     setCommessaAuditError(null)
     setCommessaAuditCommessaId(null)
@@ -474,6 +490,9 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
     }
     const tipologieValue = tipologie.length ? tipologie.join(', ') : null
 
+    const parentCommessaIdValue = formData.parent_commessa_id
+      ? Number.parseInt(formData.parent_commessa_id, 10)
+      : null
     const payload = {
       ...formData,
       titolo: formData.titolo.trim(),
@@ -490,7 +509,9 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
       data_inizio: formData.data_inizio && typeof formData.data_inizio === 'string' && formData.data_inizio.trim() ? formData.data_inizio.trim() : null,
       data_fine: formData.data_fine && typeof formData.data_fine === 'string' && formData.data_fine.trim() ? formData.data_fine.trim() : null,
       note: formData.note && typeof formData.note === 'string' && formData.note.trim() ? formData.note.trim() : null,
-      allegati: formData.allegati || null
+      allegati: formData.allegati || null,
+      parent_commessa_id: parentCommessaIdValue,
+      is_struttura: formData.is_struttura ? 1 : 0
     }
 
     try {
@@ -530,7 +551,9 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
   }
 
   const handleEdit = async (commessa) => {
+    setStructureParentId(null)
     const parsedTipologie = parseTipologie(commessa.sotto_stato)
+    const parentCommessa = commesse.find((item) => String(item.id) === String(commessa.parent_commessa_id))
     const nextForm = {
       titolo: commessa.titolo || '',
       cliente_id: commessa.cliente_id || '',
@@ -550,7 +573,10 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
       data_inizio: commessa.data_inizio || '',
       data_fine: commessa.data_fine || '',
       note: commessa.note || '',
-      allegati: commessa.allegati || ''
+      allegati: commessa.allegati || '',
+      parent_commessa_id: commessa.parent_commessa_id ? String(commessa.parent_commessa_id) : '',
+      parent_commessa_title: parentCommessa?.titolo || '',
+      is_struttura: !!commessa.is_struttura
     }
     setEditingId(commessa.id)
     setShowForm(true)
@@ -816,6 +842,69 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
     }
   }
 
+  const handleRowClick = (commessa) => {
+    if (commessa.is_struttura) {
+      setStructureParentId(String(commessa.id))
+      setShowForm(false)
+      return
+    }
+    handleEdit(commessa)
+  }
+
+  const renderCommessaRow = (commessa, onClickHandler) => (
+    <tr
+      key={commessa.id}
+      className="commessa-row"
+      onClick={() => onClickHandler(commessa)}
+    >
+      {!selectedClienteViewId && (
+        <td>
+          <div className="commessa-title">{commessa.cliente_nome || '-'}</div>
+        </td>
+      )}
+      <td>
+        <div className="commessa-title">{commessa.titolo || '-'}</div>
+        {commessa.is_struttura && (
+          <div className="structure-row-actions">
+            <span className="status-badge structure-badge">Struttura</span>
+            <button
+              type="button"
+              className="btn btn-link btn-sm p-0"
+              onClick={(event) => {
+                event.stopPropagation()
+                handleEdit(commessa)
+              }}
+            >
+              Apri scheda
+            </button>
+          </div>
+        )}
+        {commessa.responsabile && (
+          <div className="commessa-meta">Resp: {commessa.responsabile}</div>
+        )}
+      </td>
+      <td>
+        <span className={`status-badge ${getStatoClass(commessa.stato)}`}>
+          {commessa.stato || 'In corso'}
+        </span>
+      </td>
+      <td>
+        {commessa.sotto_stato ? (
+          <span className={`status-badge substatus-badge ${getSottoStatoClass(commessa.sotto_stato)}`}>
+            {commessa.sotto_stato}
+          </span>
+        ) : (
+          <span className="commessa-meta">-</span>
+        )}
+      </td>
+      <td>
+        <span className={`status-badge status-payments ${getStatoPagamentiClass(commessa.stato_pagamenti)}`}>
+          {commessa.stato_pagamenti || 'Non iniziato'}
+        </span>
+      </td>
+    </tr>
+  )
+
   const confirmDelete = async () => {
     if (!deleteConfirm.id) {
       setDeleteConfirm({ show: false, id: null })
@@ -878,8 +967,25 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
     })
   }, [commesse, sortByLatest])
 
+  const topLevelCommesse = useMemo(() => {
+    return commesseSorted.filter((commessa) => commessa.parent_commessa_id == null)
+  }, [commesseSorted])
+
+  const structureParent = useMemo(() => {
+    if (!structureParentId) return null
+    return commesse.find((item) => String(item.id) === String(structureParentId)) || null
+  }, [commesse, structureParentId])
+
+  const structureChildren = useMemo(() => {
+    if (!structureParent) return []
+    const parentKey = String(structureParent.id)
+    return commesseSorted.filter((commessa) => String(commessa.parent_commessa_id) === parentKey)
+  }, [commesseSorted, structureParent])
+
+  const isStructureViewActive = Boolean(structureParent)
+
   const filteredCommesse = useMemo(() => {
-    return commesseSorted.filter((commessa) => {
+    return topLevelCommesse.filter((commessa) => {
       if (yearFilter) {
         const commessaYear = getCommessaYear(commessa)
         if (commessaYear !== yearFilter) {
@@ -898,6 +1004,20 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
       return true
     })
   }, [commesseSorted, filters.sottoStato, filters.statoPagamenti, yearFilter])
+
+  useEffect(() => {
+    if (structureParentId && !structureParent) {
+      setStructureParentId(null)
+    }
+  }, [structureParentId, structureParent])
+
+  useEffect(() => {
+    if (!structureParentId) return
+    const stillVisible = filteredCommesse.some((commessa) => String(commessa.id) === String(structureParentId))
+    if (!stillVisible) {
+      setStructureParentId(null)
+    }
+  }, [filteredCommesse, structureParentId])
 
   const clientiSorted = useMemo(() => {
     return [...clienti].sort((a, b) => {
@@ -963,6 +1083,10 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
       data_fine: data.data_fine || '',
       note: data.note || '',
       allegati: data.allegati || ''
+      ,
+      parent_commessa_id: data.parent_commessa_id || '',
+      parent_commessa_title: data.parent_commessa_title || '',
+      is_struttura: !!data.is_struttura
     }
     return normalized
   }
@@ -1342,71 +1466,98 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
             </div>
           </div>
           <div className="attivita-table-container">
-          {loading ? (
-            <div className="text-center py-5">
-              <div className="spinner-border" role="status">
-                <span className="visually-hidden">Caricamento...</span>
-              </div>
-            </div>
-          ) : filteredCommesse.length === 0 ? (
-            <div className="alert alert-info mt-3">
-              Nessuna commessa presente.
-            </div>
-          ) : (
-            <div className="attivita-table-scroll">
-              <table className={`table table-striped commesse-table ${selectedClienteViewId ? 'no-client-column' : ''}`}>
-                <thead className="table-dark visually-hidden">
-                  <tr>
-                    {!selectedClienteViewId && <th>Cliente</th>}
-                    <th>Commessa</th>
-                    <th>Stato</th>
-                    <th>Tipologia</th>
-                    <th>Pagamenti</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredCommesse.map((commessa) => (
-                    <tr
-                      key={commessa.id}
-                      className="commessa-row"
-                      onClick={() => handleEdit(commessa)}
-                    >
-                      {!selectedClienteViewId && (
-                        <td>
-                          <div className="commessa-title">{commessa.cliente_nome || '-'}</div>
-                        </td>
+            {isStructureViewActive ? (
+              <div className="card mb-3">
+                <div className="card-body">
+                  <div className="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                      <button
+                        type="button"
+                        className="btn btn-link btn-sm p-0 me-2"
+                        onClick={() => setStructureParentId(null)}
+                      >
+                        &larr; Torna alle commesse
+                      </button>
+                      <strong>{structureParent?.titolo || 'Struttura'}</strong>
+                      {structureParent?.cliente_nome && (
+                        <span className="commessa-meta d-block">
+                          {structureParent.cliente_nome}
+                        </span>
                       )}
-                      <td>
-                        <div className="commessa-title">{commessa.titolo || '-'}</div>
-                        {commessa.responsabile && (
-                          <div className="commessa-meta">Resp: {commessa.responsabile}</div>
-                        )}
-                      </td>
-                      <td>
-                        <span className={`status-badge ${getStatoClass(commessa.stato)}`}>
-                          {commessa.stato || 'In corso'}
-                        </span>
-                      </td>
-                      <td>
-                        {commessa.sotto_stato ? (
-                          <span className={`status-badge substatus-badge ${getSottoStatoClass(commessa.sotto_stato)}`}>
-                            {commessa.sotto_stato}
-                          </span>
-                        ) : (
-                          <span className="commessa-meta">-</span>
-                        )}
-                      </td>
-                      <td>
-                        <span className={`status-badge status-payments ${getStatoPagamentiClass(commessa.stato_pagamenti)}`}>
-                          {commessa.stato_pagamenti || 'Non iniziato'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                    </div>
+                    <div className="d-flex gap-2">
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-primary"
+                        onClick={() => startNewCommessa({ parentCommessa: structureParent })}
+                      >
+                        + Nuova sottocommessa
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-secondary"
+                        onClick={() => handleEdit(structureParent)}
+                      >
+                        Apri scheda padre
+                      </button>
+                    </div>
+                  </div>
+                  {structureChildren.length === 0 ? (
+                    <div className="alert alert-info mb-0">
+                      Nessuna sottocommessa presente.
+                    </div>
+                  ) : (
+                    <div className="attivita-table-scroll">
+                      <table className={`table table-striped commesse-table ${selectedClienteViewId ? 'no-client-column' : ''}`}>
+                        <thead className="table-dark visually-hidden">
+                          <tr>
+                            {!selectedClienteViewId && <th>Cliente</th>}
+                            <th>Commessa</th>
+                            <th>Stato</th>
+                            <th>Tipologia</th>
+                            <th>Pagamenti</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {structureChildren.map((commessa) => renderCommessaRow(commessa, handleEdit))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <>
+                {loading ? (
+                  <div className="text-center py-5">
+                    <div className="spinner-border" role="status">
+                      <span className="visually-hidden">Caricamento...</span>
+                    </div>
+                  </div>
+                ) : filteredCommesse.length === 0 ? (
+                  <div className="alert alert-info mt-3">
+                    Nessuna commessa presente.
+                  </div>
+                ) : (
+                  <div className="attivita-table-scroll">
+                    <table className={`table table-striped commesse-table ${selectedClienteViewId ? 'no-client-column' : ''}`}>
+                      <thead className="table-dark visually-hidden">
+                        <tr>
+                          {!selectedClienteViewId && <th>Cliente</th>}
+                          <th>Commessa</th>
+                          <th>Stato</th>
+                          <th>Tipologia</th>
+                          <th>Pagamenti</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredCommesse.map((commessa) => renderCommessaRow(commessa, handleRowClick))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </>
       )}

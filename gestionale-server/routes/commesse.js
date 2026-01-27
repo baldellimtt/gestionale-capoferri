@@ -99,8 +99,8 @@ class CommesseController {
           titolo, cliente_id, cliente_nome, stato, sotto_stato, stato_pagamenti,
           preventivo, importo_preventivo, importo_totale, importo_pagato,
           avanzamento_lavori, monte_ore_stimato, responsabile, ubicazione,
-          data_inizio, data_fine, note, allegati
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          data_inizio, data_fine, note, allegati, parent_commessa_id, is_struttura
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `),
       update: this.db.prepare(`
         UPDATE commesse SET
@@ -122,6 +122,8 @@ class CommesseController {
           data_fine = ?,
           note = ?,
           allegati = ?,
+          parent_commessa_id = ?,
+          is_struttura = ?,
           updated_at = datetime('now', 'localtime')
         WHERE id = ?
       `),
@@ -211,6 +213,23 @@ class CommesseController {
     return Number.isFinite(parsed) ? parsed : NaN;
   }
 
+  parseParentId(value) {
+    if (value == null || value === '') return null;
+    const parsed = Number.parseInt(value, 10);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  parseBooleanFlag(value, fallback = 0) {
+    if (value == null || value === '') return fallback;
+    if (typeof value === 'boolean') {
+      return value ? 1 : 0;
+    }
+    const normalized = String(value).toLowerCase();
+    if (['1', 'true'].includes(normalized)) return 1;
+    if (['0', 'false'].includes(normalized)) return 0;
+    return fallback;
+  }
+
   parseIntValue(value, fallback = 0) {
     if (value == null || value === '') return fallback;
     const parsed = Number.parseInt(value, 10);
@@ -278,7 +297,9 @@ class CommesseController {
       'ubicazione',
       'data_inizio',
       'data_fine',
-      'note'
+      'note',
+      'parent_commessa_id',
+      'is_struttura'
     ];
 
     const changes = [];
@@ -348,6 +369,23 @@ class CommesseController {
     const monteOreValue = this.parseNullableNumber(monte_ore_stimato);
     if (monteOreValue !== null && (!Number.isFinite(monteOreValue) || monteOreValue < 0)) {
       return 'Monte ore stimato non valido';
+    }
+
+    const parentIdValue = payload.parent_commessa_id ?? payload.parentCommessaId;
+    if (parentIdValue != null && parentIdValue !== '') {
+      const parentId = Number.parseInt(parentIdValue, 10);
+      if (!Number.isFinite(parentId) || parentId <= 0) {
+        return 'Commessa padre non valida';
+      }
+    }
+
+    const structureValue = payload.is_struttura ?? payload.isStruttura;
+    if (structureValue != null && structureValue !== '') {
+      const normalized = String(structureValue).toLowerCase();
+      const allowed = ['1', '0', 'true', 'false'];
+      if (!allowed.includes(normalized)) {
+        return 'Valore struttura non valido';
+      }
     }
 
     return null;
@@ -458,10 +496,17 @@ class CommesseController {
         data_fine,
         note,
         allegati
+        ,
+        parent_commessa_id,
+        parentCommessaId,
+        is_struttura,
+        isStruttura
       } = payload;
 
       // Usa transazione per garantire atomicità
       const transaction = this.db.transaction(() => {
+        const parentIdValue = this.parseParentId(parent_commessa_id ?? parentCommessaId);
+        const structureFlag = this.parseBooleanFlag(is_struttura ?? isStruttura);
         const result = this.stmt.create.run(
           titolo.trim(),
           cliente_id || clienteId || null,
@@ -480,7 +525,9 @@ class CommesseController {
           data_inizio || null,
           data_fine || null,
           note || null,
-          allegati || null
+          allegati || null,
+          parentIdValue,
+          structureFlag
         );
         return result.lastInsertRowid;
       });
@@ -527,11 +574,21 @@ class CommesseController {
         data_fine,
         note,
         allegati
+        ,
+        parent_commessa_id,
+        parentCommessaId,
+        is_struttura,
+        isStruttura
       } = payload;
 
       const existing = this.stmt.getById.get(id);
       if (!existing) {
         return res.status(404).json({ error: 'Commessa non trovata' });
+      }
+
+      const parentIdValue = this.parseParentId(parent_commessa_id ?? parentCommessaId);
+      if (parentIdValue && Number(parentIdValue) === Number(id)) {
+        return res.status(400).json({ error: 'Una commessa non puÃ² essere figlia di se stessa' });
       }
 
       const nextValues = {
@@ -553,6 +610,9 @@ class CommesseController {
         data_fine: data_fine || null,
         note: note || null,
         allegati: allegati || null
+        ,
+        parent_commessa_id: parentIdValue,
+        is_struttura: this.parseBooleanFlag(is_struttura ?? isStruttura, 0)
       };
 
       const result = this.stmt.update.run(
@@ -574,6 +634,8 @@ class CommesseController {
         nextValues.data_fine,
         nextValues.note,
         nextValues.allegati,
+        nextValues.parent_commessa_id,
+        nextValues.is_struttura,
         id
       );
 

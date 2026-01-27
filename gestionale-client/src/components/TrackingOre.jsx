@@ -214,6 +214,11 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
     onOpenCommessa(selectedCommessa.id)
   }
 
+  const handleOpenCommessaById = (commessaId) => {
+    if (!commessaId || !onOpenCommessa) return
+    onOpenCommessa(commessaId)
+  }
+
   const handleClienteSelect = (cliente) => {
     if (!cliente?.id) return
     setSelectedClienteId(String(cliente.id))
@@ -538,7 +543,19 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
                   {activeEntries.map((entry) => (
                     <div key={entry.id} className="d-flex justify-content-between align-items-center mb-2">
                       <div>
-                        <div><strong>{entry.commessa_titolo || `#${entry.commessa_id}`}</strong></div>
+                        <div>
+                          {onOpenCommessa ? (
+                            <button
+                              type="button"
+                              className="btn btn-link p-0 fw-semibold text-start"
+                              onClick={() => handleOpenCommessaById(entry.commessa_id)}
+                            >
+                              {entry.commessa_titolo || `#${entry.commessa_id}`}
+                            </button>
+                          ) : (
+                            <strong>{entry.commessa_titolo || `#${entry.commessa_id}`}</strong>
+                          )}
+                        </div>
                         {entry.cliente_nome && (
                           <div className="commessa-meta">{entry.cliente_nome}</div>
                         )}
@@ -774,7 +791,20 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
                 <div className="tracking-active-summary">
                   {activeEntries.map((entry) => (
                     <div key={entry.id} className="mb-3">
-                      <div><strong>Commessa:</strong> {entry.commessa_titolo || `#${entry.commessa_id}`}</div>
+                      <div>
+                        <strong>Commessa:</strong>{' '}
+                        {onOpenCommessa ? (
+                          <button
+                            type="button"
+                            className="btn btn-link p-0 align-baseline"
+                            onClick={() => handleOpenCommessaById(entry.commessa_id)}
+                          >
+                            {entry.commessa_titolo || `#${entry.commessa_id}`}
+                          </button>
+                        ) : (
+                          entry.commessa_titolo || `#${entry.commessa_id}`
+                        )}
+                      </div>
                       {entry.cliente_nome && (
                         <div><strong>Cliente:</strong> {entry.cliente_nome}</div>
                       )}
