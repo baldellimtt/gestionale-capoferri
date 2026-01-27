@@ -167,6 +167,8 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
     return (totalMinutes + runningMinutes) / 60
   }, [activeEntries, selectedId, totalMinutes, tick])
 
+  const roundedTrackedHours = useMemo(() => roundUpToHalfHour(totalTrackedHours), [totalTrackedHours])
+
   const estimatedHours = useMemo(() => {
     const value = selectedCommessa?.monte_ore_stimato
     if (value == null || value === '') return null
@@ -181,7 +183,7 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
 
   const formatEntryHours = (entry) => {
     const minutes = getEntryMinutes(entry)
-    return (minutes / 60).toFixed(2)
+    return roundUpToHalfHour(minutes / 60).toFixed(2)
   }
 
   const formatEntryDate = (entry) => {
@@ -482,7 +484,7 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
                   <div className="tracking-summary-stats">
                     <div>
                       <div className="tracking-summary-label">Ore registrate</div>
-                      <div className="tracking-summary-value">{totalTrackedHours.toFixed(2)} h</div>
+                    <div className="tracking-summary-value">{roundedTrackedHours.toFixed(2)} h</div>
                     </div>
                     <div>
                       <div className="tracking-summary-label">Monte ore stimato</div>
@@ -505,7 +507,7 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
                     </>
                   ) : (
                     <div className="text-muted" style={{ fontSize: '0.85rem' }}>
-                      Inserisci il monte ore stimato per vedere l\'avanzamento.
+                      Inserisci il monte ore stimato per vedere l'avanzamento.
                     </div>
                   )}
                   {onOpenCommessa && (
