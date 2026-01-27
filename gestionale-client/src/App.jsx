@@ -160,6 +160,12 @@ function App() {
     }
   }
 
+  const handleHomeTrackingOpen = (commessaId) => {
+    if (!commessaId) return
+    setTrackingCommessaId(commessaId)
+    setActiveView('tracking')
+  }
+
   const handleUserUpdated = (updated) => {
     setUser((prev) => ({
       ...(prev || {}),
@@ -271,7 +277,13 @@ function App() {
                   <AttivitaProvider>
                     <Suspense fallback={<LoadingFallback />}>
                       {activeView === 'home' && (
-                        <Home key="home" clienti={clienti} user={user} toast={toast} />
+                        <Home
+                          key="home"
+                          clienti={clienti}
+                          user={user}
+                          toast={toast}
+                          onOpenTracking={handleHomeTrackingOpen}
+                        />
                       )}
                       {activeView === 'attivita' && (
                         <TabellaAttivita key="attivita" clienti={clienti} user={user} toast={toast} />
