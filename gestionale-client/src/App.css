@@ -2021,6 +2021,14 @@ header .logo {
   margin-bottom: 0.25rem;
 }
 
+.home-hero-empty {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--ink-500);
+  padding: 1rem;
+  text-align: center;
+}
+
 .home-hero-alert {
   margin-top: 0.35rem;
 }

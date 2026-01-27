@@ -149,7 +149,7 @@ function Home({ clienti, user, toast, onOpenTracking }) {
   const subtitleText = useMemo(() => {
     if (loadingActive) return 'Caricamento in corso...'
     if (activeCards.length) return `${activeCards.length} timer in esecuzione`
-    return 'Aggiornamento automatico ogni 15 minuti'
+    return ''
   }, [loadingActive, activeCards])
 
   const handleStopActiveEntry = useCallback(async (entry) => {
@@ -260,6 +260,9 @@ function Home({ clienti, user, toast, onOpenTracking }) {
               </article>
             ))}
           </div>
+        )}
+        {!loadingActive && !activeCards.length && !activeError && (
+          <div className="home-hero-empty">Nessun tracking attività</div>
         )}
       </section>
 
