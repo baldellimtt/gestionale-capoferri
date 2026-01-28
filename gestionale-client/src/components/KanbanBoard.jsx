@@ -83,11 +83,8 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
     const loadScadenze = async () => {
       if (card.length > 0) {
         try {
-          const scadenzePromises = card.map(c => 
-            api.getKanbanScadenze(c.id).catch(() => [])
-          )
-          const scadenzeResults = await Promise.all(scadenzePromises)
-          const allScadenze = scadenzeResults.flat()
+          const ids = card.map((c) => c.id)
+          const allScadenze = await api.getKanbanScadenzeBulk(ids)
           setScadenze(allScadenze)
         } catch (err) {
           console.error('Errore caricamento scadenze:', err)

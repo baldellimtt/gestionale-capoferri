@@ -245,18 +245,15 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
 
     const loadAll = async () => {
       try {
-        const results = await Promise.all(
-          commesse.map(async (commessa) => {
-            const allegati = await api.getCommessaAllegati(commessa.id)
-            return [commessa.id, allegati]
-          })
-        )
+        const ids = commesse.map((commessa) => commessa.id)
+        const allegatiList = await api.getCommesseAllegatiBulk(ids)
         const next = {}
-        results.forEach(([id, allegati]) => {
-          next[id] = allegati
+        allegatiList.forEach((allegato) => {
+          const key = Number(allegato.commessa_id)
+          if (!next[key]) next[key] = []
+          next[key].push(allegato)
         })
         setAllegatiByCommessa(next)
-        
       } catch (err) {
         console.error('Errore caricamento allegati:', err)
         setAllegatiError('Errore nel caricamento degli allegati.')

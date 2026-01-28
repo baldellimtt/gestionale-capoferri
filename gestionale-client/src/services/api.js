@@ -546,6 +546,13 @@ class ApiService {
     return this.request(`/commesse/${id}/allegati`);
   }
 
+  async getCommesseAllegatiBulk(commessaIds = []) {
+    const ids = commessaIds.map((item) => Number(item)).filter((item) => Number.isInteger(item) && item >= 1);
+    if (!ids.length) return [];
+    const params = new URLSearchParams({ commessa_ids: ids.join(',') });
+    return this.request(`/commesse/allegati-bulk?${params.toString()}`);
+  }
+
   async getCommessaAudit(id) {
     return this.request(`/commesse/${id}/audit`);
   }
@@ -925,6 +932,13 @@ class ApiService {
   // Scadenze
   async getKanbanScadenze(cardId) {
     return this.request(`/kanban/card/${cardId}/scadenze`);
+  }
+
+  async getKanbanScadenzeBulk(cardIds = []) {
+    const ids = cardIds.map((item) => Number(item)).filter((item) => Number.isInteger(item) && item >= 1);
+    if (!ids.length) return [];
+    const params = new URLSearchParams({ card_ids: ids.join(',') });
+    return this.request(`/kanban/scadenze-bulk?${params.toString()}`);
   }
 
   async createKanbanScadenza(cardId, scadenza) {

@@ -166,6 +166,23 @@ const ValidationSchemas = {
     ],
     update: [] // Sarà popolato dopo la definizione
   },
+  commesse: {
+    allegatiBulk: [
+      query('commessa_ids')
+        .notEmpty()
+        .withMessage('commessa_ids obbligatorio')
+        .custom((value) => {
+          if (typeof value !== 'string') return false;
+          const ids = value
+            .split(',')
+            .map((item) => item.trim())
+            .filter(Boolean);
+          if (ids.length === 0) return false;
+          return ids.every((id) => Number.isInteger(Number(id)) && Number(id) >= 1);
+        })
+        .withMessage('commessa_ids deve contenere id validi')
+    ]
+  },
 
   // Validazione Cartelle Anno Commesse
   commessaYearFolder: {
@@ -837,8 +854,23 @@ const ValidationSchemas = {
           .withMessage('Commento obbligatorio')
           .isLength({ max: 2000 })
           .withMessage('Commento troppo lungo (max 2000 caratteri)')
-      ]
-    }
+        ]
+    },
+    scadenzeBulk: [
+      query('card_ids')
+        .notEmpty()
+        .withMessage('card_ids obbligatorio')
+        .custom((value) => {
+          if (typeof value !== 'string') return false;
+          const ids = value
+            .split(',')
+            .map((item) => item.trim())
+            .filter(Boolean);
+          if (ids.length === 0) return false;
+          return ids.every((id) => Number.isInteger(Number(id)) && Number(id) >= 1);
+        })
+        .withMessage('card_ids deve contenere id validi')
+    ]
   }
 };
 

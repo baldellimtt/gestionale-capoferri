@@ -646,6 +646,35 @@ class KanbanController {
     }
   }
 
+  getScadenzeBulk(req, res) {
+    try {
+      const idsRaw = String(req.query.card_ids || '');
+      const ids = idsRaw
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean)
+        .map((item) => Number(item))
+        .filter((item) => Number.isInteger(item) && item >= 1);
+
+      if (ids.length === 0) {
+        return res.json([]);
+      }
+
+      const placeholders = ids.map(() => '?').join(',');
+      const stmt = this.db.prepare(`
+        SELECT * FROM kanban_scadenze
+        WHERE card_id IN (${placeholders})
+        ORDER BY card_id ASC, data_scadenza ASC, id ASC
+      `);
+      const scadenze = stmt.all(...ids);
+      Logger.info('GET /kanban/scadenze-bulk', { count: ids.length });
+      res.json(scadenze);
+    } catch (error) {
+      Logger.error('Errore GET /kanban/scadenze-bulk', error);
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
+    }
+  }
+
   createScadenza(req, res) {
     try {
       const { cardId } = req.params;
@@ -1020,6 +1049,7 @@ function createRouter(db) {
   router.delete('/commenti/:id', validateRequest(ValidationSchemas.id), (req, res) => controller.deleteCommento(req, res));
 
   // Scadenze
+  router.get('/scadenze-bulk', validateRequest(ValidationSchemas.kanban.scadenzeBulk), (req, res) => controller.getScadenzeBulk(req, res));
   router.get('/card/:cardId/scadenze', validateRequest(ValidationSchemas.idParam('cardId')), (req, res) => controller.getScadenzeByCard(req, res));
   router.post('/card/:cardId/scadenze', validateRequest(ValidationSchemas.kanban.scadenza.create), (req, res) => controller.createScadenza(req, res));
   router.put('/scadenze/:id', validateRequest(ValidationSchemas.kanban.scadenza.update), (req, res) => controller.updateScadenza(req, res));

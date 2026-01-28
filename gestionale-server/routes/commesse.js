@@ -728,6 +728,36 @@ class CommesseController {
     }
   }
 
+  getAllegatiBulk(req, res) {
+    try {
+      const idsRaw = String(req.query.commessa_ids || '');
+      const ids = idsRaw
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean)
+        .map((item) => Number(item))
+        .filter((item) => Number.isInteger(item) && item >= 1);
+
+      if (ids.length === 0) {
+        return res.json([]);
+      }
+
+      const placeholders = ids.map(() => '?').join(',');
+      const stmt = this.db.prepare(`
+        SELECT id, commessa_id, filename, original_name, mime_type, file_size, file_path, version, is_latest, previous_id, created_at
+        FROM commesse_allegati
+        WHERE commessa_id IN (${placeholders})
+        ORDER BY commessa_id ASC, created_at DESC, id DESC
+      `);
+      const allegati = stmt.all(...ids);
+      Logger.info('GET /commesse/allegati-bulk', { count: ids.length });
+      res.json(allegati);
+    } catch (error) {
+      Logger.error('Errore GET /commesse/allegati-bulk', error);
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
+    }
+  }
+
   getAudit(req, res) {
     try {
       const { id } = req.params;
@@ -977,6 +1007,7 @@ function createRouter(db) {
 
   router.get('/cartelle-anni', validateRequest(ValidationSchemas.commessaYearFolder.list), (req, res) => controller.getYearFolders(req, res));
   router.post('/cartelle-anni', validateRequest(ValidationSchemas.commessaYearFolder.create), (req, res) => controller.createYearFolder(req, res));
+  router.get('/allegati-bulk', validateRequest(ValidationSchemas.commesse.allegatiBulk), (req, res) => controller.getAllegatiBulk(req, res));
   router.get('/:id/allegati', validateRequest(ValidationSchemas.id), (req, res) => controller.getAllegati(req, res));
   router.get('/:id/audit', validateRequest(ValidationSchemas.id), (req, res) => controller.getAudit(req, res));
   router.post('/:id/audit', validateRequest(ValidationSchemas.commessaAuditNote), (req, res) => controller.addAuditNote(req, res));
