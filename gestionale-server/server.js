@@ -133,7 +133,6 @@ app.use('/api', (req, res, next) => {
 // Static files
 const fs = require('fs');
 const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, 'uploads');
-app.use('/uploads', express.static(uploadDir));
 
 // Client static files (build) - per hosting locale senza Vite dev server
 const serveStatic = (process.env.SERVE_STATIC || 'false').toLowerCase() === 'true';
@@ -192,7 +191,7 @@ app.use('/api/kanban', require('./routes/kanban')(db));
 // SPA fallback (solo se serve static)
 if (serveStaticEnabled) {
   app.get('*', (req, res, next) => {
-    if (req.path.startsWith('/api') || req.path.startsWith('/uploads') || req.path === '/health') {
+    if (req.path.startsWith('/api') || req.path === '/health') {
       return next();
     }
     return res.sendFile(path.join(resolvedClientDist, 'index.html'));

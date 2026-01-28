@@ -2,6 +2,17 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_A
 const TOKEN_STORAGE_KEY = 'gestionale_auth_token';
 const REFRESH_TOKEN_STORAGE_KEY = 'gestionale_refresh_token';
 
+const parseFilenameFromDisposition = (value) => {
+  if (!value || typeof value !== 'string') return '';
+  const match = value.match(/filename\*?=(?:UTF-8''|")?([^\";]+)/i);
+  if (!match || !match[1]) return '';
+  try {
+    return decodeURIComponent(match[1].replace(/\"/g, '').trim());
+  } catch {
+    return match[1].replace(/\"/g, '').trim();
+  }
+};
+
 class ApiService {
   constructor() {
     this.baseURL = API_BASE_URL;
@@ -546,6 +557,61 @@ class ApiService {
     return this.request(`/commesse/${id}/allegati`);
   }
 
+  async requestBlob(endpoint, options = {}) {
+    const url = `${this.baseURL}${endpoint}`;
+    const buildConfig = (token) => ({
+      ...options,
+      headers: {
+        ...options.headers,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+
+    const handleResponse = async (response) => {
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        const error = new Error(data.error || `HTTP error! status: ${response.status}`);
+        error.status = response.status;
+        if (data.details) {
+          error.details = data.details;
+        }
+        throw error;
+      }
+      const blob = await response.blob();
+      const disposition = response.headers.get('content-disposition') || '';
+      const filename = parseFilenameFromDisposition(disposition);
+      return {
+        blob,
+        filename,
+        contentType: response.headers.get('content-type') || '',
+      };
+    };
+
+    let response = await fetch(url, buildConfig(this.token));
+
+    if (response.status === 401 && this.getRefreshToken() && !endpoint.includes('/auth/')) {
+      try {
+        if (this.refreshBlockedUntil && Date.now() < this.refreshBlockedUntil) {
+          const retryAfter = Math.ceil((this.refreshBlockedUntil - Date.now()) / 1000);
+          const error = new Error('Troppe richieste, riprova più tardi');
+          error.status = 429;
+          error.retryAfter = retryAfter;
+          throw error;
+        }
+        const newToken = await this.refreshAccessToken();
+        response = await fetch(url, buildConfig(newToken));
+      } catch (refreshError) {
+        if (refreshError.status === 429) {
+          const retryAfter = refreshError.retryAfter || 60;
+          this.refreshBlockedUntil = Date.now() + retryAfter * 1000;
+        }
+        throw refreshError;
+      }
+    }
+
+    return handleResponse(response);
+  }
+
   async getCommesseAllegatiBulk(commessaIds = []) {
     const ids = commessaIds.map((item) => Number(item)).filter((item) => Number.isInteger(item) && item >= 1);
     if (!ids.length) return [];
@@ -574,6 +640,10 @@ class ApiService {
     return this.request(`/commesse/allegati/${allegatoId}`, {
       method: 'DELETE',
     });
+  }
+
+  async downloadCommessaAllegato(allegatoId) {
+    return this.requestBlob(`/commesse/allegati/${allegatoId}/download`);
   }
 
   // Tracking ore commesse
@@ -834,6 +904,10 @@ class ApiService {
     return this.request(`/impostazioni/documenti-aziendali/${id}`, {
       method: 'DELETE',
     });
+  }
+
+  async downloadDocumentoAziendale(id) {
+    return this.requestBlob(`/impostazioni/documenti-aziendali/${id}/download`);
   }
 
   async getDatiFiscali() {

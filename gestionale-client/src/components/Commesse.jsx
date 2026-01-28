@@ -839,6 +839,24 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
     }
   }
 
+  const handleDownloadAllegato = async (allegato) => {
+    if (!allegato?.id) return
+    try {
+      const { blob, filename } = await api.downloadCommessaAllegato(allegato.id)
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = filename || allegato.original_name || 'allegato'
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('Errore download allegato:', err)
+      toast?.showError('Errore nel download dell’allegato', 'Allegati')
+    }
+  }
+
   const handleRowClick = (commessa) => {
     if (commessa.is_struttura) {
       setStructureParentId(String(commessa.id))
@@ -1036,7 +1054,6 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
   }, [clientiSorted, clienteFilterInput, filteredCommesse])
 
 
-  const uploadsBase = api.baseURL.replace(/\/api\/?$/, '') + '/uploads'
   const selectedCommessa = commesse.find((item) => String(item.id) === String(selectedCommessaId))
   const selectedAllegati = selectedCommessa ? (allegatiByCommessa[selectedCommessa.id] || []) : []
   const isClientListView = !showForm && !selectedClienteViewId
@@ -1298,9 +1315,9 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
           selectedCommessaId={selectedCommessaId}
           selectedAllegati={selectedAllegati}
           uploading={uploading}
-          uploadsBase={uploadsBase}
           onUpload={handleUpload}
           onDeleteAllegato={handleDeleteAllegato}
+          onDownloadAllegato={handleDownloadAllegato}
         />
       )}
 

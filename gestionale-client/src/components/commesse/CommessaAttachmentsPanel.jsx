@@ -5,9 +5,9 @@ function CommessaAttachmentsPanel({
   selectedCommessaId,
   selectedAllegati,
   uploading,
-  uploadsBase,
   onUpload,
-  onDeleteAllegato
+  onDeleteAllegato,
+  onDownloadAllegato
 }) {
   return (
     <div className="card mb-4">
@@ -55,13 +55,13 @@ function CommessaAttachmentsPanel({
                 <ul className="commessa-attachments-list">
                   {selectedAllegati.map((allegato) => (
                     <li key={allegato.id}>
-                      <a
-                        href={`${uploadsBase}/${allegato.file_path}`}
-                        target="_blank"
-                        rel="noreferrer"
+                      <button
+                        type="button"
+                        className="btn btn-link p-0"
+                        onClick={() => onDownloadAllegato(allegato)}
                       >
                         {allegato.original_name}
-                      </a>
+                      </button>
                       <button
                         type="button"
                         className="btn btn-secondary btn-sm"

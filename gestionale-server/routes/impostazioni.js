@@ -9,6 +9,19 @@ const { validateRequest } = require('../utils/validationMiddleware');
 const ValidationSchemas = require('../utils/validationSchemas');
 
 const uploadsRoot = path.join(__dirname, '..', 'uploads', 'documenti-aziendali');
+const uploadsBase = path.resolve(path.join(__dirname, '..', 'uploads'));
+
+const resolveUploadPath = (relativePath) => {
+  const raw = String(relativePath || '').replace(/^\/+/, '');
+  if (!raw) return null;
+  const candidate = (raw.startsWith('uploads/') || raw.startsWith('uploads\\'))
+    ? path.resolve(path.join(__dirname, '..', raw))
+    : path.resolve(path.join(uploadsBase, raw));
+  if (!candidate.startsWith(`${uploadsBase}${path.sep}`)) {
+    return null;
+  }
+  return candidate;
+};
 
 const ensureDir = (dirPath) => {
   if (!fs.existsSync(dirPath)) {
@@ -261,6 +274,30 @@ class ImpostazioniController {
       res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
     }
   }
+
+  downloadDocumentoAziendale(req, res) {
+    try {
+      const { id } = req.params;
+      const existing = this.stmt.getDocumentoAziendaleById.get(id);
+      if (!existing) {
+        return res.status(404).json({ error: 'Documento non trovato' });
+      }
+
+      const absolutePath = resolveUploadPath(existing.file_path);
+      if (!absolutePath || !fs.existsSync(absolutePath)) {
+        return res.status(404).json({ error: 'File non trovato' });
+      }
+
+      const filename = existing.original_name || existing.filename || 'documento';
+      if (existing.mime_type) {
+        res.setHeader('Content-Type', existing.mime_type);
+      }
+      return res.download(absolutePath, filename);
+    } catch (error) {
+      Logger.error('Errore GET /impostazioni/documenti-aziendali/download', error);
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
+    }
+  }
 }
 
 function createRouter(db) {
@@ -272,6 +309,7 @@ function createRouter(db) {
   router.get('/dati-fiscali', controller.getDatiFiscali.bind(controller));
   router.put('/dati-fiscali', controller.updateDatiFiscali.bind(controller));
   router.get('/documenti-aziendali', controller.getDocumentiAziendali.bind(controller));
+  router.get('/documenti-aziendali/:id/download', validateRequest(ValidationSchemas.idParam('id')), (req, res) => controller.downloadDocumentoAziendale(req, res));
   router.post('/documenti-aziendali', upload.single('file'), (req, res) => controller.uploadDocumentoAziendale(req, res));
   router.delete('/documenti-aziendali/:id', validateRequest(ValidationSchemas.idParam('id')), (req, res) => controller.deleteDocumentoAziendale(req, res));
 

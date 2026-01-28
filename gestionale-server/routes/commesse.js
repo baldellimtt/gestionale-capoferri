@@ -14,6 +14,19 @@ const STATI_COMMESSA = ['In corso', 'Preventivato', 'In attesa di approvazione',
 const STATI_PAGAMENTI = ['Non iniziato', 'Parziale', 'Consuntivo con altre commesse', 'Saldo'];
 
 const uploadsRoot = path.join(__dirname, '..', 'uploads', 'commesse');
+const uploadsBase = path.resolve(path.join(__dirname, '..', 'uploads'));
+
+const resolveUploadPath = (relativePath) => {
+  const raw = String(relativePath || '').replace(/^\/+/, '');
+  if (!raw) return null;
+  const candidate = (raw.startsWith('uploads/') || raw.startsWith('uploads\\'))
+    ? path.resolve(path.join(__dirname, '..', raw))
+    : path.resolve(path.join(uploadsBase, raw));
+  if (!candidate.startsWith(`${uploadsBase}${path.sep}`)) {
+    return null;
+  }
+  return candidate;
+};
 
 const ensureDir = (dirPath) => {
   if (!fs.existsSync(dirPath)) {
@@ -948,6 +961,30 @@ class CommesseController {
     }
   }
 
+  downloadAllegato(req, res) {
+    try {
+      const { allegatoId } = req.params;
+      const existing = this.stmt.getAllegatoById.get(allegatoId);
+      if (!existing) {
+        return res.status(404).json({ error: 'Allegato non trovato' });
+      }
+
+      const absolutePath = resolveUploadPath(existing.file_path);
+      if (!absolutePath || !fs.existsSync(absolutePath)) {
+        return res.status(404).json({ error: 'File non trovato' });
+      }
+
+      const filename = existing.original_name || existing.filename || 'allegato';
+      if (existing.mime_type) {
+        res.setHeader('Content-Type', existing.mime_type);
+      }
+      return res.download(absolutePath, filename);
+    } catch (error) {
+      Logger.error('Errore GET /commesse/allegati/download', error);
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
+    }
+  }
+
   getYearFolders(req, res) {
     try {
       const { clienteId, cliente_id } = req.query;
@@ -1013,6 +1050,7 @@ function createRouter(db) {
   router.post('/:id/audit', validateRequest(ValidationSchemas.commessaAuditNote), (req, res) => controller.addAuditNote(req, res));
   router.post('/:id/allegati', validateRequest(ValidationSchemas.id), upload.single('file'), (req, res) => controller.uploadAllegato(req, res));
   router.delete('/allegati/:allegatoId', validateRequest(ValidationSchemas.idParam('allegatoId')), (req, res) => controller.deleteAllegato(req, res));
+  router.get('/allegati/:allegatoId/download', validateRequest(ValidationSchemas.idParam('allegatoId')), (req, res) => controller.downloadAllegato(req, res));
   router.get('/:id', validateRequest(ValidationSchemas.id), (req, res) => controller.getById(req, res));
   router.get('/', validateRequest(ValidationSchemas.pagination), (req, res) => controller.getAll(req, res));
   router.post('/', validateRequest(ValidationSchemas.commessa.create), (req, res) => controller.create(req, res));
