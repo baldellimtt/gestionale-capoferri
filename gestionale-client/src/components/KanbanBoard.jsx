@@ -17,6 +17,16 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
   const [showCardDetail, setShowCardDetail] = useState(false)
   const [viewMode, setViewMode] = useState('kanban') // 'kanban' o 'calendar'
   const [inboxBusyIds, setInboxBusyIds] = useState([])
+  const [showColonneManager, setShowColonneManager] = useState(false)
+  const [colonneDrafts, setColonneDrafts] = useState({})
+  const [colonnaCreating, setColonnaCreating] = useState(false)
+  const [colonnaSavingId, setColonnaSavingId] = useState(null)
+  const [colonnaDeletingId, setColonnaDeletingId] = useState(null)
+  const [newColonna, setNewColonna] = useState({
+    nome: '',
+    colore: '#3b82f6',
+    ordine: ''
+  })
   const [filters, setFilters] = useState({
     cliente_id: '',
     colonna_id: '',
@@ -46,6 +56,20 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
       setColonne(colonneData)
       setCard(cardData)
       setCommesse(commesseData || [])
+      setColonneDrafts((prev) => {
+        if (!colonneData?.length) return prev
+        const next = { ...prev }
+        colonneData.forEach((col) => {
+          if (!next[col.id]) {
+            next[col.id] = {
+              nome: col.nome || '',
+              colore: col.colore || '#3b82f6',
+              ordine: col.ordine ?? ''
+            }
+          }
+        })
+        return next
+      })
     } catch (err) {
       console.error('Errore caricamento Kanban:', err)
       setError('Errore nel caricamento dei dati. Verifica che il server sia avviato.')
@@ -306,6 +330,102 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
     }
   }
 
+  const normalizeColonnaDraft = (draft) => ({
+    nome: String(draft.nome || '').trim(),
+    colore: draft.colore || '#3b82f6',
+    ordine: Number.isFinite(Number(draft.ordine)) ? Number(draft.ordine) : null
+  })
+
+  const handleCreateColonna = async (e) => {
+    e.preventDefault()
+    const payload = normalizeColonnaDraft(newColonna)
+    if (!payload.nome) {
+      toast?.showError('Inserisci il nome della colonna', 'Dati mancanti')
+      return
+    }
+    const maxOrdine = colonne.reduce((max, col) => Math.max(max, Number(col.ordine) || 0), 0)
+    const ordine = payload.ordine ?? maxOrdine + 1
+    try {
+      setColonnaCreating(true)
+      const created = await api.createKanbanColonna({
+        nome: payload.nome,
+        colore: payload.colore,
+        ordine
+      })
+      setColonne((prev) => [...prev, created].sort((a, b) => (a.ordine || 0) - (b.ordine || 0)))
+      setColonneDrafts((prev) => ({
+        ...prev,
+        [created.id]: {
+          nome: created.nome || '',
+          colore: created.colore || '#3b82f6',
+          ordine: created.ordine ?? ''
+        }
+      }))
+      setNewColonna({ nome: '', colore: '#3b82f6', ordine: '' })
+      toast?.showSuccess('Colonna creata')
+    } catch (err) {
+      console.error('Errore creazione colonna:', err)
+      toast?.showError('Errore creazione colonna', 'Errore')
+    } finally {
+      setColonnaCreating(false)
+    }
+  }
+
+  const handleUpdateColonna = async (colonnaId) => {
+    const draft = colonneDrafts[colonnaId]
+    if (!draft) return
+    const payload = normalizeColonnaDraft(draft)
+    if (!payload.nome) {
+      toast?.showError('Il nome colonna è obbligatorio', 'Dati mancanti')
+      return
+    }
+    const current = colonne.find((col) => col.id === colonnaId)
+    try {
+      setColonnaSavingId(colonnaId)
+      const updated = await api.updateKanbanColonna(colonnaId, {
+        nome: payload.nome,
+        colore: payload.colore,
+        ordine: payload.ordine ?? (current?.ordine ?? 0)
+      })
+      setColonne((prev) =>
+        prev
+          .map((col) => (col.id === colonnaId ? updated : col))
+          .sort((a, b) => (a.ordine || 0) - (b.ordine || 0))
+      )
+      toast?.showSuccess('Colonna aggiornata')
+    } catch (err) {
+      console.error('Errore aggiornamento colonna:', err)
+      toast?.showError('Errore aggiornamento colonna', 'Errore')
+    } finally {
+      setColonnaSavingId(null)
+    }
+  }
+
+  const handleDeleteColonna = async (colonnaId) => {
+    const colonna = colonne.find((item) => item.id === colonnaId)
+    const label = colonna?.nome ? ` "${colonna.nome}"` : ''
+    if (!window.confirm(`Eliminare la colonna${label}? Se ci sono card collegate l'eliminazione potrebbe fallire.`)) {
+      return
+    }
+    try {
+      setColonnaDeletingId(colonnaId)
+      await api.deleteKanbanColonna(colonnaId)
+      setColonne((prev) => prev.filter((col) => col.id !== colonnaId))
+      setColonneDrafts((prev) => {
+        const next = { ...prev }
+        delete next[colonnaId]
+        return next
+      })
+      toast?.showSuccess('Colonna eliminata')
+      await loadData()
+    } catch (err) {
+      console.error('Errore eliminazione colonna:', err)
+      toast?.showError('Errore eliminazione colonna', 'Errore')
+    } finally {
+      setColonnaDeletingId(null)
+    }
+  }
+
   const handleCloseDetail = () => {
     setShowCardDetail(false)
     setSelectedCard(null)
@@ -389,18 +509,44 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
                 </svg>
                 Nuova Card
               </button>
+              {user?.role === 'admin' && (
+                <button
+                  className="btn btn-primary btn-sm"
+                  onClick={() => setShowColonneManager((prev) => !prev)}
+                  style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '0.5rem',
+                    height: '38px'
+                  }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="21" y1="4" x2="14" y2="4" />
+                    <line x1="10" y1="4" x2="3" y2="4" />
+                    <line x1="21" y1="12" x2="12" y2="12" />
+                    <line x1="8" y1="12" x2="3" y2="12" />
+                    <line x1="21" y1="20" x2="16" y2="20" />
+                    <line x1="12" y1="20" x2="3" y2="20" />
+                    <circle cx="12" cy="4" r="2" />
+                    <circle cx="10" cy="12" r="2" />
+                    <circle cx="14" cy="20" r="2" />
+                  </svg>
+                  {showColonneManager ? 'Nascondi gestione colonne' : 'Gestione colonne'}
+                </button>
+              )}
             </div>
           </div>
 
-          <div
-            className="mb-3 p-3"
-            style={{
-              background: 'linear-gradient(135deg, var(--bg-2) 0%, var(--bg-3) 100%)',
-              borderRadius: 'var(--radius-md)',
-              border: '1px solid var(--border-soft)',
-              boxShadow: 'var(--shadow-1)'
-            }}
-          >
+          {!showColonneManager && viewMode === 'kanban' && (
+            <div
+              className="mb-3 p-3"
+              style={{
+                background: 'linear-gradient(135deg, var(--bg-2) 0%, var(--bg-3) 100%)',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--border-soft)',
+                boxShadow: 'var(--shadow-1)'
+              }}
+            >
             <div className="d-flex justify-content-between align-items-center mb-2">
               <div>
                 <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--ink-800)' }}>Inbox giornaliera</div>
@@ -490,7 +636,8 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
                 })}
               </div>
             )}
-          </div>
+            </div>
+          )}
 
           <div className="mb-3">
             <KanbanFilters
@@ -500,6 +647,126 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
               onFiltersChange={setFilters}
             />
           </div>
+
+          {user?.role === 'admin' && showColonneManager && (
+            <div className="card mb-3">
+              <div className="card-header">Gestione colonne Kanban</div>
+              <div className="card-body">
+                <form onSubmit={handleCreateColonna} className="mb-4">
+                  <div className="row g-3 align-items-end">
+                    <div className="col-md-5">
+                      <label className="form-label">Nome colonna</label>
+                      <input
+                        className="form-control"
+                        value={newColonna.nome}
+                        onChange={(e) => setNewColonna((prev) => ({ ...prev, nome: e.target.value }))}
+                        placeholder="Es. Verifica, Approvazione"
+                      />
+                    </div>
+                    <div className="col-md-3">
+                      <label className="form-label">Colore</label>
+                      <input
+                        type="color"
+                        className="form-control form-control-color"
+                        value={newColonna.colore}
+                        onChange={(e) => setNewColonna((prev) => ({ ...prev, colore: e.target.value }))}
+                      />
+                    </div>
+                    <div className="col-md-2">
+                      <label className="form-label">Ordine</label>
+                      <input
+                        type="number"
+                        className="form-control"
+                        value={newColonna.ordine}
+                        onChange={(e) => setNewColonna((prev) => ({ ...prev, ordine: e.target.value }))}
+                        placeholder="Auto"
+                      />
+                    </div>
+                    <div className="col-md-2 d-grid">
+                      <button className="btn btn-primary" type="submit" disabled={colonnaCreating}>
+                        {colonnaCreating ? 'Creazione...' : 'Crea'}
+                      </button>
+                    </div>
+                  </div>
+                </form>
+
+                {colonne.length === 0 ? (
+                  <div className="alert alert-info mb-0">Nessuna colonna disponibile.</div>
+                ) : (
+                  <div className="list-group">
+                    {colonne.map((col) => {
+                      const draft = colonneDrafts[col.id] || { nome: col.nome || '', colore: col.colore || '#3b82f6', ordine: col.ordine ?? '' }
+                      return (
+                        <div key={col.id} className="list-group-item">
+                          <div className="row g-3 align-items-end">
+                            <div className="col-md-4">
+                              <label className="form-label">Nome</label>
+                              <input
+                                className="form-control"
+                                value={draft.nome}
+                                onChange={(e) =>
+                                  setColonneDrafts((prev) => ({
+                                    ...prev,
+                                    [col.id]: { ...draft, nome: e.target.value }
+                                  }))
+                                }
+                              />
+                            </div>
+                            <div className="col-md-2">
+                              <label className="form-label">Colore</label>
+                              <input
+                                type="color"
+                                className="form-control form-control-color"
+                                value={draft.colore || '#3b82f6'}
+                                onChange={(e) =>
+                                  setColonneDrafts((prev) => ({
+                                    ...prev,
+                                    [col.id]: { ...draft, colore: e.target.value }
+                                  }))
+                                }
+                              />
+                            </div>
+                            <div className="col-md-2">
+                              <label className="form-label">Ordine</label>
+                              <input
+                                type="number"
+                                className="form-control"
+                                value={draft.ordine}
+                                onChange={(e) =>
+                                  setColonneDrafts((prev) => ({
+                                    ...prev,
+                                    [col.id]: { ...draft, ordine: e.target.value }
+                                  }))
+                                }
+                              />
+                            </div>
+                            <div className="col-md-4 d-flex gap-2">
+                              <button
+                                type="button"
+                                className="btn btn-outline-primary"
+                                onClick={() => handleUpdateColonna(col.id)}
+                                disabled={colonnaSavingId === col.id}
+                              >
+                                {colonnaSavingId === col.id ? 'Salvataggio...' : 'Salva'}
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-outline-danger"
+                                onClick={() => handleDeleteColonna(col.id)}
+                                disabled={colonnaDeletingId === col.id}
+                              >
+                                {colonnaDeletingId === col.id ? 'Eliminazione...' : 'Elimina'}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </>
       )}
 
@@ -533,6 +800,7 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
               key={colonna.id}
               colonna={colonna}
               card={card}
+              commesse={commesse}
               onCardClick={handleCardClick}
               onMoveCard={handleCardMove}
               onQuickUpdate={handleQuickUpdate}

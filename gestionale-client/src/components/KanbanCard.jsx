@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 
-function KanbanCard({ card, onCardClick, onQuickUpdate }) {
+function KanbanCard({ card, commesse = [], onCardClick, onQuickUpdate }) {
   const [isDragging, setIsDragging] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
   const [isEditingTitle, setIsEditingTitle] = useState(false)
@@ -29,10 +29,22 @@ function KanbanCard({ card, onCardClick, onQuickUpdate }) {
     return priorita ? priorita.charAt(0).toUpperCase() + priorita.slice(1) : 'Media'
   }
 
-  const formatDate = (dateString) => {
-    if (!dateString) return null
-    const date = new Date(dateString)
-    return date.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  const formatDateTime = (value) => {
+    if (!value) return null
+    const clean = String(value).trim()
+    const [datePart, timePart] = clean.includes('T')
+      ? clean.split('T')
+      : clean.includes(' ')
+        ? clean.split(' ')
+        : [clean, '']
+    if (!datePart) return null
+    const [year, month, day] = datePart.split('-')
+    if (!year || !month || !day) return null
+    const dateLabel = `${day}/${month}/${year}`
+    const time = timePart ? timePart.slice(0, 5) : ''
+    if (!time) return dateLabel
+    const timeLabel = time.replace(':', '.')
+    return `${dateLabel} ore ${timeLabel}`
   }
 
   const toDateInputValue = (dateString) => {
@@ -145,9 +157,14 @@ function KanbanCard({ card, onCardClick, onQuickUpdate }) {
   }
 
   const prioritaColor = getPrioritaColor(card.priorita)
-  const dataFine = formatDate(card.data_fine_prevista)
+  const dataFine = formatDateTime(card.data_fine_prevista)
+  const dataInizio = formatDateTime(card.data_inizio)
   const scaduta = dataFine && isScaduta(card.data_fine_prevista)
   const scadenzaProssima = dataFine && isScadenzaProssima(card.data_fine_prevista)
+  const commessaRef = card.commessa_id
+    ? commesse.find((item) => String(item.id) === String(card.commessa_id))
+    : null
+  const commessaLabel = commessaRef?.titolo || (card.commessa_id ? `Commessa #${card.commessa_id}` : '')
 
   return (
     <div
@@ -300,6 +317,11 @@ function KanbanCard({ card, onCardClick, onQuickUpdate }) {
       )}
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.5rem', fontSize: '0.75rem' }}>
+        {card.commessa_id && (
+          <div style={{ color: 'var(--ink-600)' }}>
+            <strong>Commessa:</strong> {commessaLabel}
+          </div>
+        )}
         {card.cliente_nome && (
           <div style={{ color: 'var(--ink-600)' }}>
             <strong>Cliente:</strong> {card.cliente_nome}
@@ -344,6 +366,10 @@ function KanbanCard({ card, onCardClick, onQuickUpdate }) {
                 <polyline points="12 6 12 12 16 14" />
               </svg>
             )}
+          </div>
+        ) : dataInizio ? (
+          <div style={{ color: 'var(--ink-600)' }}>
+            <strong>Quando:</strong> {dataInizio}
           </div>
         ) : (
           <div style={{ color: 'var(--ink-600)' }}>

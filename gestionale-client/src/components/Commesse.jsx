@@ -864,7 +864,7 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
       )}
       <td>
         <div className="commessa-title">{commessa.titolo || '-'}</div>
-        {commessa.is_struttura && (
+        {commessa.is_struttura ? (
           <div className="structure-row-actions">
             <span className="status-badge structure-badge">Struttura</span>
             <button
@@ -878,7 +878,7 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
               Apri scheda
             </button>
           </div>
-        )}
+        ) : null}
         {commessa.responsabile && (
           <div className="commessa-meta">Resp: {commessa.responsabile}</div>
         )}

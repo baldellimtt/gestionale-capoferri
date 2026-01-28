@@ -11,6 +11,18 @@ const getTodayDate = () => {
 }
 
 function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, onSave, onDelete, onClose, onRefresh, toast }) {
+  const parseDateTime = (value) => {
+    if (!value) return { date: '', time: '' }
+    const clean = String(value).trim()
+    const [datePart, timePart] = clean.includes('T')
+      ? clean.split('T')
+      : clean.includes(' ')
+        ? clean.split(' ')
+        : [clean, '']
+    const time = timePart ? timePart.slice(0, 5) : ''
+    return { date: datePart.slice(0, 10), time }
+  }
+
   const [formData, setFormData] = useState({
     titolo: '',
     descrizione: '',
@@ -23,6 +35,9 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
     data_fine_prevista: '',
     tags: []
   })
+  const [allDay, setAllDay] = useState(true)
+  const [timeStart, setTimeStart] = useState('')
+  const [timeEnd, setTimeEnd] = useState('')
   const [scadenze, setScadenze] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -51,18 +66,23 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
 
   useEffect(() => {
     if (card) {
+      const start = parseDateTime(card.data_inizio)
+      const end = parseDateTime(card.data_fine_prevista)
       setFormData({
         titolo: card.titolo || '',
         descrizione: card.descrizione || '',
-    colonna_id: card.colonna_id || '',
-    priorita: card.priorita || 'media',
-    cliente_id: card.cliente_id || '',
+        colonna_id: card.colonna_id || '',
+        priorita: card.priorita || 'media',
+        cliente_id: card.cliente_id || '',
         cliente_nome: card.cliente_nome || '',
         commessa_id: card.commessa_id || '',
-        data_inizio: card.data_inizio || '',
-        data_fine_prevista: card.data_fine_prevista || '',
+        data_inizio: start.date,
+        data_fine_prevista: end.date,
         tags: card.tags ? (typeof card.tags === 'string' ? JSON.parse(card.tags) : card.tags) : []
       })
+      setTimeStart(start.time)
+      setTimeEnd(end.time)
+      setAllDay(!start.time && !end.time)
       setClienteSearch(card.cliente_nome || '')
       // Imposta commessa search se esiste commessa_id
       if (card.commessa_id) {
@@ -94,6 +114,9 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
         data_fine_prevista: '',
         tags: []
       })
+      setAllDay(true)
+      setTimeStart('')
+      setTimeEnd('')
       setClienteSearch('')
       setCommessaSearch('')
       setScadenze([])
@@ -487,9 +510,17 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
       const loadingToastId = toast?.showLoading('Salvataggio in corso...', 'Salvataggio card')
       
       // Prepara i dati assicurandosi che i campi numerici siano corretti
+      const buildDateTime = (dateValue, timeValue) => {
+        if (!dateValue) return ''
+        if (allDay || !timeValue) return dateValue
+        return `${dateValue}T${timeValue}:00`
+      }
+
       const cardData = {
         ...formData,
         tags: formData.tags && formData.tags.length > 0 ? formData.tags : null,
+        data_inizio: buildDateTime(formData.data_inizio, timeStart),
+        data_fine_prevista: buildDateTime(formData.data_fine_prevista, timeEnd),
         // Assicurati che commessa_id e cliente_id siano numeri o null
         commessa_id: (() => {
           if (!formData.commessa_id || formData.commessa_id === '' || formData.commessa_id === 0) return null;
@@ -856,7 +887,46 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
                   />
                 </div>
                 <div className="col-md-3">
-                  {/* Spacer per mantenere il layout */}
+                  <label className="form-label">Intera giornata</label>
+                  <div className="form-check form-switch">
+                    <input
+                      id="kanban-all-day"
+                      type="checkbox"
+                      className="form-check-input"
+                      checked={allDay}
+                      onChange={(e) => {
+                        const next = e.target.checked
+                        setAllDay(next)
+                        if (next) {
+                          setTimeStart('')
+                          setTimeEnd('')
+                        }
+                      }}
+                    />
+                    <label className="form-check-label" htmlFor="kanban-all-day">
+                      Senza orario
+                    </label>
+                  </div>
+                </div>
+                <div className="col-md-3">
+                  <label className="form-label">Ora Inizio</label>
+                  <input
+                    type="time"
+                    className="form-control"
+                    value={timeStart}
+                    onChange={(e) => setTimeStart(e.target.value)}
+                    disabled={allDay}
+                  />
+                </div>
+                <div className="col-md-3">
+                  <label className="form-label">Ora Fine</label>
+                  <input
+                    type="time"
+                    className="form-control"
+                    value={timeEnd}
+                    onChange={(e) => setTimeEnd(e.target.value)}
+                    disabled={allDay}
+                  />
                 </div>
                 <div className="col-md-6">
                   <label className="form-label">Cliente</label>

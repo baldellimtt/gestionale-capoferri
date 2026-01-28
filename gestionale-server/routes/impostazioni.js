@@ -1,4 +1,37 @@
 const express = require('express');
+const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
+const Logger = require('../utils/logger');
+const fileValidator = require('../utils/fileValidator');
+const ErrorHandler = require('../utils/errorHandler');
+const { validateRequest } = require('../utils/validationMiddleware');
+const ValidationSchemas = require('../utils/validationSchemas');
+
+const uploadsRoot = path.join(__dirname, '..', 'uploads', 'documenti-aziendali');
+
+const ensureDir = (dirPath) => {
+  if (!fs.existsSync(dirPath)) {
+    fs.mkdirSync(dirPath, { recursive: true });
+  }
+};
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    ensureDir(uploadsRoot);
+    cb(null, uploadsRoot);
+  },
+  filename: (req, file, cb) => {
+    const safeBase = path
+      .basename(file.originalname)
+      .replace(/\s+/g, '_')
+      .replace(/[^a-zA-Z0-9._-]/g, '');
+    const unique = `${Date.now()}_${Math.round(Math.random() * 1e6)}`;
+    cb(null, `${unique}_${safeBase}`);
+  }
+});
+
+const upload = multer({ storage });
 
 class ImpostazioniController {
   constructor(db) {
@@ -35,7 +68,23 @@ class ImpostazioniController {
           cassa_previdenziale = ?,
           updated_at = datetime('now', 'localtime')
         WHERE id = 1
-      `)
+      `),
+      getDocumentiAziendali: this.db.prepare(`
+        SELECT * FROM documenti_aziendali
+        ORDER BY datetime(created_at) DESC, id DESC
+      `),
+      getDocumentoAziendaleById: this.db.prepare('SELECT * FROM documenti_aziendali WHERE id = ?'),
+      createDocumentoAziendale: this.db.prepare(`
+        INSERT INTO documenti_aziendali (
+          filename,
+          original_name,
+          mime_type,
+          file_size,
+          file_path,
+          categoria
+        ) VALUES (?, ?, ?, ?, ?, ?)
+      `),
+      deleteDocumentoAziendale: this.db.prepare('DELETE FROM documenti_aziendali WHERE id = ?')
     };
   }
 
@@ -127,6 +176,91 @@ class ImpostazioniController {
       res.status(500).json({ error: 'Errore nell\'aggiornamento dei dati fiscali' });
     }
   }
+
+  getDocumentiAziendali(req, res) {
+    try {
+      const documenti = this.stmt.getDocumentiAziendali.all();
+      res.json(documenti);
+    } catch (err) {
+      console.error('Errore recupero documenti aziendali:', err);
+      res.status(500).json({ error: 'Errore nel recupero dei documenti aziendali' });
+    }
+  }
+
+  uploadDocumentoAziendale(req, res) {
+    try {
+      if (!req.file) {
+        throw ErrorHandler.createError('File mancante', 400);
+      }
+
+      const validation = fileValidator.validate(req.file);
+      if (!validation.valid) {
+        throw ErrorHandler.createError(validation.error, 400);
+      }
+
+      const safeFileName = fileValidator.generateSafeFileName(req.file.originalname);
+      const oldPath = req.file.path;
+      const newPath = path.join(path.dirname(oldPath), safeFileName);
+
+      if (fs.existsSync(oldPath)) {
+        fs.renameSync(oldPath, newPath);
+      }
+
+      const filePath = path.relative(path.join(__dirname, '..'), newPath).replace(/\\/g, '/');
+      const categoria = String(req.body?.categoria || '').trim();
+
+      const result = this.stmt.createDocumentoAziendale.run(
+        safeFileName,
+        req.file.originalname,
+        req.file.mimetype,
+        req.file.size,
+        filePath,
+        categoria
+      );
+
+      const created = this.stmt.getDocumentoAziendaleById.get(result.lastInsertRowid);
+      Logger.info('POST /impostazioni/documenti-aziendali', { documentoId: created?.id });
+      res.status(201).json(created);
+    } catch (error) {
+      if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+        try {
+          fs.unlinkSync(req.file.path);
+        } catch (e) {
+          Logger.error('Errore eliminazione file dopo upload fallito', e);
+        }
+      }
+
+      if (error.statusCode) {
+        return res.status(error.statusCode).json({ error: error.message });
+      }
+      Logger.error('Errore POST /impostazioni/documenti-aziendali', error);
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
+    }
+  }
+
+  deleteDocumentoAziendale(req, res) {
+    try {
+      const { id } = req.params;
+      const existing = this.stmt.getDocumentoAziendaleById.get(id);
+      if (!existing) {
+        return res.status(404).json({ error: 'Documento non trovato' });
+      }
+
+      this.stmt.deleteDocumentoAziendale.run(id);
+      if (existing.file_path) {
+        const absolutePath = path.join(__dirname, '..', existing.file_path);
+        if (fs.existsSync(absolutePath)) {
+          fs.unlinkSync(absolutePath);
+        }
+      }
+
+      Logger.info('DELETE /impostazioni/documenti-aziendali', { documentoId: id });
+      res.json({ success: true });
+    } catch (error) {
+      Logger.error('Errore DELETE /impostazioni/documenti-aziendali', error);
+      res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
+    }
+  }
 }
 
 function createRouter(db) {
@@ -137,6 +271,9 @@ function createRouter(db) {
   router.put('/dati-aziendali', controller.updateDatiAziendali.bind(controller));
   router.get('/dati-fiscali', controller.getDatiFiscali.bind(controller));
   router.put('/dati-fiscali', controller.updateDatiFiscali.bind(controller));
+  router.get('/documenti-aziendali', controller.getDocumentiAziendali.bind(controller));
+  router.post('/documenti-aziendali', upload.single('file'), (req, res) => controller.uploadDocumentoAziendale(req, res));
+  router.delete('/documenti-aziendali/:id', validateRequest(ValidationSchemas.idParam('id')), (req, res) => controller.deleteDocumentoAziendale(req, res));
 
   return router;
 }

@@ -238,6 +238,20 @@ class Migrations {
         updated_at TEXT DEFAULT (datetime('now', 'localtime'))
       );
 
+      -- Tabella Documenti Aziendali
+      CREATE TABLE IF NOT EXISTS documenti_aziendali (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        filename TEXT NOT NULL,
+        original_name TEXT NOT NULL,
+        mime_type TEXT,
+        file_size INTEGER DEFAULT 0,
+        file_path TEXT NOT NULL,
+        categoria TEXT,
+        created_at TEXT DEFAULT (datetime('now', 'localtime'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_documenti_aziendali_created_at ON documenti_aziendali(created_at);
+
       -- Tabella Colonne Kanban
       CREATE TABLE IF NOT EXISTS kanban_colonne (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -367,6 +381,7 @@ class Migrations {
     this.ensureDefaultUser(db);
     this.ensureDatiAziendaliInitialized(db);
     this.ensureDatiFiscaliInitialized(db);
+    this.ensureDocumentiAziendaliTable(db);
 
     console.log('[MIGRATIONS] Schema database creato/verificato');
   }
@@ -624,6 +639,30 @@ class Migrations {
       addColumn('ritenuta_acconto', 'REAL', 0);
       addColumn('rivalsa_inps', 'REAL', 0);
       addColumn('cassa_previdenziale', 'TEXT');
+    }
+  }
+
+  ensureDocumentiAziendaliTable(db) {
+    try {
+      const tableInfo = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='documenti_aziendali'").get();
+      if (!tableInfo) {
+        db.exec(`
+          CREATE TABLE documenti_aziendali (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            filename TEXT NOT NULL,
+            original_name TEXT NOT NULL,
+            mime_type TEXT,
+            file_size INTEGER DEFAULT 0,
+            file_path TEXT NOT NULL,
+            categoria TEXT,
+            created_at TEXT DEFAULT (datetime('now', 'localtime'))
+          );
+          CREATE INDEX IF NOT EXISTS idx_documenti_aziendali_created_at ON documenti_aziendali(created_at);
+        `);
+        console.log('[MIGRATIONS] Tabella documenti_aziendali creata');
+      }
+    } catch (error) {
+      console.log('[MIGRATIONS] Errore verifica tabella documenti_aziendali:', error.message);
     }
   }
 }

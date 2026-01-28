@@ -196,7 +196,7 @@ function CommessaForm({
                   ))}
                 </select>
               </div>
-              {(formData.parent_commessa_id || formData.is_struttura) && (
+              {(!!formData.parent_commessa_id || !!formData.is_struttura) ? (
                 <div className="col-12">
                   {formData.parent_commessa_id && (
                     <div className="alert alert-info d-flex justify-content-between align-items-center mb-2">
@@ -228,7 +228,7 @@ function CommessaForm({
                     Attiva per aprire una lista di sottocommesse quando clicchi sulla riga nella lista.
                   </div>
                 </div>
-              )}
+              ) : null}
             </>
           )}
           <div className="col-md-4">

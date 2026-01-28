@@ -6,6 +6,33 @@ function KanbanCalendar({ card, scadenze, colonne, clienti, filters, onCardClick
   const [viewMode, setViewMode] = useState('month') // 'month', 'week', 'day'
   const [selectedDate, setSelectedDate] = useState(null)
 
+  const parseDateTime = (value) => {
+    if (!value) return { date: '', time: '' }
+    const clean = String(value).trim()
+    const [datePart, timePart] = clean.includes('T')
+      ? clean.split('T')
+      : clean.includes(' ')
+        ? clean.split(' ')
+        : [clean, '']
+    return { date: datePart.slice(0, 10), time: timePart ? timePart.slice(0, 5) : '' }
+  }
+
+  const formatTimeLabel = (time) => {
+    if (!time) return ''
+    return time.replace(':', '.')
+  }
+
+  const getEventTimeLabel = (event) => {
+    const start = parseDateTime(event.date)
+    const end = parseDateTime(event.endDate)
+    if (!start.time && !end.time) return ''
+    if (start.time && end.time && start.date === end.date) {
+      return `${formatTimeLabel(start.time)}-${formatTimeLabel(end.time)}`
+    }
+    if (start.time) return formatTimeLabel(start.time)
+    return formatTimeLabel(end.time)
+  }
+
   // Calcola gli eventi per il calendario
   const events = useMemo(() => {
     const allEvents = []
@@ -328,43 +355,47 @@ function KanbanCalendar({ card, scadenze, colonne, clienti, filters, onCardClick
                   maxHeight: '80px',
                   overflowY: 'auto'
                 }}>
-                  {dayEvents.slice(0, 3).map(event => (
-                    <div
-                      key={event.id}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        if (onCardClick && event.cardId) {
-                          const cardData = card.find(c => c.id === event.cardId)
-                          if (cardData) onCardClick(cardData)
-                        }
-                      }}
-                      style={{
-                        fontSize: '0.7rem',
-                        padding: '0.2rem 0.4rem',
-                        borderRadius: '4px',
-                        background: getPrioritaColor(event.priorita),
-                        color: 'white',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                        transition: 'all 0.2s ease'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.transform = 'scale(1.05)'
-                        e.currentTarget.style.boxShadow = '0 2px 6px rgba(0,0,0,0.3)'
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = 'scale(1)'
-                        e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.2)'
-                      }}
-                      title={event.title}
-                    >
-                      {event.title.length > 15 ? event.title.substring(0, 15) + '...' : event.title}
-                    </div>
-                  ))}
+                  {dayEvents.slice(0, 3).map((event) => {
+                    const timeLabel = getEventTimeLabel(event)
+                    const displayTitle = timeLabel ? `${timeLabel} ${event.title}` : event.title
+                    return (
+                      <div
+                        key={event.id}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          if (onCardClick && event.cardId) {
+                            const cardData = card.find(c => c.id === event.cardId)
+                            if (cardData) onCardClick(cardData)
+                          }
+                        }}
+                        style={{
+                          fontSize: '0.7rem',
+                          padding: '0.2rem 0.4rem',
+                          borderRadius: '4px',
+                          background: getPrioritaColor(event.priorita),
+                          color: 'white',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                          transition: 'all 0.2s ease'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = 'scale(1.05)'
+                          e.currentTarget.style.boxShadow = '0 2px 6px rgba(0,0,0,0.3)'
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = 'scale(1)'
+                          e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.2)'
+                        }}
+                        title={displayTitle}
+                      >
+                        {displayTitle.length > 15 ? displayTitle.substring(0, 15) + '...' : displayTitle}
+                      </div>
+                    )
+                  })}
                   {dayEvents.length > 3 && (
                     <div style={{
                       fontSize: '0.7rem',
@@ -449,47 +480,55 @@ function KanbanCalendar({ card, scadenze, colonne, clienti, filters, onCardClick
                   flexDirection: 'column',
                   gap: '0.5rem'
                 }}>
-                  {dayEvents.map(event => (
-                    <div
-                      key={event.id}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        if (onCardClick && event.cardId) {
-                          const cardData = card.find(c => c.id === event.cardId)
-                          if (cardData) onCardClick(cardData)
-                        }
-                      }}
-                      style={{
-                        fontSize: '0.8rem',
-                        padding: '0.5rem',
-                        borderRadius: 'var(--radius-sm)',
-                        background: `linear-gradient(135deg, ${getPrioritaColor(event.priorita)} 0%, ${getPrioritaColor(event.priorita)}dd 100%)`,
-                        color: 'white',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        boxShadow: 'var(--shadow-1)',
-                        transition: 'all 0.2s ease',
-                        borderLeft: `4px solid ${getPrioritaColor(event.priorita)}`
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.transform = 'translateX(4px)'
-                        e.currentTarget.style.boxShadow = 'var(--shadow-2)'
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = 'translateX(0)'
-                        e.currentTarget.style.boxShadow = 'var(--shadow-1)'
-                      }}
-                    >
-                      <div style={{ fontWeight: 700, marginBottom: '0.25rem' }}>
-                        {event.title}
-                      </div>
-                      {event.cliente_nome && (
-                        <div style={{ fontSize: '0.7rem', opacity: 0.9 }}>
-                          {event.cliente_nome}
+                  {dayEvents.map((event) => {
+                    const timeLabel = getEventTimeLabel(event)
+                    return (
+                      <div
+                        key={event.id}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          if (onCardClick && event.cardId) {
+                            const cardData = card.find(c => c.id === event.cardId)
+                            if (cardData) onCardClick(cardData)
+                          }
+                        }}
+                        style={{
+                          fontSize: '0.8rem',
+                          padding: '0.5rem',
+                          borderRadius: 'var(--radius-sm)',
+                          background: `linear-gradient(135deg, ${getPrioritaColor(event.priorita)} 0%, ${getPrioritaColor(event.priorita)}dd 100%)`,
+                          color: 'white',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          boxShadow: 'var(--shadow-1)',
+                          transition: 'all 0.2s ease',
+                          borderLeft: `4px solid ${getPrioritaColor(event.priorita)}`
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = 'translateX(4px)'
+                          e.currentTarget.style.boxShadow = 'var(--shadow-2)'
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = 'translateX(0)'
+                          e.currentTarget.style.boxShadow = 'var(--shadow-1)'
+                        }}
+                      >
+                        <div style={{ fontWeight: 700, marginBottom: '0.25rem' }}>
+                          {event.title}
                         </div>
-                      )}
-                    </div>
-                  ))}
+                        {timeLabel && (
+                          <div style={{ fontSize: '0.7rem', opacity: 0.9 }}>
+                            Ore: {timeLabel}
+                          </div>
+                        )}
+                        {event.cliente_nome && (
+                          <div style={{ fontSize: '0.7rem', opacity: 0.9 }}>
+                            {event.cliente_nome}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             )
@@ -573,80 +612,92 @@ function KanbanCalendar({ card, scadenze, colonne, clienti, filters, onCardClick
               flexDirection: 'column',
               gap: '0.75rem'
             }}>
-              {dayEvents.map(event => (
-                <div
-                  key={event.id}
-                  onClick={() => {
-                    if (onCardClick && event.cardId) {
-                      const cardData = card.find(c => c.id === event.cardId)
-                      if (cardData) onCardClick(cardData)
-                    }
-                  }}
-                  style={{
-                    padding: '1rem',
-                    borderRadius: 'var(--radius-sm)',
-                    background: `linear-gradient(135deg, ${getPrioritaColor(event.priorita)}15 0%, var(--bg-1) 100%)`,
-                    border: `2px solid ${getPrioritaColor(event.priorita)}`,
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease',
-                    boxShadow: 'var(--shadow-1)'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = 'translateY(-2px)'
-                    e.currentTarget.style.boxShadow = 'var(--shadow-2)'
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = 'translateY(0)'
-                    e.currentTarget.style.boxShadow = 'var(--shadow-1)'
-                  }}
-                >
-                  <div style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'flex-start',
-                    marginBottom: '0.5rem'
-                  }}>
+              {dayEvents.map((event) => {
+                const timeLabel = getEventTimeLabel(event)
+                return (
+                  <div
+                    key={event.id}
+                    onClick={() => {
+                      if (onCardClick && event.cardId) {
+                        const cardData = card.find(c => c.id === event.cardId)
+                        if (cardData) onCardClick(cardData)
+                      }
+                    }}
+                    style={{
+                      padding: '1rem',
+                      borderRadius: 'var(--radius-sm)',
+                      background: `linear-gradient(135deg, ${getPrioritaColor(event.priorita)}15 0%, var(--bg-1) 100%)`,
+                      border: `2px solid ${getPrioritaColor(event.priorita)}`,
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      boxShadow: 'var(--shadow-1)'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'translateY(-2px)'
+                      e.currentTarget.style.boxShadow = 'var(--shadow-2)'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'translateY(0)'
+                      e.currentTarget.style.boxShadow = 'var(--shadow-1)'
+                    }}
+                  >
                     <div style={{
-                      fontWeight: 700,
-                      fontSize: '1rem',
-                      color: getPrioritaColor(event.priorita)
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'flex-start',
+                      marginBottom: '0.5rem'
                     }}>
-                      {event.title}
+                      <div style={{
+                        fontWeight: 700,
+                        fontSize: '1rem',
+                        color: getPrioritaColor(event.priorita)
+                      }}>
+                        {event.title}
+                      </div>
+                      <span style={{
+                        fontSize: '0.75rem',
+                        padding: '0.25rem 0.5rem',
+                        borderRadius: '12px',
+                        background: `${getPrioritaColor(event.priorita)}20`,
+                        color: getPrioritaColor(event.priorita),
+                        fontWeight: 700,
+                        textTransform: 'uppercase'
+                      }}>
+                        {event.priorita}
+                      </span>
                     </div>
-                    <span style={{
-                      fontSize: '0.75rem',
-                      padding: '0.25rem 0.5rem',
-                      borderRadius: '12px',
-                      background: `${getPrioritaColor(event.priorita)}20`,
-                      color: getPrioritaColor(event.priorita),
-                      fontWeight: 700,
-                      textTransform: 'uppercase'
-                    }}>
-                      {event.priorita}
-                    </span>
+                    
+                    {event.cliente_nome && (
+                      <div style={{
+                        fontSize: '0.85rem',
+                        color: 'var(--ink-600)',
+                        marginBottom: '0.25rem'
+                      }}>
+                        <strong>Cliente:</strong> {event.cliente_nome}
+                      </div>
+                    )}
+                    {timeLabel && (
+                      <div style={{
+                        fontSize: '0.85rem',
+                        color: 'var(--ink-600)',
+                        marginBottom: '0.25rem'
+                      }}>
+                        <strong>Ora:</strong> {timeLabel}
+                      </div>
+                    )}
+                    
+                    {event.colonna_nome && (
+                      <div style={{
+                        fontSize: '0.85rem',
+                        color: 'var(--ink-600)',
+                        marginBottom: '0.25rem'
+                      }}>
+                        <strong>Colonna:</strong> {event.colonna_nome}
+                      </div>
+                    )}
                   </div>
-                  
-                  {event.cliente_nome && (
-                    <div style={{
-                      fontSize: '0.85rem',
-                      color: 'var(--ink-600)',
-                      marginBottom: '0.25rem'
-                    }}>
-                      <strong>Cliente:</strong> {event.cliente_nome}
-                    </div>
-                  )}
-                  
-                  {event.colonna_nome && (
-                    <div style={{
-                      fontSize: '0.85rem',
-                      color: 'var(--ink-600)',
-                      marginBottom: '0.25rem'
-                    }}>
-                      <strong>Colonna:</strong> {event.colonna_nome}
-                    </div>
-                  )}
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>

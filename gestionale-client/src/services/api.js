@@ -810,6 +810,25 @@ class ApiService {
     });
   }
 
+  async getDocumentiAziendali() {
+    return this.request('/impostazioni/documenti-aziendali');
+  }
+
+  async uploadDocumentoAziendale(file, categoria = '') {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (categoria) {
+      formData.append('categoria', categoria);
+    }
+    return this.requestForm('/impostazioni/documenti-aziendali', formData);
+  }
+
+  async deleteDocumentoAziendale(id) {
+    return this.request(`/impostazioni/documenti-aziendali/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
   async getDatiFiscali() {
     return this.request('/impostazioni/dati-fiscali');
   }
