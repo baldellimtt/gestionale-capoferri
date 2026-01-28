@@ -639,14 +639,16 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
             </div>
           )}
 
-          <div className="mb-3">
-            <KanbanFilters
-              colonne={colonne}
-              clienti={clienti}
-              filters={filters}
-              onFiltersChange={setFilters}
-            />
-          </div>
+          {!showColonneManager && (
+            <div className="mb-3">
+              <KanbanFilters
+                colonne={colonne}
+                clienti={clienti}
+                filters={filters}
+                onFiltersChange={setFilters}
+              />
+            </div>
+          )}
 
           {user?.role === 'admin' && showColonneManager && (
             <div className="card mb-3">
@@ -783,30 +785,32 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
       )}
 
       {viewMode === 'kanban' ? (
-        <div
-          className="kanban-board-container"
-          style={{
-            display: 'flex',
-            gap: '1rem',
-            overflowX: 'auto',
-            paddingBottom: '1rem',
-            minHeight: '600px',
-            scrollBehavior: 'smooth',
-            WebkitOverflowScrolling: 'touch'
-          }}
-        >
-          {colonne.map((colonna) => (
-            <KanbanColumn
-              key={colonna.id}
-              colonna={colonna}
-              card={card}
-              commesse={commesse}
-              onCardClick={handleCardClick}
-              onMoveCard={handleCardMove}
-              onQuickUpdate={handleQuickUpdate}
-            />
-          ))}
-        </div>
+        !showColonneManager && (
+          <div
+            className="kanban-board-container"
+            style={{
+              display: 'flex',
+              gap: '1rem',
+              overflowX: 'auto',
+              paddingBottom: '1rem',
+              minHeight: '600px',
+              scrollBehavior: 'smooth',
+              WebkitOverflowScrolling: 'touch'
+            }}
+          >
+            {colonne.map((colonna) => (
+              <KanbanColumn
+                key={colonna.id}
+                colonna={colonna}
+                card={card}
+                commesse={commesse}
+                onCardClick={handleCardClick}
+                onMoveCard={handleCardMove}
+                onQuickUpdate={handleQuickUpdate}
+              />
+            ))}
+          </div>
+        )
       ) : (
         <KanbanCalendar
           card={card}

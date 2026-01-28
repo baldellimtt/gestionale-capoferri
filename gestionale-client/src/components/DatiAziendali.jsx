@@ -15,7 +15,7 @@ function DatiAziendali({ onBack, toast, showHeader = true }) {
   const [documenti, setDocumenti] = useState([])
   const [documentiError, setDocumentiError] = useState(null)
   const [uploadingDocumento, setUploadingDocumento] = useState(false)
-  const [documentoCategoria, setDocumentoCategoria] = useState('')
+  const [documentoNome, setDocumentoNome] = useState('')
   const [documentoFiles, setDocumentoFiles] = useState([])
   const [documentoSuccess, setDocumentoSuccess] = useState(false)
   const [fileInputKey, setFileInputKey] = useState(Date.now())
@@ -103,6 +103,12 @@ function DatiAziendali({ onBack, toast, showHeader = true }) {
 
   const handleUploadDocumento = async (e) => {
     e.preventDefault()
+    if (!documentoNome.trim()) {
+      const errorMsg = 'Il nome documento è obbligatorio.'
+      setDocumentiError(errorMsg)
+      toast?.showError(errorMsg, 'Dati mancanti')
+      return
+    }
     if (!documentoFiles.length) return
     try {
       setUploadingDocumento(true)
@@ -111,11 +117,11 @@ function DatiAziendali({ onBack, toast, showHeader = true }) {
       const loadingToastId = toast?.showLoading('Caricamento documento...', 'Documentazione aziendale')
       const createdDocs = []
       for (const file of documentoFiles) {
-        const created = await api.uploadDocumentoAziendale(file, documentoCategoria)
+        const created = await api.uploadDocumentoAziendale(file, documentoNome.trim())
         createdDocs.push(created)
       }
       setDocumenti((prev) => [...createdDocs, ...prev])
-      setDocumentoCategoria('')
+      setDocumentoNome('')
       setDocumentoFiles([])
       setFileInputKey(Date.now())
       setDocumentoSuccess(true)
@@ -311,12 +317,13 @@ function DatiAziendali({ onBack, toast, showHeader = true }) {
           <form onSubmit={handleUploadDocumento}>
             <div className="row g-3 align-items-end">
               <div className="col-md-5">
-                <label className="form-label">Tipo documento (opzionale)</label>
+                <label className="form-label">Nome documento</label>
                 <input
                   className="form-control"
-                  value={documentoCategoria}
-                  onChange={(e) => setDocumentoCategoria(e.target.value)}
+                  value={documentoNome}
+                  onChange={(e) => setDocumentoNome(e.target.value)}
                   placeholder="Es. atto costitutivo, visura, visura camerale"
+                  required
                 />
               </div>
               <div className="col-md-5">
@@ -355,7 +362,7 @@ function DatiAziendali({ onBack, toast, showHeader = true }) {
                     <div>
                       <div className="fw-semibold">{doc.original_name}</div>
                       <div className="text-muted small">
-                        {doc.categoria ? `Tipo: ${doc.categoria}` : 'Tipo: n/d'}
+                        {doc.categoria ? `Nome: ${doc.categoria}` : 'Nome: n/d'}
                         {doc.file_size ? ` · ${formatFileSize(doc.file_size)}` : ''}
                       </div>
                     </div>
