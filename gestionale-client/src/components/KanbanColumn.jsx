@@ -1,18 +1,22 @@
 import { useState } from 'react'
 import KanbanCard from './KanbanCard'
 
-function KanbanColumn({ colonna, card, commesse = [], onCardClick, onMoveCard, onQuickUpdate, onDelete }) {
+function KanbanColumn({ colonna, card, commesse = [], onCardClick, onMoveCard, onQuickUpdate, onDelete, cardsOverride = null, disableDrop = false }) {
   const [dragOver, setDragOver] = useState(false)
   
-  const cardInColonna = card.filter(c => c.colonna_id === colonna.id)
+  const cardInColonna = Array.isArray(cardsOverride)
+    ? cardsOverride
+    : card.filter(c => c.colonna_id === colonna.id)
 
   const handleDragOver = (e) => {
+    if (disableDrop) return
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
     setDragOver(true)
   }
 
   const handleDragLeave = (e) => {
+    if (disableDrop) return
     e.preventDefault()
     // Solo se stiamo uscendo dalla colonna, non da un elemento figlio
     if (!e.currentTarget.contains(e.relatedTarget)) {
@@ -21,6 +25,7 @@ function KanbanColumn({ colonna, card, commesse = [], onCardClick, onMoveCard, o
   }
 
   const handleDrop = async (e) => {
+    if (disableDrop) return
     e.preventDefault()
     setDragOver(false)
     

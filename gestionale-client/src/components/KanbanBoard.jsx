@@ -42,6 +42,27 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
     data_fine_a: ''
   })
 
+  const completedColonna = useMemo(() => {
+    return colonne.find((col) => String(col?.nome || '').trim().toLowerCase() === 'completati') || null
+  }, [colonne])
+
+  const virtualCompletedColonna = useMemo(() => ({
+    id: '__completati__',
+    nome: 'Completati',
+    colore: '#10b981',
+    ordine: 9999
+  }), [])
+
+  const resolvedCompletedColonna = completedColonna || virtualCompletedColonna
+
+  const displayColonne = useMemo(() => {
+    if (completedColonna) return colonne
+    return [...colonne, virtualCompletedColonna]
+  }, [colonne, completedColonna, virtualCompletedColonna])
+
+  const activeCards = useMemo(() => card.filter((item) => !item.data_fine_effettiva), [card])
+  const completedCards = useMemo(() => card.filter((item) => item.data_fine_effettiva), [card])
+
   useEffect(() => {
     loadData()
   }, [filters])
@@ -275,12 +296,13 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
   const handleQuickUpdate = async (cardId, patch) => {
     const existing = card.find((item) => item.id === cardId)
     if (!existing) return
+    const shouldMoveToCompleted = Boolean(patch?.data_fine_effettiva) && completedColonna?.id
     const payload = {
       row_version: existing.row_version,
       commessa_id: existing.commessa_id || null,
       titolo: patch.titolo ?? existing.titolo,
       descrizione: patch.descrizione ?? existing.descrizione,
-      colonna_id: patch.colonna_id ?? existing.colonna_id,
+      colonna_id: patch.colonna_id ?? (shouldMoveToCompleted ? completedColonna.id : existing.colonna_id),
       priorita: patch.priorita ?? existing.priorita,
       responsabile_id: patch.responsabile_id ?? existing.responsabile_id,
       cliente_id: patch.cliente_id ?? existing.cliente_id,
@@ -825,18 +847,23 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
               WebkitOverflowScrolling: 'touch'
             }}
           >
-            {colonne.map((colonna) => (
+            {displayColonne.map((colonna) => {
+              const isCompletedColumn = colonna.id === resolvedCompletedColonna.id
+              return (
               <KanbanColumn
                 key={colonna.id}
                 colonna={colonna}
-                card={card}
+                card={isCompletedColumn ? card : activeCards}
+                cardsOverride={isCompletedColumn ? completedCards : null}
+                disableDrop={isCompletedColumn}
                 commesse={commesse}
                 onCardClick={handleCardClick}
                 onMoveCard={handleCardMove}
                 onQuickUpdate={handleQuickUpdate}
                 onDelete={handleCardDelete}
               />
-            ))}
+            )
+            })}
           </div>
         )
       ) : (

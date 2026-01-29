@@ -6,9 +6,14 @@ const formatTrackingDate = (value) => {
   return `${day}/${month}/${year}`
 }
 
+const roundUpToHalfHour = (hoursValue) => {
+  if (!Number.isFinite(hoursValue) || hoursValue <= 0) return 0
+  return Math.ceil(hoursValue * 2) / 2
+}
+
 const formatTrackingHours = (minutes) => {
   if (!Number.isFinite(minutes)) return '0.00'
-  return (minutes / 60).toFixed(2)
+  return roundUpToHalfHour(minutes / 60).toFixed(2)
 }
 
 const getUserLabel = (entry) => {
