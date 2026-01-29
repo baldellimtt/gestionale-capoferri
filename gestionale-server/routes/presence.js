@@ -19,7 +19,11 @@ function createRouter(db) {
 
   const cleanupPresenceStmt = db.prepare(`
     DELETE FROM utenti_presenze
-    WHERE last_seen_at < datetime('now', '-7 days')
+    WHERE last_seen_at < datetime('now', '-1 minutes')
+  `);
+  const deleteOtherPresenceStmt = db.prepare(`
+    DELETE FROM utenti_presenze
+    WHERE user_id = ? AND session_key != ?
   `);
 
   const getActiveUsersStmt = db.prepare(`
@@ -30,7 +34,7 @@ function createRouter(db) {
       u.cognome,
       u.role,
       MAX(p.last_seen_at) as last_seen_at,
-      COUNT(DISTINCT COALESCE(p.ip_address, '') || '|' || COALESCE(p.user_agent, '')) as session_count,
+      COUNT(DISTINCT p.session_key) as session_count,
       GROUP_CONCAT(DISTINCT p.last_view) as views
     FROM utenti_presenze p
     JOIN utenti u ON u.id = p.user_id
@@ -48,7 +52,10 @@ function createRouter(db) {
     try {
       const authHeader = req.headers.authorization || '';
       const [, token] = authHeader.split(' ');
-      const sessionKey = buildSessionKey(token);
+      const sessionKeyRaw = typeof req.body?.session_key === 'string'
+        ? req.body.session_key.trim()
+        : null;
+      const sessionKey = buildSessionKey(sessionKeyRaw || token);
       if (!sessionKey) {
         return res.status(401).json({ error: 'Token non valido' });
       }
@@ -64,6 +71,8 @@ function createRouter(db) {
         userAgent,
         ipAddress
       );
+      // Mantieni una sola sessione attiva per utente (pulizia aggressiva)
+      deleteOtherPresenceStmt.run(req.user.id, sessionKey);
       cleanupPresenceStmt.run();
 
       res.json({ success: true });

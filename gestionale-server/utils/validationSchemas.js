@@ -899,6 +899,11 @@ ValidationSchemas.commessa.update = [
 // Fix per riferimenti circolari Kanban
 ValidationSchemas.kanban.colonna.update = [
   param('id').isInt({ min: 1 }).withMessage('ID non valido'),
+  body('row_version')
+    .notEmpty()
+    .withMessage('row_version obbligatorio')
+    .isInt({ min: 1 })
+    .withMessage('row_version non valido'),
   ...ValidationSchemas.kanban.colonna.create
 ];
 

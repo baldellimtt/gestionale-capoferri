@@ -251,6 +251,10 @@ function createRouter(db) {
       if (req.user?.token) {
         deletePresenceStmt.run(req.user.id, hashToken(req.user.token));
       }
+      const customToken = req.body?.customToken;
+      if (customToken && typeof customToken === 'string') {
+        deletePresenceStmt.run(req.user.id, hashToken(customToken));
+      }
       const refreshToken = req.body?.refreshToken;
       if (refreshToken && typeof refreshToken === 'string') {
         const tokenHash = hashToken(refreshToken);

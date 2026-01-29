@@ -26,6 +26,8 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
   const [colonnaCreating, setColonnaCreating] = useState(false)
   const [colonnaSavingId, setColonnaSavingId] = useState(null)
   const [colonnaDeletingId, setColonnaDeletingId] = useState(null)
+  const [colonnaDragId, setColonnaDragId] = useState(null)
+  const [colonnaReorderBusy, setColonnaReorderBusy] = useState(false)
   const [newColonna, setNewColonna] = useState({
     nome: '',
     colore: '#3b82f6',
@@ -427,12 +429,19 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
       return
     }
     const current = colonne.find((col) => col.id === colonnaId)
+    const rowVersion = Number.isInteger(Number(current?.row_version)) ? Number(current.row_version) : null
+    if (!current || rowVersion === null) {
+      toast?.showError('Impossibile aggiornare la colonna. Ricarica la pagina e riprova.', 'Errore')
+      await loadData()
+      return
+    }
     try {
       setColonnaSavingId(colonnaId)
       const updated = await api.updateKanbanColonna(colonnaId, {
         nome: payload.nome,
         colore: payload.colore,
-        ordine: payload.ordine ?? (current?.ordine ?? 0)
+        ordine: payload.ordine ?? (current?.ordine ?? 0),
+        row_version: rowVersion
       })
       setColonne((prev) =>
         prev
@@ -442,10 +451,108 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
       toast?.showSuccess('Colonna aggiornata')
     } catch (err) {
       console.error('Errore aggiornamento colonna:', err)
-      toast?.showError('Errore aggiornamento colonna', 'Errore')
+      if (err?.status === 409) {
+        await loadData()
+        toast?.showError('Colonna aggiornata da un altro utente. Dati ricaricati.', 'Conflitto')
+      } else {
+        toast?.showError('Errore aggiornamento colonna', 'Errore')
+      }
     } finally {
       setColonnaSavingId(null)
     }
+  }
+
+  const reorderColonne = async (dragId, targetId) => {
+    if (!dragId || !targetId || String(dragId) === String(targetId)) return
+    const ordered = [...colonne].sort((a, b) => (a.ordine || 0) - (b.ordine || 0))
+    const fromIndex = ordered.findIndex((col) => String(col.id) === String(dragId))
+    const toIndex = ordered.findIndex((col) => String(col.id) === String(targetId))
+    if (fromIndex < 0 || toIndex < 0) return
+
+    const next = [...ordered]
+    const [moved] = next.splice(fromIndex, 1)
+    next.splice(toIndex, 0, moved)
+
+    const normalized = next.map((col, index) => ({
+      ...col,
+      ordine: index + 1
+    }))
+
+    const previousMap = new Map(colonne.map((col) => [String(col.id), col]))
+    const changed = normalized.filter((col) => (previousMap.get(String(col.id))?.ordine ?? 0) !== col.ordine)
+    const missingVersion = changed.find((col) => !Number.isInteger(Number(previousMap.get(String(col.id))?.row_version)))
+    if (missingVersion) {
+      toast?.showError('Impossibile riordinare le colonne. Ricarica la pagina e riprova.', 'Errore')
+      await loadData()
+      return
+    }
+
+    setColonne(normalized)
+    setColonneDrafts((prev) => {
+      const nextDrafts = { ...prev }
+      normalized.forEach((col) => {
+        if (nextDrafts[col.id]) {
+          nextDrafts[col.id] = {
+            ...nextDrafts[col.id],
+            ordine: col.ordine
+          }
+        }
+      })
+      return nextDrafts
+    })
+
+    if (changed.length === 0) return
+
+    try {
+      setColonnaReorderBusy(true)
+      const updatedMap = new Map()
+      for (const col of changed) {
+        const prev = previousMap.get(String(col.id))
+        const updated = await api.updateKanbanColonna(col.id, {
+          nome: col.nome,
+          colore: col.colore,
+          ordine: col.ordine,
+          row_version: Number(prev.row_version)
+        })
+        updatedMap.set(updated.id, updated)
+      }
+      if (updatedMap.size > 0) {
+        setColonne((prev) =>
+          prev.map((col) => updatedMap.get(col.id) || col).sort((a, b) => (a.ordine || 0) - (b.ordine || 0))
+        )
+      }
+    } catch (err) {
+      console.error('Errore riordino colonne:', err)
+      if (err?.status === 409) {
+        await loadData()
+        toast?.showError('Colonne aggiornate da un altro utente. Dati ricaricati.', 'Conflitto')
+      } else {
+        toast?.showError('Errore riordino colonne', 'Errore')
+      }
+    } finally {
+      setColonnaReorderBusy(false)
+    }
+  }
+
+  const handleColumnDragStart = (colonnaId) => (e) => {
+    if (!colonnaId || colonnaReorderBusy) return
+    setColonnaDragId(colonnaId)
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('application/x-kanban-column', String(colonnaId))
+    e.dataTransfer.setData('text/plain', `kanban-column:${colonnaId}`)
+  }
+
+  const handleColumnDragEnd = () => {
+    setColonnaDragId(null)
+  }
+
+  const handleColumnDrop = (targetId) => (e) => {
+    const dragId = e.dataTransfer.getData('application/x-kanban-column')
+    if (!dragId) return
+    e.preventDefault()
+    e.stopPropagation()
+    setColonnaDragId(null)
+    reorderColonne(dragId, targetId)
   }
 
   const handleDeleteColonna = (colonnaId) => {
@@ -847,23 +954,31 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
               WebkitOverflowScrolling: 'touch'
             }}
           >
-            {displayColonne.map((colonna) => {
-              const isCompletedColumn = colonna.id === resolvedCompletedColonna.id
-              return (
-              <KanbanColumn
-                key={colonna.id}
-                colonna={colonna}
-                card={isCompletedColumn ? card : activeCards}
-                cardsOverride={isCompletedColumn ? completedCards : null}
-                disableDrop={isCompletedColumn}
-                commesse={commesse}
-                onCardClick={handleCardClick}
-                onMoveCard={handleCardMove}
-                onQuickUpdate={handleQuickUpdate}
-                onDelete={handleCardDelete}
-              />
-            )
-            })}
+              {displayColonne.map((colonna) => {
+                const isCompletedColumn = colonna.id === resolvedCompletedColonna.id
+                const isVirtualColumn = colonna.id === '__completati__'
+                const allowReorder = !isVirtualColumn && !colonnaReorderBusy
+                return (
+                <KanbanColumn
+                  key={colonna.id}
+                  colonna={colonna}
+                  card={isCompletedColumn ? card : activeCards}
+                  cardsOverride={isCompletedColumn ? completedCards : null}
+                  disableDrop={isCompletedColumn}
+                  commesse={commesse}
+                  onCardClick={handleCardClick}
+                  onMoveCard={handleCardMove}
+                  onQuickUpdate={handleQuickUpdate}
+                  onDelete={handleCardDelete}
+                  onColumnDragStart={allowReorder ? handleColumnDragStart(colonna.id) : null}
+                  onColumnDragEnd={handleColumnDragEnd}
+                  onColumnDrop={allowReorder ? handleColumnDrop(colonna.id) : null}
+                  columnDragDisabled={!allowReorder}
+                  isColumnDragging={colonnaDragId === colonna.id}
+                  columnDragId={colonnaDragId}
+                />
+              )
+              })}
           </div>
         )
       ) : (

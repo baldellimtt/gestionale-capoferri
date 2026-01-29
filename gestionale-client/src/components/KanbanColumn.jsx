@@ -1,14 +1,54 @@
 import { useState } from 'react'
 import KanbanCard from './KanbanCard'
 
-function KanbanColumn({ colonna, card, commesse = [], onCardClick, onMoveCard, onQuickUpdate, onDelete, cardsOverride = null, disableDrop = false }) {
+function KanbanColumn({
+  colonna,
+  card,
+  commesse = [],
+  onCardClick,
+  onMoveCard,
+  onQuickUpdate,
+  onDelete,
+  cardsOverride = null,
+  disableDrop = false,
+  onColumnDragStart = null,
+  onColumnDragEnd = null,
+  onColumnDrop = null,
+  columnDragDisabled = false,
+  isColumnDragging = false,
+  columnDragId = null
+}) {
   const [dragOver, setDragOver] = useState(false)
+  const [columnDragOver, setColumnDragOver] = useState(false)
   
   const cardInColonna = Array.isArray(cardsOverride)
     ? cardsOverride
     : card.filter(c => c.colonna_id === colonna.id)
 
+  const isColumnDrag = (e) => {
+    if (columnDragId) return true
+    const types = Array.from(e.dataTransfer?.types || [])
+    return types.includes('application/x-kanban-column')
+  }
+
+  const getColumnDragId = (e) => {
+    const direct = e.dataTransfer.getData('application/x-kanban-column')
+    if (direct) return direct
+    const plain = e.dataTransfer.getData('text/plain') || ''
+    if (plain.startsWith('kanban-column:')) {
+      return plain.replace('kanban-column:', '')
+    }
+    return columnDragId
+  }
+
   const handleDragOver = (e) => {
+    if (isColumnDrag(e)) {
+      if (columnDragDisabled || !onColumnDrop) return
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'move'
+      setColumnDragOver(true)
+      return
+    }
     if (disableDrop) return
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
@@ -16,6 +56,12 @@ function KanbanColumn({ colonna, card, commesse = [], onCardClick, onMoveCard, o
   }
 
   const handleDragLeave = (e) => {
+    if (isColumnDrag(e)) {
+      if (!e.currentTarget.contains(e.relatedTarget)) {
+        setColumnDragOver(false)
+      }
+      return
+    }
     if (disableDrop) return
     e.preventDefault()
     // Solo se stiamo uscendo dalla colonna, non da un elemento figlio
@@ -25,6 +71,12 @@ function KanbanColumn({ colonna, card, commesse = [], onCardClick, onMoveCard, o
   }
 
   const handleDrop = async (e) => {
+    const columnData = getColumnDragId(e)
+    if (columnData && onColumnDrop) {
+      setColumnDragOver(false)
+      onColumnDrop(e)
+      return
+    }
     if (disableDrop) return
     e.preventDefault()
     setDragOver(false)
@@ -78,6 +130,8 @@ function KanbanColumn({ colonna, card, commesse = [], onCardClick, onMoveCard, o
         boxShadow: dragOver
           ? `0 0 0 4px ${colonna.colore || '#3b82f6'}20, var(--shadow-2)`
           : 'var(--shadow-1)',
+        outline: columnDragOver ? `2px solid ${colonna.colore || '#3b82f6'}70` : 'none',
+        outlineOffset: '2px',
         transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
         position: 'relative'
       }}
@@ -119,6 +173,23 @@ function KanbanColumn({ colonna, card, commesse = [], onCardClick, onMoveCard, o
             gap: '0.5rem'
           }}
         >
+          {onColumnDragStart && !columnDragDisabled && (
+            <span
+              draggable
+              onDragStart={onColumnDragStart}
+              onDragEnd={onColumnDragEnd}
+              title="Trascina per riordinare"
+              style={{
+                fontSize: '0.75rem',
+                letterSpacing: '0.2rem',
+                cursor: isColumnDragging ? 'grabbing' : 'grab',
+                color: 'var(--ink-500)',
+                userSelect: 'none'
+              }}
+            >
+              |||
+            </span>
+          )}
           <span
             style={{
               width: '12px',
