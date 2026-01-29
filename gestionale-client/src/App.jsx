@@ -245,7 +245,7 @@ function App() {
             }}
           />
           <div className="header-title">
-            <h1>Gestionale Studio Capoferri</h1>
+            <h1>Gestionale</h1>
             {user && (
               <span className="header-sub">Benvenuto, {user.username} ({user.role})</span>
             )}

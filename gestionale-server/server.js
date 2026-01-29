@@ -91,7 +91,7 @@ const corsOptions = {
       callback(new Error('Not allowed by CORS'));
     }
   },
-  credentials: true,
+  credentials: (process.env.CORS_ORIGIN || '*') !== '*' && NODE_ENV !== 'development',
   optionsSuccessStatus: 200
 };
 app.use(cors(corsOptions));

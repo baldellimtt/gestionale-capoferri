@@ -22,7 +22,22 @@ const storage = multer.diskStorage({
   }
 });
 
-const upload = multer({ storage });
+const upload = multer({
+  storage,
+  limits: { fileSize: fileValidator.getMaxFileSize() },
+  fileFilter: (req, file, cb) => {
+    if (!fileValidator.isExtensionAllowed(file.originalname)) {
+      return cb(ErrorHandler.createError(
+        `Tipo file non consentito. Estensioni consentite: ${fileValidator.allowedExtensions.join(', ')}`,
+        400
+      ));
+    }
+    if (file.mimetype && !fileValidator.isMimeAllowed(file.mimetype)) {
+      Logger.warn('MIME type non riconosciuto', { mime: file.mimetype, file: file.originalname });
+    }
+    return cb(null, true);
+  }
+});
 
 class NoteSpeseController {
   constructor(db) {

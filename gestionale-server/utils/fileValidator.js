@@ -48,6 +48,20 @@ class FileValidator {
     this.maxFileSize = 50 * 1024 * 1024;
   }
 
+  getMaxFileSize() {
+    return this.maxFileSize;
+  }
+
+  isExtensionAllowed(fileName) {
+    const ext = path.extname(String(fileName || '')).toLowerCase();
+    return this.allowedExtensions.includes(ext);
+  }
+
+  isMimeAllowed(mimeType) {
+    if (!mimeType) return false;
+    return this.allowedMimeTypes.includes(mimeType);
+  }
+
   /**
    * Valida file upload
    */

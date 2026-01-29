@@ -50,6 +50,7 @@ class ApiService {
     this.clientiPromise = null;
     this.utentiPromise = null;
     this.commessePromise = null;
+    this.commessePromiseByKey = new Map();
   }
 
   setToken(token, refreshToken = null) {
@@ -510,28 +511,35 @@ class ApiService {
       return Promise.resolve(this.commesseCache.data);
     }
 
-    // Se c'Ã¨ giÃ  una chiamata in corso per questi filtri, aspetta quella
-    if (this.commessePromise) {
-      return this.commessePromise;
+    // Se c'è già una chiamata in corso per questi filtri, aspetta quella
+    if (this.commessePromiseByKey && this.commessePromiseByKey.has(filtersKey)) {
+      return this.commessePromiseByKey.get(filtersKey);
     }
 
     // Fai la chiamata e salva in cache
-    this.commessePromise = this.request(endpoint)
+    const promise = this.request(endpoint)
       .then(data => {
         // Gestisci sia array che oggetto paginato
         const result = Array.isArray(data) ? data : (data.data || data);
         this.commesseCache.data = result;
         this.commesseCache.timestamp = now;
         this.commesseCache.filters = filtersKey;
-        this.commessePromise = null;
+        if (this.commessePromiseByKey) {
+          this.commessePromiseByKey.delete(filtersKey);
+        }
         return result;
       })
       .catch(err => {
-        this.commessePromise = null;
+        if (this.commessePromiseByKey) {
+          this.commessePromiseByKey.delete(filtersKey);
+        }
         throw err;
       });
 
-    return this.commessePromise;
+    if (this.commessePromiseByKey) {
+      this.commessePromiseByKey.set(filtersKey, promise);
+    }
+    return promise;
   }
 
   async getCommesseYearFolders(clienteId) {
@@ -1127,6 +1135,8 @@ class ApiService {
 }
 
 export default new ApiService();
+
+
 
 
 
