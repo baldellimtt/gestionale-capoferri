@@ -22,6 +22,24 @@ function KanbanCalendar({ card, scadenze, colonne, clienti, filters, onCardClick
     return time.replace(':', '.')
   }
 
+  const getDateKey = (date) => {
+    const yyyy = date.getFullYear()
+    const mm = String(date.getMonth() + 1).padStart(2, '0')
+    const dd = String(date.getDate()).padStart(2, '0')
+    return `${yyyy}-${mm}-${dd}`
+  }
+
+  const getDateKeyFromValue = (value) => {
+    if (!value) return null
+    const clean = String(value).trim()
+    if (clean.length >= 10 && /^\d{4}-\d{2}-\d{2}/.test(clean)) {
+      return clean.slice(0, 10)
+    }
+    const parsed = new Date(clean)
+    if (Number.isNaN(parsed.getTime())) return null
+    return getDateKey(parsed)
+  }
+
   const getEventTimeLabel = (event) => {
     const start = parseDateTime(event.date)
     const end = parseDateTime(event.endDate)
@@ -145,13 +163,14 @@ function KanbanCalendar({ card, scadenze, colonne, clienti, filters, onCardClick
     const lastDay = new Date(year, month + 1, 0)
     const daysInMonth = lastDay.getDate()
     const startingDayOfWeek = firstDay.getDay()
+    const mondayFirstIndex = (startingDayOfWeek + 6) % 7
     
     const days = []
     
     // Aggiungi giorni del mese precedente
     const prevMonth = new Date(year, month, 0)
     const daysInPrevMonth = prevMonth.getDate()
-    for (let i = startingDayOfWeek - 1; i >= 0; i--) {
+    for (let i = mondayFirstIndex - 1; i >= 0; i--) {
       days.push({
         date: new Date(year, month - 1, daysInPrevMonth - i),
         isCurrentMonth: false
@@ -196,9 +215,9 @@ function KanbanCalendar({ card, scadenze, colonne, clienti, filters, onCardClick
 
   // Ottieni eventi per una data specifica
   const getEventsForDate = (date) => {
-    const dateStr = date.toISOString().split('T')[0]
+    const dateStr = getDateKey(date)
     return filteredEvents.filter(event => {
-      const eventDate = new Date(event.date).toISOString().split('T')[0]
+      const eventDate = getDateKeyFromValue(event.date)
       return eventDate === dateStr
     })
   }

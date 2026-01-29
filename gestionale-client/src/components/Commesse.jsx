@@ -517,7 +517,8 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
       const loadingToastId = toast?.showLoading('Salvataggio in corso...', 'Salvataggio commessa')
       
       if (editingId) {
-        await api.updateCommessa(editingId, payload)
+        const editingCommessa = commesse.find((item) => String(item.id) === String(editingId))
+        await api.updateCommessa(editingId, { ...payload, row_version: editingCommessa?.row_version })
         // Aggiorna gli allegati iniziali dopo il salvataggio per sincronizzare lo stato
         const currentAllegati = allegatiByCommessa[editingId] || []
         setInitialAllegati(JSON.parse(JSON.stringify(currentAllegati)))
@@ -1587,3 +1588,4 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
 }
 
 export default Commesse
+

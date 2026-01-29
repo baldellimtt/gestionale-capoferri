@@ -560,6 +560,9 @@ class CommesseController {
     try {
       const { id } = req.params;
       const payload = req.body || {};
+      if (!Number.isInteger(Number(payload.row_version))) {
+        return res.status(400).json({ error: 'row_version obbligatorio' });
+      }
       // Validazione aggiuntiva per logica business (stato, avanzamento, etc.)
       const validationError = this.validatePayload(payload);
       if (validationError) {
@@ -1061,3 +1064,5 @@ function createRouter(db) {
 }
 
 module.exports = createRouter;
+
+

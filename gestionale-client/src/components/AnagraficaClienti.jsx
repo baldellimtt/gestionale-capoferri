@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import api from '../services/api'
 import ContattiList from './ContattiList'
+import ConfirmDeleteModal from './ConfirmDeleteModal'
 
 // Helper per ottenere il label del campo in italiano
 const getFieldLabel = (fieldName) => {
@@ -77,6 +78,8 @@ function AnagraficaClienti({ clienti, onUpdateClienti, onBack, currentUser, toas
   })
   const [contatti, setContatti] = useState([])
   const [initialContatti, setInitialContatti] = useState([])
+  const [deleteCliente, setDeleteCliente] = useState(null)
+  const [deleteClienteLoading, setDeleteClienteLoading] = useState(false)
 
   // Filtra clienti localmente o usa ricerca server-side
   useEffect(() => {
@@ -153,7 +156,7 @@ function AnagraficaClienti({ clienti, onUpdateClienti, onBack, currentUser, toas
       const loadingToastId = toast?.showLoading('Salvataggio in corso...', 'Salvataggio cliente')
       
       if (editingCliente !== null) {
-        await api.updateCliente(editingCliente.id, apiData)
+        await api.updateCliente(editingCliente.id, { ...apiData, row_version: editingCliente.row_version })
         // Sincronizza i contatti iniziali dopo il salvataggio
         setInitialContatti(JSON.parse(JSON.stringify(contatti)))
         if (loadingToastId) {
@@ -236,17 +239,18 @@ function AnagraficaClienti({ clienti, onUpdateClienti, onBack, currentUser, toas
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  const handleDelete = async (cliente) => {
-    if (!window.confirm('Sei sicuro di voler eliminare questo cliente?')) {
-      return
-    }
+  const handleDelete = (cliente) => {
+    setDeleteCliente(cliente)
+  }
 
+  const confirmDeleteCliente = async () => {
+    if (!deleteCliente?.id) return
     setError(null)
-    setLoading(true)
+    setDeleteClienteLoading(true)
 
     try {
       const loadingToastId = toast?.showLoading('Eliminazione in corso...', 'Eliminazione cliente')
-      await api.deleteCliente(cliente.id)
+      await api.deleteCliente(deleteCliente.id)
       await onUpdateClienti()
       if (loadingToastId) {
         toast?.updateToast(loadingToastId, { type: 'success', title: 'Completato', message: 'Cliente eliminato con successo', duration: 3000 })
@@ -259,7 +263,8 @@ function AnagraficaClienti({ clienti, onUpdateClienti, onBack, currentUser, toas
       setError(errorMsg)
       toast?.showError(errorMsg, 'Errore eliminazione')
     } finally {
-      setLoading(false)
+      setDeleteClienteLoading(false)
+      setDeleteCliente(null)
     }
   }
 
@@ -639,8 +644,20 @@ function AnagraficaClienti({ clienti, onUpdateClienti, onBack, currentUser, toas
           )}
         </div>
       )}
+
+      <ConfirmDeleteModal
+        show={Boolean(deleteCliente)}
+        title="Elimina cliente"
+        message="Sei sicuro di voler eliminare questo cliente?"
+        loading={deleteClienteLoading}
+        onClose={() => {
+          if (!deleteClienteLoading) setDeleteCliente(null)
+        }}
+        onConfirm={confirmDeleteCliente}
+      />
     </div>
   )
 }
 
 export default AnagraficaClienti
+

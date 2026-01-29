@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 
-function KanbanCard({ card, commesse = [], onCardClick, onQuickUpdate }) {
+function KanbanCard({ card, commesse = [], onCardClick, onQuickUpdate, onDelete }) {
   const [isDragging, setIsDragging] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
   const [isEditingTitle, setIsEditingTitle] = useState(false)
@@ -50,6 +50,14 @@ function KanbanCard({ card, commesse = [], onCardClick, onQuickUpdate }) {
   const toDateInputValue = (dateString) => {
     if (!dateString) return ''
     return dateString.length > 10 ? dateString.slice(0, 10) : dateString
+  }
+
+  const toLocalDateString = () => {
+    const now = new Date()
+    const yyyy = now.getFullYear()
+    const mm = String(now.getMonth() + 1).padStart(2, '0')
+    const dd = String(now.getDate()).padStart(2, '0')
+    return `${yyyy}-${mm}-${dd}`
   }
 
   useEffect(() => {
@@ -165,6 +173,7 @@ function KanbanCard({ card, commesse = [], onCardClick, onQuickUpdate }) {
     ? commesse.find((item) => String(item.id) === String(card.commessa_id))
     : null
   const commessaLabel = commessaRef?.titolo || (card.commessa_id ? `Commessa #${card.commessa_id}` : '')
+  const isCompleted = Boolean(card.data_fine_effettiva)
 
   return (
     <div
@@ -250,6 +259,26 @@ function KanbanCard({ card, commesse = [], onCardClick, onQuickUpdate }) {
             >
               {card.titolo}
             </h5>
+            {isCompleted && (
+              <div style={{ marginTop: '0.35rem' }}>
+                <span
+                  style={{
+                    display: 'inline-block',
+                    fontSize: '0.65rem',
+                    fontWeight: 700,
+                    letterSpacing: '0.04em',
+                    color: '#0f766e',
+                    background: '#ccfbf1',
+                    border: '1px solid #99f6e4',
+                    padding: '0.15rem 0.45rem',
+                    borderRadius: '999px',
+                    textTransform: 'uppercase'
+                  }}
+                >
+                  Completata
+                </span>
+              </div>
+            )}
           </div>
         )}
 
@@ -434,8 +463,38 @@ function KanbanCard({ card, commesse = [], onCardClick, onQuickUpdate }) {
           </div>
         )}
       </div>
+
+      <div className="kanban-card-actions">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            if (isCompleted) return
+            onQuickUpdate?.(card.id, { data_fine_effettiva: toLocalDateString(), avanzamento: 100 })
+          }}
+          disabled={isCompleted}
+          title={isCompleted ? 'Già completata' : 'Segna come completata'}
+          onMouseDown={(e) => e.stopPropagation()}
+          className={`kanban-card-action ${isCompleted ? 'is-disabled' : 'is-complete'}`}
+        >
+          COMPLETATA
+        </button>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onDelete?.(card.id)
+          }}
+          title="Elimina card"
+          onMouseDown={(e) => e.stopPropagation()}
+          className="kanban-card-action is-delete"
+        >
+          ELIMINA
+        </button>
+      </div>
     </div>
   )
 }
 
 export default KanbanCard
+

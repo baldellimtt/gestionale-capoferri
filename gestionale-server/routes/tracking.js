@@ -72,8 +72,9 @@ class TrackingController {
         UPDATE commesse_ore
         SET end_time = datetime('now', 'localtime'),
             durata_minuti = CAST((julianday(datetime('now', 'localtime')) - julianday(start_time)) * 24 * 60 AS INTEGER),
-            updated_at = datetime('now', 'localtime')
-        WHERE id = ? AND end_time IS NULL
+            updated_at = datetime('now', 'localtime'),
+            row_version = row_version + 1
+        WHERE id = ? AND end_time IS NULL AND row_version = ?
       `)
       ,
       updateEntry: this.db.prepare(`
@@ -83,14 +84,16 @@ class TrackingController {
             end_time = ?,
             durata_minuti = ?,
             note = ?,
-            updated_at = datetime('now', 'localtime')
-        WHERE id = ?
+            updated_at = datetime('now', 'localtime'),
+            row_version = row_version + 1
+        WHERE id = ? AND row_version = ?
       `),
       updateEntryNoteOnly: this.db.prepare(`
         UPDATE commesse_ore
         SET note = ?,
-            updated_at = datetime('now', 'localtime')
-        WHERE id = ?
+            updated_at = datetime('now', 'localtime'),
+            row_version = row_version + 1
+        WHERE id = ? AND row_version = ?
       `),
       deleteEntry: this.db.prepare(`DELETE FROM commesse_ore WHERE id = ?`)
     };
@@ -197,6 +200,10 @@ class TrackingController {
       }
 
       const { id } = req.params;
+      const { row_version } = req.body || {};
+      if (!Number.isInteger(Number(row_version))) {
+        return res.status(400).json({ error: 'row_version obbligatorio' });
+      }
       const existing = this.stmt.getEntryById.get(id);
       if (!existing) {
         return res.status(404).json({ error: 'Tracking non trovato' });
@@ -208,9 +215,13 @@ class TrackingController {
         return res.status(409).json({ error: 'Tracking già fermato', entry: this.buildEntryResponse(existing) });
       }
 
-      const result = this.stmt.stopEntry.run(id);
+      const result = this.stmt.stopEntry.run(id, row_version);
       if (result.changes === 0) {
-        return res.status(404).json({ error: 'Tracking non trovato' });
+        const current = this.stmt.getEntryById.get(id);
+        if (!current) {
+          return res.status(404).json({ error: 'Tracking non trovato' });
+        }
+        return res.status(409).json({ error: 'Conflitto di aggiornamento', current: this.buildEntryResponse(current) });
       }
       const updated = this.stmt.getEntryById.get(id);
       Logger.info('PUT /tracking/entries/:id/stop', { id });
@@ -279,7 +290,10 @@ class TrackingController {
         return res.status(409).json({ error: 'Tracking attivo non modificabile' });
       }
 
-      const { data, ore, note } = req.body || {};
+      const { data, ore, note, row_version } = req.body || {};
+      if (!Number.isInteger(Number(row_version))) {
+        return res.status(400).json({ error: 'row_version obbligatorio' });
+      }
       const hasData = data !== undefined && data !== null && String(data).trim() !== '';
       const hasOre = ore !== undefined && ore !== null && String(ore).trim() !== '';
       const hasNote = note !== undefined;
@@ -311,10 +325,19 @@ class TrackingController {
         ? (note ? String(note).trim() : null)
         : existing.note;
 
+      let result;
       if (!hasData && !hasOre) {
-        this.stmt.updateEntryNoteOnly.run(nextNote, id);
+        result = this.stmt.updateEntryNoteOnly.run(nextNote, id, row_version);
       } else {
-        this.stmt.updateEntry.run(nextData, nextStart, nextEnd, nextDuration, nextNote, id);
+        result = this.stmt.updateEntry.run(nextData, nextStart, nextEnd, nextDuration, nextNote, id, row_version);
+      }
+
+      if (result.changes === 0) {
+        const current = this.stmt.getEntryById.get(id);
+        if (!current) {
+          return res.status(404).json({ error: 'Tracking non trovato' });
+        }
+        return res.status(409).json({ error: 'Conflitto di aggiornamento', current: this.buildEntryResponse(current) });
       }
 
       const updated = this.stmt.getEntryById.get(id);

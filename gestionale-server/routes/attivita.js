@@ -61,8 +61,9 @@ class AttivitaController {
         UPDATE attivita SET
           data = ?, user_id = ?, cliente_id = ?, cliente_nome = ?,
           attivita = ?, km = ?, indennita = ?, note = ?,
-          updated_at = datetime('now', 'localtime')
-        WHERE id = ?
+          updated_at = datetime('now', 'localtime'),
+          row_version = row_version + 1
+        WHERE id = ? AND row_version = ?
       `),
       delete: this.db.prepare('DELETE FROM attivita WHERE id = ?'),
       getTotals: this.db.prepare(`
@@ -204,7 +205,7 @@ class AttivitaController {
 
   create(req, res) {
     try {
-      const { data, clienteId, clienteNome, attivita, km, indennita, note, userId } = req.body;
+      const { data, clienteId, clienteNome, attivita, km, indennita, note, userId, row_version } = req.body;
 
       if (!data) {
         return res.status(400).json({ error: 'Data obbligatoria' });
@@ -230,8 +231,9 @@ class AttivitaController {
         note || null
       );
 
+      const created = this.stmt.getById.get(result.lastInsertRowid);
       Logger.info('POST /attivita', { id: result.lastInsertRowid });
-      res.status(201).json({ id: result.lastInsertRowid, ...req.body, userId: ownerId });
+      res.status(201).json(created);
     } catch (error) {
       Logger.error('Errore POST /attivita', error);
       res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
@@ -241,7 +243,7 @@ class AttivitaController {
   update(req, res) {
     try {
       const { id } = req.params;
-      const { data, clienteId, clienteNome, attivita, km, indennita, note, userId } = req.body;
+      const { data, clienteId, clienteNome, attivita, km, indennita, note, userId, row_version } = req.body;
 
       if (!data) {
         return res.status(400).json({ error: 'Data obbligatoria' });
@@ -337,3 +339,4 @@ function createRouter(db) {
 }
 
 module.exports = createRouter;
+

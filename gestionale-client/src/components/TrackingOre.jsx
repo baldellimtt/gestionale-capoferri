@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import api from '../services/api'
+import ConfirmDeleteModal from './ConfirmDeleteModal'
 
 const getTodayDate = () => {
   const today = new Date()
@@ -53,6 +54,8 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
   const [editingEntryId, setEditingEntryId] = useState(null)
   const [editingEntry, setEditingEntry] = useState({ data: '', ore: '', note: '' })
   const [editingSaving, setEditingSaving] = useState(false)
+  const [deleteEntry, setDeleteEntry] = useState(null)
+  const [deleteEntryLoading, setDeleteEntryLoading] = useState(false)
   const [tick, setTick] = useState(0)
 
   useEffect(() => {
@@ -269,9 +272,9 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
     if (!entry?.id) return
     const roundedStopHours = roundUpToHalfHour(getEntryMinutes(entry) / 60)
     try {
-      await api.stopTracking(entry.id)
+      await api.stopTracking(entry.id, entry.row_version)
       if (roundedStopHours > 0) {
-        await api.updateTrackingEntry(entry.id, { ore: roundedStopHours.toFixed(2) })
+        await api.updateTrackingEntry(entry.id, { ore: roundedStopHours.toFixed(2), row_version: entry.row_version })
       }
       toast?.showSuccess('Tracking fermato', 'Tracking ore')
       await refreshActive()
@@ -334,26 +337,37 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
         const oreValue = Number(String(editingEntry.ore || '').replace(',', '.'))
         payload.ore = roundUpToHalfHour(oreValue).toFixed(2)
       }
-      await api.updateTrackingEntry(entryId, payload)
+      await api.updateTrackingEntry(entryId, { ...payload, row_version: editingEntry?.row_version })
       toast?.showSuccess('Tracking aggiornato', 'Tracking ore')
       handleCancelEdit()
       await loadEntries(selectedId)
     } catch (err) {
       toast?.showError(err.message || 'Errore aggiornamento tracking', 'Tracking ore')
+      if (err?.status === 409) {
+        await loadEntries(selectedId)
+      }
     } finally {
       setEditingSaving(false)
     }
   }
 
-  const handleDeleteEntry = async (entry) => {
+  const handleDeleteEntry = (entry) => {
     if (!entry?.id) return
-    if (!window.confirm('Eliminare questa riga di tracking?')) return
+    setDeleteEntry(entry)
+  }
+
+  const confirmDeleteEntry = async () => {
+    if (!deleteEntry?.id) return
     try {
-      await api.deleteTrackingEntry(entry.id)
+      setDeleteEntryLoading(true)
+      await api.deleteTrackingEntry(deleteEntry.id)
       toast?.showSuccess('Tracking eliminato', 'Tracking ore')
       await loadEntries(selectedId)
     } catch (err) {
       toast?.showError(err.message || 'Errore eliminazione tracking', 'Tracking ore')
+    } finally {
+      setDeleteEntryLoading(false)
+      setDeleteEntry(null)
     }
   }
 
@@ -581,6 +595,23 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
             <div className="card-header">Inserisci ore manualmente</div>
             <div className="card-body">
               <div className="row g-3">
+                <div className="col-md-6">
+                  <label className="form-label">Commessa</label>
+                  <select
+                    className="form-select"
+                    value={selectedId}
+                    onChange={(e) => handleSelectCommessa(e.target.value)}
+                    disabled={loading}
+                  >
+                    <option value="">Seleziona commessa</option>
+                    {(selectedClienteId ? filteredCommesseByCliente : commesse).map((commessa) => (
+                      <option key={commessa.id} value={commessa.id}>
+                        {commessa.titolo || `Commessa #${commessa.id}`}
+                        {commessa.cliente_nome ? ` — ${commessa.cliente_nome}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <div className="col-md-4">
                   <label className="form-label">Data</label>
                   <input
@@ -853,6 +884,17 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
           </div>
         </div>
       )}
+
+      <ConfirmDeleteModal
+        show={Boolean(deleteEntry)}
+        title="Elimina tracking"
+        message="Eliminare questa riga di tracking?"
+        loading={deleteEntryLoading}
+        onClose={() => {
+          if (!deleteEntryLoading) setDeleteEntry(null)
+        }}
+        onConfirm={confirmDeleteEntry}
+      />
     </div>
   )
 }

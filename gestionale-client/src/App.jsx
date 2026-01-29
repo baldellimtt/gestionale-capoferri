@@ -1,4 +1,4 @@
-import { useState, useEffect, Suspense, lazy } from 'react'
+import { useState, useEffect, Suspense, lazy, useRef } from 'react'
 import './App.css'
 import ErrorBoundary from './components/ErrorBoundary'
 import api from './services/api'
@@ -18,6 +18,7 @@ const Home = lazy(() => import('./components/Home'))
 const Team = lazy(() => import('./components/Team'))
 const DatiAziendali = lazy(() => import('./components/DatiAziendali'))
 const DatiFiscali = lazy(() => import('./components/DatiFiscali'))
+const ActiveUsers = lazy(() => import('./components/ActiveUsers'))
 
 // Componente di loading per Suspense
 const LoadingFallback = () => (
@@ -40,6 +41,10 @@ function App() {
   const [authChecking, setAuthChecking] = useState(true)
   const [authLoading, setAuthLoading] = useState(false)
   const [authError, setAuthError] = useState(null)
+  const [activeUsers, setActiveUsers] = useState([])
+  const [presenceLoading, setPresenceLoading] = useState(false)
+  const [presenceError, setPresenceError] = useState(null)
+  const presenceBusyRef = useRef(false)
   const toast = useToast()
 
   // Verifica autenticazione
@@ -86,6 +91,57 @@ function App() {
       loadUtenti()
     }
   }, [user])
+
+  useEffect(() => {
+    if (!user) {
+      setActiveUsers([])
+      setPresenceError(null)
+      return
+    }
+
+    let cancelled = false
+    const runPresence = async () => {
+      if (presenceBusyRef.current) return
+      presenceBusyRef.current = true
+      setPresenceLoading(true)
+      try {
+        await api.presenceHeartbeat(activeView)
+        const data = await api.getActiveUsers(2)
+        if (!cancelled) {
+          setActiveUsers(Array.isArray(data) ? data : [])
+          setPresenceError(null)
+        }
+      } catch (err) {
+        console.error('Errore presenza utenti:', err)
+        if (!cancelled) {
+          setPresenceError('Presenze non disponibili')
+        }
+      } finally {
+        if (!cancelled) {
+          setPresenceLoading(false)
+        }
+        presenceBusyRef.current = false
+      }
+    }
+
+    runPresence()
+    const intervalId = setInterval(runPresence, 30000)
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        runPresence()
+      }
+    }
+
+    window.addEventListener('focus', runPresence)
+    document.addEventListener('visibilitychange', handleVisibility)
+
+    return () => {
+      cancelled = true
+      clearInterval(intervalId)
+      window.removeEventListener('focus', runPresence)
+      document.removeEventListener('visibilitychange', handleVisibility)
+    }
+  }, [user, activeView])
 
   const loadClienti = async () => {
     try {
@@ -195,9 +251,16 @@ function App() {
             )}
           </div>
           {user && (
-            <div style={{ display: 'flex', gap: '0.5rem', marginLeft: 'auto' }}>
-              <button 
-                className="btn btn-secondary" 
+            <div className="header-actions">
+              <Suspense fallback={null}>
+                <ActiveUsers
+                  users={activeUsers}
+                  loading={presenceLoading}
+                  error={presenceError}
+                />
+              </Suspense>
+              <button
+                className="btn btn-secondary"
                 onClick={handleLogout}
               >
                 Logout

@@ -159,7 +159,7 @@ function Home({ clienti, user, toast, onOpenTracking }) {
     try {
       await api.stopTracking(entry.id)
       if (roundedHours > 0) {
-        await api.updateTrackingEntry(entry.id, { ore: roundedHours.toFixed(2) })
+        await api.updateTrackingEntry(entry.id, { ore: roundedHours.toFixed(2), row_version: entry.row_version })
       }
       toast?.showSuccess('Tracking fermato', 'Home')
       await loadActiveTracking()

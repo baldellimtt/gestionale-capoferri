@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import api from '../services/api'
 import KanbanComments from './KanbanComments'
+import ConfirmDeleteModal from './ConfirmDeleteModal'
 
 const getTodayDate = () => {
   const today = new Date()
@@ -63,6 +64,34 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
     tipo: '',
     priorita: 'media'
   })
+  const [deleteScadenzaId, setDeleteScadenzaId] = useState(null)
+  const [deleteScadenzaLoading, setDeleteScadenzaLoading] = useState(false)
+
+  const buildCardPayload = () => {
+    const buildDateTime = (dateValue, timeValue) => {
+      if (!dateValue) return ''
+      if (allDay || !timeValue) return dateValue
+      return `${dateValue}T${timeValue}:00`
+    }
+
+    return {
+      ...formData,
+      tags: formData.tags && formData.tags.length > 0 ? formData.tags : null,
+      data_inizio: buildDateTime(formData.data_inizio, timeStart),
+      data_fine_prevista: buildDateTime(formData.data_fine_prevista, timeEnd),
+      row_version: card?.row_version,
+      commessa_id: (() => {
+        if (!formData.commessa_id || formData.commessa_id === '' || formData.commessa_id === 0) return null;
+        const num = typeof formData.commessa_id === 'number' ? formData.commessa_id : parseInt(formData.commessa_id, 10);
+        return !isNaN(num) && num >= 1 ? num : null;
+      })(),
+      cliente_id: (() => {
+        if (!formData.cliente_id || formData.cliente_id === '' || formData.cliente_id === 0) return null;
+        const num = typeof formData.cliente_id === 'number' ? formData.cliente_id : parseInt(formData.cliente_id, 10);
+        return !isNaN(num) && num >= 1 ? num : null;
+      })()
+    }
+  }
 
   useEffect(() => {
     if (card) {
@@ -509,30 +538,7 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
     try {
       const loadingToastId = toast?.showLoading('Salvataggio in corso...', 'Salvataggio card')
       
-      // Prepara i dati assicurandosi che i campi numerici siano corretti
-      const buildDateTime = (dateValue, timeValue) => {
-        if (!dateValue) return ''
-        if (allDay || !timeValue) return dateValue
-        return `${dateValue}T${timeValue}:00`
-      }
-
-      const cardData = {
-        ...formData,
-        tags: formData.tags && formData.tags.length > 0 ? formData.tags : null,
-        data_inizio: buildDateTime(formData.data_inizio, timeStart),
-        data_fine_prevista: buildDateTime(formData.data_fine_prevista, timeEnd),
-        // Assicurati che commessa_id e cliente_id siano numeri o null
-        commessa_id: (() => {
-          if (!formData.commessa_id || formData.commessa_id === '' || formData.commessa_id === 0) return null;
-          const num = typeof formData.commessa_id === 'number' ? formData.commessa_id : parseInt(formData.commessa_id, 10);
-          return !isNaN(num) && num >= 1 ? num : null;
-        })(),
-        cliente_id: (() => {
-          if (!formData.cliente_id || formData.cliente_id === '' || formData.cliente_id === 0) return null;
-          const num = typeof formData.cliente_id === 'number' ? formData.cliente_id : parseInt(formData.cliente_id, 10);
-          return !isNaN(num) && num >= 1 ? num : null;
-        })()
-      }
+      const cardData = buildCardPayload()
 
       console.log('Salvataggio card con dati:', cardData)
 
@@ -580,6 +586,32 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
       }
       setError(errorMsg)
       toast?.showError(errorMsg, 'Errore salvataggio')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCompleteCard = async () => {
+    if (!card?.id) return
+    if (card.data_fine_effettiva) return
+    try {
+      setLoading(true)
+      const loadingToastId = toast?.showLoading('Completamento in corso...', 'Completa card')
+      const payload = {
+        ...buildCardPayload(),
+        data_fine_effettiva: getTodayDate(),
+        avanzamento: 100
+      }
+      await onSave({ ...payload, id: card.id })
+      if (loadingToastId) {
+        toast?.updateToast(loadingToastId, { type: 'success', title: 'Completato', message: 'Card completata', duration: 3000 })
+      } else {
+        toast?.showSuccess('Card completata')
+      }
+    } catch (err) {
+      console.error('Errore completamento card:', err)
+      const errorMsg = err.message || 'Errore completamento card'
+      toast?.showError(errorMsg, 'Errore completamento')
     } finally {
       setLoading(false)
     }
@@ -695,9 +727,9 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
     }
   }
 
-  const handleCompleteScadenza = async (scadenzaId) => {
+  const handleCompleteScadenza = async (scadenza) => {
     try {
-      await api.completeKanbanScadenza(scadenzaId)
+      await api.completeKanbanScadenza(scadenza.id, scadenza.row_version)
       await loadScadenze()
     } catch (err) {
       console.error('Errore completamento scadenza:', err)
@@ -705,13 +737,16 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
     }
   }
 
-  const handleDeleteScadenza = async (scadenzaId) => {
-    if (!window.confirm('Sei sicuro di voler eliminare questa scadenza?')) {
-      return
-    }
+  const handleDeleteScadenza = (scadenzaId) => {
+    setDeleteScadenzaId(scadenzaId)
+  }
+
+  const confirmDeleteScadenza = async () => {
+    if (!deleteScadenzaId) return
     try {
+      setDeleteScadenzaLoading(true)
       const loadingToastId = toast?.showLoading('Eliminazione in corso...', 'Eliminazione scadenza')
-      await api.deleteKanbanScadenza(scadenzaId)
+      await api.deleteKanbanScadenza(deleteScadenzaId)
       await loadScadenze()
       if (loadingToastId) {
         toast?.updateToast(loadingToastId, { type: 'success', title: 'Completato', message: 'Scadenza eliminata con successo', duration: 3000 })
@@ -723,6 +758,9 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
       const errorMsg = 'Errore nell\'eliminazione della scadenza'
       setError(errorMsg)
       toast?.showError(errorMsg, 'Errore eliminazione')
+    } finally {
+      setDeleteScadenzaLoading(false)
+      setDeleteScadenzaId(null)
     }
   }
 
@@ -774,17 +812,39 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
               padding: '1.25rem 1.5rem'
             }}
           >
-            <h5 
-              className="modal-title"
-              style={{
-                margin: 0,
-                fontWeight: 700,
-                fontSize: '1.25rem',
-                color: 'var(--ink-800)'
-              }}
-            >
-              {card ? 'Modifica Card' : 'Nuova Card'}
-            </h5>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              <h5
+                className="modal-title"
+                style={{
+                  margin: 0,
+                  fontWeight: 700,
+                  fontSize: '1.25rem',
+                  color: 'var(--ink-800)'
+                }}
+              >
+                {card ? 'Modifica Card' : 'Nuova Card'}
+              </h5>
+              {card?.data_fine_effettiva && (
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.35rem',
+                    fontSize: '0.7rem',
+                    fontWeight: 700,
+                    letterSpacing: '0.06em',
+                    textTransform: 'uppercase',
+                    color: '#0f766e',
+                    background: '#ccfbf1',
+                    border: '1px solid #99f6e4',
+                    padding: '0.2rem 0.5rem',
+                    borderRadius: '999px'
+                  }}
+                >
+                  Completata
+                </span>
+              )}
+            </div>
             <button
               type="button"
               className="btn-close"
@@ -1320,7 +1380,7 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
                                   {!scadenza.completata && (
                                     <button
                                       className="btn btn-sm btn-success"
-                                      onClick={() => handleCompleteScadenza(scadenza.id)}
+                                      onClick={() => handleCompleteScadenza(scadenza)}
                                       title="Completa"
                                       style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.25rem 0.5rem' }}
                                     >
@@ -1379,14 +1439,26 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
               {card && (
                 <button
                   type="button"
+                  className="btn btn-outline-success"
+                  disabled={loading || Boolean(card.data_fine_effettiva)}
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    handleCompleteCard()
+                  }}
+                >
+                  {card.data_fine_effettiva ? 'Completata' : 'Segna completata'}
+                </button>
+              )}
+              {card && (
+                <button
+                  type="button"
                   className="btn btn-danger"
                   onClick={async (e) => {
                     e.preventDefault()
                     e.stopPropagation()
-                    if (window.confirm('Sei sicuro di voler eliminare questa card?')) {
-                      if (onDelete) {
-                        await onDelete(card.id)
-                      }
+                    if (onDelete) {
+                      await onDelete(card.id)
                     }
                   }}
                 >
@@ -1461,6 +1533,17 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
           ))}
         </div>
       )}
+
+      <ConfirmDeleteModal
+        show={Boolean(deleteScadenzaId)}
+        title="Elimina scadenza"
+        message="Sei sicuro di voler eliminare questa scadenza?"
+        loading={deleteScadenzaLoading}
+        onClose={() => {
+          if (!deleteScadenzaLoading) setDeleteScadenzaId(null)
+        }}
+        onConfirm={confirmDeleteScadenza}
+      />
     </div>
   )
 }

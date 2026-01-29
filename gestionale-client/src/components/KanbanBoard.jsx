@@ -5,6 +5,7 @@ import KanbanCardDetail from './KanbanCardDetail'
 import KanbanNotifications from './KanbanNotifications'
 import KanbanFilters from './KanbanFilters'
 import KanbanCalendar from './KanbanCalendar'
+import ConfirmDeleteModal from './ConfirmDeleteModal'
 
 function KanbanBoard({ clienti, user, toast, hideControls = false }) {
   const [colonne, setColonne] = useState([])
@@ -17,7 +18,10 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
   const [showCardDetail, setShowCardDetail] = useState(false)
   const [viewMode, setViewMode] = useState('kanban') // 'kanban' o 'calendar'
   const [inboxBusyIds, setInboxBusyIds] = useState([])
+  const [deleteCardId, setDeleteCardId] = useState(null)
+  const [deleteCardLoading, setDeleteCardLoading] = useState(false)
   const [showColonneManager, setShowColonneManager] = useState(false)
+  const [deleteColonnaTarget, setDeleteColonnaTarget] = useState(null)
   const [colonneDrafts, setColonneDrafts] = useState({})
   const [colonnaCreating, setColonnaCreating] = useState(false)
   const [colonnaSavingId, setColonnaSavingId] = useState(null)
@@ -130,6 +134,9 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
       const errorMsg = 'Errore nell\'aggiornamento della card'
       setError(errorMsg)
       toast?.showError(errorMsg, 'Errore salvataggio')
+      if (err?.status === 409) {
+        await loadData()
+      }
       throw err // Rilancia l'errore per gestirlo in KanbanCardDetail
     }
   }
@@ -212,12 +219,15 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
     if (inboxBusyIds.includes(scadenza.id)) return
     markInboxBusy(scadenza.id, true)
     try {
-      await api.completeKanbanScadenza(scadenza.id)
+      await api.completeKanbanScadenza(scadenza.id, scadenza.row_version)
       toast?.showSuccess('Scadenza completata')
       await loadData()
     } catch (err) {
       console.error('Errore completamento scadenza:', err)
       toast?.showError('Errore completamento scadenza', 'Errore')
+      if (err?.status === 409) {
+        await loadData()
+      }
     } finally {
       markInboxBusy(scadenza.id, false)
     }
@@ -232,7 +242,8 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
         descrizione: scadenza.descrizione,
         data_scadenza: addDays(scadenza.data_scadenza, 1),
         tipo: scadenza.tipo,
-        priorita: scadenza.priorita
+        priorita: scadenza.priorita,
+        row_version: scadenza.row_version
       }
       await api.updateKanbanScadenza(scadenza.id, updated)
       toast?.showSuccess('Scadenza rinviata di 1 giorno')
@@ -240,6 +251,9 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
     } catch (err) {
       console.error('Errore rinvio scadenza:', err)
       toast?.showError('Errore rinvio scadenza', 'Errore')
+      if (err?.status === 409) {
+        await loadData()
+      }
     } finally {
       markInboxBusy(scadenza.id, false)
     }
@@ -262,6 +276,7 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
     const existing = card.find((item) => item.id === cardId)
     if (!existing) return
     const payload = {
+      row_version: existing.row_version,
       commessa_id: existing.commessa_id || null,
       titolo: patch.titolo ?? existing.titolo,
       descrizione: patch.descrizione ?? existing.descrizione,
@@ -288,29 +303,39 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
     } catch (err) {
       console.error('Errore quick update card:', err)
       toast?.showError('Errore aggiornamento rapido', 'Errore')
+      if (err?.status === 409) {
+        await loadData()
+      }
       throw err
     }
   }
 
   const handleCardMove = async (cardId, newColonnaId, newOrdine) => {
     try {
-      await api.moveKanbanCard(cardId, newColonnaId, newOrdine)
+      const existing = card.find((item) => item.id === cardId)
+      await api.moveKanbanCard(cardId, newColonnaId, newOrdine, existing?.row_version)
       await loadData()
     } catch (err) {
       console.error('Errore spostamento card:', err)
       setError('Errore nello spostamento della card')
+      if (err?.status === 409) {
+        await loadData()
+      }
     }
   }
 
-  const handleCardDelete = async (cardId) => {
-    if (!window.confirm('Sei sicuro di voler eliminare questa card?')) {
-      return
-    }
+  const handleCardDelete = (cardId) => {
+    setDeleteCardId(cardId)
+  }
+
+  const confirmDeleteCard = async () => {
+    if (!deleteCardId) return
     try {
+      setDeleteCardLoading(true)
       const loadingToastId = toast?.showLoading('Eliminazione in corso...', 'Eliminazione card')
-      await api.deleteKanbanCard(cardId)
+      await api.deleteKanbanCard(deleteCardId)
       await loadData()
-      if (selectedCard?.id === cardId) {
+      if (selectedCard?.id === deleteCardId) {
         setShowCardDetail(false)
         setSelectedCard(null)
       }
@@ -324,6 +349,9 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
       const errorMsg = 'Errore nell\'eliminazione della card'
       setError(errorMsg)
       toast?.showError(errorMsg, 'Errore eliminazione')
+    } finally {
+      setDeleteCardLoading(false)
+      setDeleteCardId(null)
     }
   }
 
@@ -398,19 +426,20 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
     }
   }
 
-  const handleDeleteColonna = async (colonnaId) => {
+  const handleDeleteColonna = (colonnaId) => {
     const colonna = colonne.find((item) => item.id === colonnaId)
-    const label = colonna?.nome ? ` "${colonna.nome}"` : ''
-    if (!window.confirm(`Eliminare la colonna${label}? Se ci sono card collegate l'eliminazione potrebbe fallire.`)) {
-      return
-    }
+    setDeleteColonnaTarget(colonna || { id: colonnaId })
+  }
+
+  const confirmDeleteColonna = async () => {
+    if (!deleteColonnaTarget?.id) return
     try {
-      setColonnaDeletingId(colonnaId)
-      await api.deleteKanbanColonna(colonnaId)
-      setColonne((prev) => prev.filter((col) => col.id !== colonnaId))
+      setColonnaDeletingId(deleteColonnaTarget.id)
+      await api.deleteKanbanColonna(deleteColonnaTarget.id)
+      setColonne((prev) => prev.filter((col) => col.id !== deleteColonnaTarget.id))
       setColonneDrafts((prev) => {
         const next = { ...prev }
-        delete next[colonnaId]
+        delete next[deleteColonnaTarget.id]
         return next
       })
       toast?.showSuccess('Colonna eliminata')
@@ -420,6 +449,7 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
       toast?.showError('Errore eliminazione colonna', 'Errore')
     } finally {
       setColonnaDeletingId(null)
+      setDeleteColonnaTarget(null)
     }
   }
 
@@ -804,6 +834,7 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
                 onCardClick={handleCardClick}
                 onMoveCard={handleCardMove}
                 onQuickUpdate={handleQuickUpdate}
+                onDelete={handleCardDelete}
               />
             ))}
           </div>
@@ -838,10 +869,36 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
           toast={toast}
         />
       )}
+
+      <ConfirmDeleteModal
+        show={Boolean(deleteCardId)}
+        title="Elimina card"
+        message="Sei sicuro di voler eliminare questa card?"
+        loading={deleteCardLoading}
+        onClose={() => {
+          if (!deleteCardLoading) {
+            setDeleteCardId(null)
+          }
+        }}
+        onConfirm={confirmDeleteCard}
+      />
+
+      <ConfirmDeleteModal
+        show={Boolean(deleteColonnaTarget)}
+        title="Elimina colonna"
+        message={`Eliminare la colonna${deleteColonnaTarget?.nome ? ` "${deleteColonnaTarget.nome}"` : ''}? Se ci sono card collegate l'eliminazione potrebbe fallire.`}
+        loading={Boolean(colonnaDeletingId)}
+        onClose={() => {
+          if (!colonnaDeletingId) setDeleteColonnaTarget(null)
+        }}
+        onConfirm={confirmDeleteColonna}
+      />
     </div>
   )
 }
 
 export default KanbanBoard
+
+
 
 

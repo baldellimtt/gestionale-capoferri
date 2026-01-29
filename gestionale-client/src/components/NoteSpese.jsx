@@ -122,7 +122,7 @@ function NoteSpese({ selectedMember, currentUser, toast, openKey }) {
       const loadingToastId = toast?.showLoading('Salvataggio in corso...', 'Nuova voce spesa')
       const created = await api.createNotaSpesa(payload)
       if (formData.allegato) {
-        await api.uploadNotaSpesaAllegato(created.id, formData.allegato)
+        await api.uploadNotaSpesaAllegato(created.id, formData.allegato, created.row_version)
       }
       await loadVoci()
       setFormData(createEmptyVoce())

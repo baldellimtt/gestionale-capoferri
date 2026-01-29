@@ -183,15 +183,19 @@ class NoteSpeseController {
         importo = existing.importo,
         metodo_pagamento = existing.metodo_pagamento,
         rimborsabile = existing.rimborsabile,
-        stato = existing.stato
+        stato = existing.stato,
+        row_version
       } = req.body || {};
 
       const parsedImporto = Number(importo);
       if (!descrizione || !Number.isFinite(parsedImporto) || parsedImporto <= 0) {
         return res.status(400).json({ error: 'Descrizione e importo validi sono obbligatori' });
       }
+      if (!Number.isInteger(Number(row_version))) {
+        return res.status(400).json({ error: 'row_version obbligatorio' });
+      }
 
-      this.stmt.update.run(
+      const result = this.stmt.update.run(
         data,
         categoria,
         descrizione,
@@ -199,8 +203,17 @@ class NoteSpeseController {
         metodo_pagamento,
         rimborsabile ? 1 : 0,
         stato,
-        id
+        id,
+        row_version
       );
+
+      if (result.changes === 0) {
+        const current = this.stmt.getById.get(id);
+        if (!current) {
+          return res.status(404).json({ error: 'Voce nota spese non trovata' });
+        }
+        return res.status(409).json({ error: 'Conflitto di aggiornamento', current });
+      }
 
       const updated = this.stmt.getById.get(id);
       Logger.info(`PUT /note-spese/${id}`);
@@ -241,6 +254,10 @@ class NoteSpeseController {
       if (req.user?.role !== 'admin' && existing.user_id !== req.user?.id) {
         return res.status(403).json({ error: 'Permesso negato' });
       }
+      const rowVersionValue = req.body?.row_version;
+      if (!Number.isInteger(Number(rowVersionValue))) {
+        return res.status(400).json({ error: 'row_version obbligatorio' });
+      }
 
       const validation = fileValidator.validate(req.file);
       if (!validation.valid) {
@@ -251,13 +268,22 @@ class NoteSpeseController {
       }
 
       const relativePath = path.relative(path.join(__dirname, '..', 'uploads'), req.file.path);
-      this.stmt.updateAllegato.run(
+      const result = this.stmt.updateAllegato.run(
         req.file.originalname,
         relativePath,
         req.file.mimetype || null,
         req.file.size || 0,
-        id
+        id,
+        rowVersionValue
       );
+
+      if (result.changes === 0) {
+        const current = this.stmt.getById.get(id);
+        if (!current) {
+          return res.status(404).json({ error: 'Voce nota spese non trovata' });
+        }
+        return res.status(409).json({ error: 'Conflitto di aggiornamento', current });
+      }
 
       const updated = this.stmt.getById.get(id);
       Logger.info(`POST /note-spese/${id}/allegato`, { id });
@@ -278,3 +304,5 @@ module.exports = (db) => {
   router.post('/:id/allegato', upload.single('file'), (req, res) => controller.uploadAllegato(req, res));
   return router;
 };
+
+

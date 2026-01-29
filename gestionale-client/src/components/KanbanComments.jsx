@@ -60,7 +60,8 @@ function KanbanComments({ cardId, currentUser, onCommentAdded, toast }) {
 
     try {
       setError(null)
-      const updated = await api.updateKanbanCommento(id, editText.trim())
+      const current = commenti.find((c) => c.id === id)
+      const updated = await api.updateKanbanCommento(id, editText.trim(), current?.row_version)
       setCommenti(commenti.map(c => c.id === id ? updated : c))
       setEditingId(null)
       setEditText('')
@@ -259,6 +260,5 @@ function KanbanComments({ cardId, currentUser, onCommentAdded, toast }) {
 }
 
 export default KanbanComments
-
 
 

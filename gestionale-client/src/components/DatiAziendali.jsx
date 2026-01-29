@@ -5,7 +5,8 @@ function DatiAziendali({ onBack, toast, showHeader = true }) {
   const [formData, setFormData] = useState({
     ragione_sociale: '',
     partita_iva: '',
-    codice_fiscale: ''
+    codice_fiscale: '',
+    row_version: null
   })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -21,7 +22,8 @@ function DatiAziendali({ onBack, toast, showHeader = true }) {
       setFormData({
         ragione_sociale: data.ragione_sociale || '',
         partita_iva: data.partita_iva || '',
-        codice_fiscale: data.codice_fiscale || ''
+        codice_fiscale: data.codice_fiscale || '',
+        row_version: data.row_version ?? null
       })
     } catch (err) {
       console.error('Errore caricamento dati aziendali:', err)

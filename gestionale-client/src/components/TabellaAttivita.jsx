@@ -328,7 +328,8 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false, targetUse
         attivita: row.attivita || null,
         km: parseFloat(row.km) || 0,
         indennita: row.indennita ? 1 : 0,
-        note: row.note || null
+        note: row.note || null,
+        row_version: row.row_version
       }
 
       if (row.id && typeof row.id === 'number') {
@@ -338,7 +339,7 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false, targetUse
         }
       } else {
         const result = await api.createAttivita(attivitaData)
-        setAttivita((prev) => prev.map((r) => (r === row ? { ...r, id: result.id } : r)))
+        setAttivita((prev) => prev.map((r) => (r === row ? { ...r, id: result.id, row_version: result.row_version } : r)))
         if (isComplete) {
           toast?.showSuccess('Rimborso salvato con successo')
         }
@@ -1483,3 +1484,4 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false, targetUse
 }
 
 export default TabellaAttivita
+

@@ -26,8 +26,9 @@ class ClientiController {
           denominazione = ?, qualifica = ?, nome = ?, cognome = ?, paese = ?, codice_destinatario_sdi = ?,
           indirizzo = ?, comune = ?, cap = ?, provincia = ?,
           partita_iva = ?, codice_fiscale = ?, email = ?, pec = ?,
-          updated_at = datetime('now', 'localtime')
-        WHERE id = ?
+          updated_at = datetime('now', 'localtime'),
+          row_version = row_version + 1
+        WHERE id = ? AND row_version = ?
       `),
       delete: this.db.prepare('DELETE FROM clienti WHERE id = ?'),
       search: this.db.prepare(`
@@ -53,8 +54,9 @@ class ClientiController {
           ruolo = ?,
           telefono = ?,
           email = ?,
-          updated_at = datetime('now', 'localtime')
-        WHERE id = ? AND cliente_id = ?
+          updated_at = datetime('now', 'localtime'),
+          row_version = row_version + 1
+        WHERE id = ? AND cliente_id = ? AND row_version = ?
       `),
       contattiDelete: this.db.prepare(`
         DELETE FROM clienti_contatti
@@ -142,8 +144,9 @@ class ClientiController {
         pec || null
       );
 
+      const created = this.stmt.getById.get(result.lastInsertRowid);
       Logger.info('POST /clienti', { id: result.lastInsertRowid });
-      res.status(201).json({ id: result.lastInsertRowid, ...req.body });
+      res.status(201).json(created);
     } catch (error) {
       Logger.error('Errore POST /clienti', error);
       res.status(500).json({ error: error.message });
@@ -159,11 +162,14 @@ class ClientiController {
         indirizzo, comune, cap, provincia, 
         partitaIva, partita_iva,
         codiceFiscale, codice_fiscale,
-        email, pec
+        email, pec, row_version
       } = req.body;
 
       if (!denominazione) {
         return res.status(400).json({ error: 'Denominazione obbligatoria' });
+      }
+      if (!Number.isInteger(Number(row_version))) {
+        return res.status(400).json({ error: 'row_version obbligatorio' });
       }
 
       const result = this.stmt.update.run(
@@ -181,15 +187,21 @@ class ClientiController {
         (codiceFiscale || codice_fiscale) || null,
         email || null,
         pec || null,
-        id
+        id,
+        row_version
       );
 
       if (result.changes === 0) {
-        return res.status(404).json({ error: 'Cliente non trovato' });
+        const existing = this.stmt.getById.get(id);
+        if (!existing) {
+          return res.status(404).json({ error: 'Cliente non trovato' });
+        }
+        return res.status(409).json({ error: 'Conflitto di aggiornamento', current: existing });
       }
 
       Logger.info(`PUT /clienti/${id}`);
-      res.json({ id: parseInt(id), ...req.body });
+      const updated = this.stmt.getById.get(id);
+      res.json(updated);
     } catch (error) {
       Logger.error(`Errore PUT /clienti/${req.params.id}`, error);
       res.status(500).json({ error: error.message });
@@ -248,17 +260,25 @@ class ClientiController {
   updateContatto(req, res) {
     try {
       const { id, contattoId } = req.params;
-      const { nome, ruolo, telefono, email } = req.body || {};
+      const { nome, ruolo, telefono, email, row_version } = req.body || {};
+      if (!Number.isInteger(Number(row_version))) {
+        return res.status(400).json({ error: 'row_version obbligatorio' });
+      }
       const result = this.stmt.contattiUpdate.run(
         nome || null,
         ruolo || null,
         telefono || null,
         email || null,
         contattoId,
-        id
+        id,
+        row_version
       );
       if (result.changes === 0) {
-        return res.status(404).json({ error: 'Contatto non trovato' });
+        const existing = this.db.prepare('SELECT * FROM clienti_contatti WHERE id = ? AND cliente_id = ?').get(contattoId, id);
+        if (!existing) {
+          return res.status(404).json({ error: 'Contatto non trovato' });
+        }
+        return res.status(409).json({ error: 'Conflitto di aggiornamento', current: existing });
       }
       const updated = this.db.prepare('SELECT * FROM clienti_contatti WHERE id = ?').get(contattoId);
       Logger.info(`PUT /clienti/${id}/contatti/${contattoId}`);

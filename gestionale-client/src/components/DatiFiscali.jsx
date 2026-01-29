@@ -44,7 +44,8 @@ function DatiFiscali({ onBack, toast, showHeader = true }) {
     tipo_documento_predefinito: '',
     ritenuta_acconto: '',
     rivalsa_inps: '',
-    cassa_previdenziale: ''
+    cassa_previdenziale: '',
+    row_version: null
   })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -101,7 +102,8 @@ function DatiFiscali({ onBack, toast, showHeader = true }) {
         tipo_documento_predefinito: data.tipo_documento_predefinito || '',
         ritenuta_acconto: data.ritenuta_acconto ? String(data.ritenuta_acconto) : '',
         rivalsa_inps: data.rivalsa_inps ? String(data.rivalsa_inps) : '',
-        cassa_previdenziale: data.cassa_previdenziale || ''
+        cassa_previdenziale: data.cassa_previdenziale || '',
+        row_version: data.row_version ?? null
       })
     } catch (err) {
       console.error('Errore caricamento dati fiscali:', err)
@@ -753,3 +755,4 @@ function DatiFiscali({ onBack, toast, showHeader = true }) {
 }
 
 export default DatiFiscali
+

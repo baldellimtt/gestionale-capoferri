@@ -187,6 +187,7 @@ app.use('/api/commesse', require('./routes/commesse')(db));
 app.use('/api/tracking', require('./routes/tracking')(db));
 app.use('/api/note-spese', require('./routes/noteSpese')(db));
 app.use('/api/kanban', require('./routes/kanban')(db));
+app.use('/api/presence', require('./routes/presence')(db));
 
 // SPA fallback (solo se serve static)
 if (serveStaticEnabled) {

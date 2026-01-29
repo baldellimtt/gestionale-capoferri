@@ -22,8 +22,9 @@ class KanbanController {
       updateColonna: this.db.prepare(`
         UPDATE kanban_colonne SET
           nome = ?, ordine = ?, colore = ?,
-          updated_at = datetime('now', 'localtime')
-        WHERE id = ?
+          updated_at = datetime('now', 'localtime'),
+          row_version = row_version + 1
+        WHERE id = ? AND row_version = ?
       `),
       deleteColonna: this.db.prepare('DELETE FROM kanban_colonne WHERE id = ?'),
       
@@ -78,26 +79,30 @@ class KanbanController {
           priorita = ?, responsabile_id = ?, cliente_id = ?, cliente_nome = ?,
           ordine = ?, avanzamento = ?, data_inizio = ?, data_fine_prevista = ?,
           data_fine_effettiva = ?, budget = ?, tags = ?,
-          updated_at = datetime('now', 'localtime')
-        WHERE id = ?
+          updated_at = datetime('now', 'localtime'),
+          row_version = row_version + 1
+        WHERE id = ? AND row_version = ?
       `),
       updateCardInline: this.db.prepare(`
         UPDATE kanban_card SET
           data_fine_prevista = ?, priorita = ?,
-          updated_at = datetime('now', 'localtime')
-        WHERE id = ?
+          updated_at = datetime('now', 'localtime'),
+          row_version = row_version + 1
+        WHERE id = ? AND row_version = ?
       `),
       moveCard: this.db.prepare(`
         UPDATE kanban_card SET
           colonna_id = ?, ordine = ?,
-          updated_at = datetime('now', 'localtime')
-        WHERE id = ?
+          updated_at = datetime('now', 'localtime'),
+          row_version = row_version + 1
+        WHERE id = ? AND row_version = ?
       `),
       reorderCard: this.db.prepare(`
         UPDATE kanban_card SET
           ordine = ?,
-          updated_at = datetime('now', 'localtime')
-        WHERE id = ?
+          updated_at = datetime('now', 'localtime'),
+          row_version = row_version + 1
+        WHERE id = ? AND row_version = ?
       `),
       deleteCard: this.db.prepare('DELETE FROM kanban_card WHERE id = ?'),
       
@@ -115,16 +120,18 @@ class KanbanController {
       updateScadenza: this.db.prepare(`
         UPDATE kanban_scadenze SET
           titolo = ?, descrizione = ?, data_scadenza = ?, tipo = ?, priorita = ?,
-          updated_at = datetime('now', 'localtime')
-        WHERE id = ?
+          updated_at = datetime('now', 'localtime'),
+          row_version = row_version + 1
+        WHERE id = ? AND row_version = ?
       `),
       completeScadenza: this.db.prepare(`
         UPDATE kanban_scadenze SET
           completata = 1,
           data_completamento = datetime('now', 'localtime'),
           completata_da = ?,
-          updated_at = datetime('now', 'localtime')
-        WHERE id = ?
+          updated_at = datetime('now', 'localtime'),
+          row_version = row_version + 1
+        WHERE id = ? AND row_version = ?
       `),
       deleteScadenza: this.db.prepare('DELETE FROM kanban_scadenze WHERE id = ?'),
       
@@ -184,8 +191,9 @@ class KanbanController {
       updateCommento: this.db.prepare(`
         UPDATE kanban_card_commenti SET
           commento = ?,
-          updated_at = datetime('now', 'localtime')
-        WHERE id = ? AND user_id = ?
+          updated_at = datetime('now', 'localtime'),
+          row_version = row_version + 1
+        WHERE id = ? AND user_id = ? AND row_version = ?
       `),
       deleteCommento: this.db.prepare(`
         DELETE FROM kanban_card_commenti 
@@ -273,13 +281,20 @@ class KanbanController {
   updateColonna(req, res) {
     try {
       const { id } = req.params;
-      const { nome, ordine, colore } = req.body;
+      const { nome, ordine, colore, row_version } = req.body;
       if (!nome) {
         return res.status(400).json({ error: 'Nome colonna obbligatorio' });
       }
-      const result = this.stmt.updateColonna.run(nome, ordine || 0, colore || null, id);
+      if (!Number.isInteger(Number(row_version))) {
+        return res.status(400).json({ error: 'row_version obbligatorio' });
+      }
+      const result = this.stmt.updateColonna.run(nome, ordine || 0, colore || null, id, row_version);
       if (result.changes === 0) {
-        return res.status(404).json({ error: 'Colonna non trovata' });
+        const current = this.stmt.getColonnaById.get(id);
+        if (!current) {
+          return res.status(404).json({ error: 'Colonna non trovata' });
+        }
+        return res.status(409).json({ error: 'Conflitto di aggiornamento', current });
       }
       const updated = this.stmt.getColonnaById.get(id);
       Logger.info(`PUT /kanban/colonne/${id}`);
@@ -468,11 +483,14 @@ class KanbanController {
       const {
         commessa_id, titolo, descrizione, colonna_id, priorita,
         responsabile_id, cliente_id, cliente_nome, ordine,
-        avanzamento, data_inizio, data_fine_prevista, data_fine_effettiva, budget, tags
+        avanzamento, data_inizio, data_fine_prevista, data_fine_effettiva, budget, tags, row_version
       } = req.body;
       
       if (!titolo) {
         return res.status(400).json({ error: 'Titolo card obbligatorio' });
+      }
+      if (!Number.isInteger(Number(row_version))) {
+        return res.status(400).json({ error: 'row_version obbligatorio' });
       }
       
       // Leggi la card prima dell'update per confrontare i valori
@@ -498,11 +516,16 @@ class KanbanController {
         data_fine_effettiva || null,
         budget || 0,
         tagsJson,
-        id
+        id,
+        row_version
       );
       
       if (result.changes === 0) {
-        return res.status(404).json({ error: 'Card non trovata' });
+        const current = this.stmt.getCardById.get(id);
+        if (!current) {
+          return res.status(404).json({ error: 'Card non trovata' });
+        }
+        return res.status(409).json({ error: 'Conflitto di aggiornamento', current });
       }
       
       const updated = this.stmt.getCardById.get(id);
@@ -527,10 +550,13 @@ class KanbanController {
   updateCardInline(req, res) {
     try {
       const { id } = req.params;
-      const { data_fine_prevista, priorita } = req.body;
+      const { data_fine_prevista, priorita, row_version } = req.body;
 
       if (data_fine_prevista === undefined && priorita === undefined) {
         return res.status(400).json({ error: 'Nessun campo da aggiornare' });
+      }
+      if (!Number.isInteger(Number(row_version))) {
+        return res.status(400).json({ error: 'row_version obbligatorio' });
       }
 
       const oldCard = this.stmt.getCardById.get(id);
@@ -550,11 +576,16 @@ class KanbanController {
       const result = this.stmt.updateCardInline.run(
         nextDataFine,
         nextPriorita || 'media',
-        id
+        id,
+        row_version
       );
 
       if (result.changes === 0) {
-        return res.status(404).json({ error: 'Card non trovata' });
+        const current = this.stmt.getCardById.get(id);
+        if (!current) {
+          return res.status(404).json({ error: 'Card non trovata' });
+        }
+        return res.status(409).json({ error: 'Conflitto di aggiornamento', current });
       }
 
       const updated = this.stmt.getCardById.get(id);
@@ -580,10 +611,13 @@ class KanbanController {
   moveCard(req, res) {
     try {
       const { id } = req.params;
-      const { colonna_id, ordine } = req.body;
+      const { colonna_id, ordine, row_version } = req.body;
       
       if (!colonna_id) {
         return res.status(400).json({ error: 'Colonna obbligatoria' });
+      }
+      if (!Number.isInteger(Number(row_version))) {
+        return res.status(400).json({ error: 'row_version obbligatorio' });
       }
       
       // Verifica che la colonna esista
@@ -592,9 +626,13 @@ class KanbanController {
         return res.status(400).json({ error: 'Colonna non valida' });
       }
       
-      const result = this.stmt.moveCard.run(colonna_id, ordine || 0, id);
+      const result = this.stmt.moveCard.run(colonna_id, ordine || 0, id, row_version);
       if (result.changes === 0) {
-        return res.status(404).json({ error: 'Card non trovata' });
+        const current = this.stmt.getCardById.get(id);
+        if (!current) {
+          return res.status(404).json({ error: 'Card non trovata' });
+        }
+        return res.status(409).json({ error: 'Conflitto di aggiornamento', current });
       }
       
       const updated = this.stmt.getCardById.get(id);
@@ -756,7 +794,7 @@ class KanbanController {
   updateScadenza(req, res) {
     try {
       const { id } = req.params;
-      const { titolo, descrizione, data_scadenza, tipo, priorita } = req.body;
+      const { titolo, descrizione, data_scadenza, tipo, priorita, row_version } = req.body;
       
       // Validazione aggiuntiva server-side
       if (!titolo || typeof titolo !== 'string' || !titolo.trim()) {
@@ -794,6 +832,9 @@ class KanbanController {
       
       const validPriorita = ['bassa', 'media', 'alta', 'urgente'];
       const finalPriorita = priorita && validPriorita.includes(priorita) ? priorita : 'media';
+      if (!Number.isInteger(Number(row_version))) {
+        return res.status(400).json({ error: 'row_version obbligatorio' });
+      }
       
       const result = this.stmt.updateScadenza.run(
         titolo.trim(),
@@ -801,11 +842,16 @@ class KanbanController {
         data_scadenza,
         tipo && tipo.trim() ? tipo.trim() : null,
         finalPriorita,
-        id
+        id,
+        row_version
       );
       
       if (result.changes === 0) {
-        return res.status(404).json({ error: 'Scadenza non trovata' });
+        const current = this.stmt.getScadenzaById.get(id);
+        if (!current) {
+          return res.status(404).json({ error: 'Scadenza non trovata' });
+        }
+        return res.status(409).json({ error: 'Conflitto di aggiornamento', current });
       }
       
       const updated = this.stmt.getScadenzaById.get(id);
@@ -821,10 +867,18 @@ class KanbanController {
     try {
       const { id } = req.params;
       const userId = req.user?.id || null;
+      const { row_version } = req.body || {};
+      if (!Number.isInteger(Number(row_version))) {
+        return res.status(400).json({ error: 'row_version obbligatorio' });
+      }
       
-      const result = this.stmt.completeScadenza.run(userId, id);
+      const result = this.stmt.completeScadenza.run(userId, id, row_version);
       if (result.changes === 0) {
-        return res.status(404).json({ error: 'Scadenza non trovata' });
+        const current = this.stmt.getScadenzaById.get(id);
+        if (!current) {
+          return res.status(404).json({ error: 'Scadenza non trovata' });
+        }
+        return res.status(409).json({ error: 'Conflitto di aggiornamento', current });
       }
       
       const updated = this.stmt.getScadenzaById.get(id);
@@ -904,7 +958,7 @@ class KanbanController {
   updateCommento(req, res) {
     try {
       const { id } = req.params;
-      const { commento } = req.body;
+      const { commento, row_version } = req.body;
       const userId = req.user?.id;
       
       if (!userId) {
@@ -914,10 +968,17 @@ class KanbanController {
       if (!commento || !commento.trim()) {
         return res.status(400).json({ error: 'Commento obbligatorio' });
       }
+      if (!Number.isInteger(Number(row_version))) {
+        return res.status(400).json({ error: 'row_version obbligatorio' });
+      }
       
-      const result = this.stmt.updateCommento.run(commento.trim(), id, userId);
+      const result = this.stmt.updateCommento.run(commento.trim(), id, userId, row_version);
       if (result.changes === 0) {
-        return res.status(404).json({ error: 'Commento non trovato o non autorizzato' });
+        const current = this.stmt.getCommentoById.get(id);
+        if (!current || Number(current.user_id) !== Number(userId)) {
+          return res.status(404).json({ error: 'Commento non trovato o non autorizzato' });
+        }
+        return res.status(409).json({ error: 'Conflitto di aggiornamento', current });
       }
       
       const updated = this.stmt.getCommentoById.get(id);
@@ -1066,3 +1127,4 @@ function createRouter(db) {
 }
 
 module.exports = createRouter;
+

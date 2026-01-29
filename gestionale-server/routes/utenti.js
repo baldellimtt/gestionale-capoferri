@@ -9,7 +9,7 @@ const router = express.Router();
 
 function createRouter(db) {
   const getAllStmt = db.prepare(`
-    SELECT id, username, role, email, telefono, nome, cognome, mezzo, targa, rimborso_km, created_at, updated_at
+    SELECT id, username, role, email, telefono, nome, cognome, mezzo, targa, rimborso_km, row_version, created_at, updated_at
     FROM utenti
     ORDER BY cognome ASC, nome ASC, username ASC
   `);
@@ -29,8 +29,9 @@ function createRouter(db) {
       mezzo = ?,
       targa = ?,
       rimborso_km = ?,
-      updated_at = datetime('now', 'localtime')
-    WHERE id = ?
+      updated_at = datetime('now', 'localtime'),
+      row_version = row_version + 1
+    WHERE id = ? AND row_version = ?
   `);
   const updatePasswordStmt = db.prepare(`
     UPDATE utenti SET
@@ -115,6 +116,7 @@ function createRouter(db) {
         mezzo: created.mezzo,
         targa: created.targa,
         rimborso_km: created.rimborso_km,
+        row_version: created.row_version,
       });
     } catch (error) {
       if (String(error?.message || '').includes('UNIQUE')) {
@@ -139,6 +141,7 @@ function createRouter(db) {
         mezzo,
         targa,
         rimborso_km,
+        row_version,
       } = req.body || {};
 
       const existing = getByIdStmt.get(id);
@@ -148,6 +151,9 @@ function createRouter(db) {
 
       if (!username) {
         return res.status(400).json({ error: 'Username obbligatorio' });
+      }
+      if (!Number.isInteger(Number(row_version))) {
+        return res.status(400).json({ error: 'row_version obbligatorio' });
       }
 
       const rateValue = Number(rimborso_km || 0);
@@ -165,11 +171,16 @@ function createRouter(db) {
         mezzo || null,
         targa || null,
         rateValue,
-        id
+        id,
+        row_version
       );
 
       if (result.changes === 0) {
-        return res.status(404).json({ error: 'Utente non trovato' });
+        const current = getByIdStmt.get(id);
+        if (!current) {
+          return res.status(404).json({ error: 'Utente non trovato' });
+        }
+        return res.status(409).json({ error: 'Conflitto di aggiornamento', current });
       }
 
       // IMPORTANTE: Aggiorna la password SOLO se fornita e non vuota
@@ -204,6 +215,7 @@ function createRouter(db) {
         mezzo: updated.mezzo,
         targa: updated.targa,
         rimborso_km: updated.rimborso_km,
+        row_version: updated.row_version,
       });
     } catch (error) {
       if (String(error?.message || '').includes('UNIQUE')) {

@@ -107,6 +107,9 @@ class ApiService {
           const data = await response.json().catch(() => ({}));
           const error = new Error(data.error || 'Refresh token fallito');
           error.status = response.status;
+          if (data.current) {
+            error.current = data.current;
+          }
           if (response.status === 429) {
             error.retryAfter = data.retryAfter || 60;
           }
@@ -207,6 +210,9 @@ class ApiService {
             
             const error = new Error(retryData.error || `HTTP error! status: ${retryResponse.status}`);
             error.status = retryResponse.status;
+            if (retryData.current) {
+              error.current = retryData.current;
+            }
             if (retryData.details) {
               error.details = retryData.details;
             }
@@ -245,7 +251,10 @@ class ApiService {
 
       if (!response.ok) {
         const error = new Error(data.error || `HTTP error! status: ${response.status}`);
-        error.status = response.status;
+          error.status = response.status;
+          if (data.current) {
+            error.current = data.current;
+          }
         // Passa anche i dettagli di validazione se presenti
         if (data.details) {
           error.details = data.details;
@@ -293,7 +302,10 @@ class ApiService {
 
       if (!response.ok) {
         const error = new Error(data.error || `HTTP error! status: ${response.status}`);
-        error.status = response.status;
+          error.status = response.status;
+          if (data.current) {
+            error.current = data.current;
+          }
         // Passa anche i dettagli di validazione se presenti
         if (data.details) {
           error.details = data.details;
@@ -405,6 +417,21 @@ class ApiService {
       this.meCache.data = { ...this.meCache.data, ...result };
     }
     return result;
+  }
+
+  // Presence API
+  async presenceHeartbeat(view = null) {
+    return this.request('/presence/heartbeat', {
+      method: 'POST',
+      body: {
+        view: view || null
+      }
+    });
+  }
+
+  async getActiveUsers(windowMinutes = 2) {
+    const safeWindow = Number.isFinite(Number(windowMinutes)) ? Number(windowMinutes) : 2;
+    return this.request(`/presence/active?window=${safeWindow}`);
   }
 
   // Utenti API (admin)
@@ -571,7 +598,10 @@ class ApiService {
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
         const error = new Error(data.error || `HTTP error! status: ${response.status}`);
-        error.status = response.status;
+          error.status = response.status;
+          if (data.current) {
+            error.current = data.current;
+          }
         if (data.details) {
           error.details = data.details;
         }
@@ -662,9 +692,12 @@ class ApiService {
     });
   }
 
-  async stopTracking(entryId) {
+  async stopTracking(entryId, rowVersion = null) {
     return this.request(`/tracking/entries/${entryId}/stop`, {
       method: 'PUT',
+      body: {
+        row_version: rowVersion
+      }
     });
   }
 
@@ -869,9 +902,12 @@ class ApiService {
     });
   }
 
-  async uploadNotaSpesaAllegato(id, file) {
+  async uploadNotaSpesaAllegato(id, file, rowVersion = null) {
     const formData = new FormData();
     formData.append('file', file);
+    if (rowVersion !== null && rowVersion !== undefined) {
+      formData.append('row_version', String(rowVersion));
+    }
     return this.requestForm(`/note-spese/${id}/allegato`, formData);
   }
 
@@ -990,10 +1026,10 @@ class ApiService {
     });
   }
 
-  async moveKanbanCard(id, colonna_id, ordine) {
+  async moveKanbanCard(id, colonna_id, ordine, rowVersion = null) {
     return this.request(`/kanban/card/${id}/move`, {
       method: 'PUT',
-      body: { colonna_id, ordine },
+      body: { colonna_id, ordine, row_version: rowVersion },
     });
   }
 
@@ -1029,9 +1065,10 @@ class ApiService {
     });
   }
 
-  async completeKanbanScadenza(id) {
+  async completeKanbanScadenza(id, rowVersion = null) {
     return this.request(`/kanban/scadenze/${id}/complete`, {
       method: 'PUT',
+      body: { row_version: rowVersion },
     });
   }
 
@@ -1075,10 +1112,10 @@ class ApiService {
     });
   }
 
-  async updateKanbanCommento(id, commento) {
+  async updateKanbanCommento(id, commento, rowVersion = null) {
     return this.request(`/kanban/commenti/${id}`, {
       method: 'PUT',
-      body: { commento },
+      body: { commento, row_version: rowVersion },
     });
   }
 
@@ -1090,3 +1127,9 @@ class ApiService {
 }
 
 export default new ApiService();
+
+
+
+
+
+

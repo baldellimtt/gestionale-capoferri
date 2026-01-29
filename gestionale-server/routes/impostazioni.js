@@ -60,8 +60,9 @@ class ImpostazioniController {
           ragione_sociale = ?,
           partita_iva = ?,
           codice_fiscale = ?,
-          updated_at = datetime('now', 'localtime')
-        WHERE id = 1
+          updated_at = datetime('now', 'localtime'),
+          row_version = row_version + 1
+        WHERE id = 1 AND row_version = ?
       `),
       getDatiFiscali: this.db.prepare('SELECT * FROM dati_fiscali WHERE id = 1'),
       updateDatiFiscali: this.db.prepare(`
@@ -79,8 +80,9 @@ class ImpostazioniController {
           ritenuta_acconto = ?,
           rivalsa_inps = ?,
           cassa_previdenziale = ?,
-          updated_at = datetime('now', 'localtime')
-        WHERE id = 1
+          updated_at = datetime('now', 'localtime'),
+          row_version = row_version + 1
+        WHERE id = 1 AND row_version = ?
       `),
       getDocumentiAziendali: this.db.prepare(`
         SELECT * FROM documenti_aziendali
@@ -116,13 +118,24 @@ class ImpostazioniController {
 
   updateDatiAziendali(req, res) {
     try {
-      const { ragione_sociale, partita_iva, codice_fiscale } = req.body;
+      const { ragione_sociale, partita_iva, codice_fiscale, row_version } = req.body;
+      if (!Number.isInteger(Number(row_version))) {
+        return res.status(400).json({ error: 'row_version obbligatorio' });
+      }
 
-      this.stmt.updateDatiAziendali.run(
+      const result = this.stmt.updateDatiAziendali.run(
         ragione_sociale || '',
         partita_iva || '',
-        codice_fiscale || ''
+        codice_fiscale || '',
+        row_version
       );
+      if (result.changes === 0) {
+        const current = this.stmt.getDatiAziendali.get();
+        if (!current) {
+          return res.status(404).json({ error: 'Dati aziendali non trovati' });
+        }
+        return res.status(409).json({ error: 'Conflitto di aggiornamento', current });
+      }
 
       const updated = this.stmt.getDatiAziendali.get();
       res.json(updated);
@@ -160,13 +173,14 @@ class ImpostazioniController {
         tipo_documento_predefinito,
         ritenuta_acconto,
         rivalsa_inps,
-        cassa_previdenziale
+        cassa_previdenziale,
+        row_version
       } = req.body;
+      if (!Number.isInteger(Number(row_version))) {
+        return res.status(400).json({ error: 'row_version obbligatorio' });
+      }
 
-      const ritenuta = Number(String(ritenuta_acconto || 0).replace(',', '.'));
-      const rivalsa = Number(String(rivalsa_inps || 0).replace(',', '.'));
-
-      this.stmt.updateDatiFiscali.run(
+      const result = this.stmt.updateDatiFiscali.run(
         codice_destinatario_sdi || '',
         pec || '',
         regime_fiscale || '',
@@ -177,10 +191,18 @@ class ImpostazioniController {
         iban || '',
         banca || '',
         tipo_documento_predefinito || '',
-        isNaN(ritenuta) ? 0 : ritenuta,
-        isNaN(rivalsa) ? 0 : rivalsa,
-        cassa_previdenziale || ''
+        parseFloat(ritenuta_acconto) || 0,
+        parseFloat(rivalsa_inps) || 0,
+        cassa_previdenziale || '',
+        row_version
       );
+      if (result.changes === 0) {
+        const current = this.stmt.getDatiFiscali.get();
+        if (!current) {
+          return res.status(404).json({ error: 'Dati fiscali non trovati' });
+        }
+        return res.status(409).json({ error: 'Conflitto di aggiornamento', current });
+      }
 
       const updated = this.stmt.getDatiFiscali.get();
       res.json(updated);
@@ -317,4 +339,7 @@ function createRouter(db) {
 }
 
 module.exports = createRouter;
+
+
+
 

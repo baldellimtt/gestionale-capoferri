@@ -16,10 +16,16 @@ function createRouter(db) {
     VALUES (?, ?, ?)
   `);
   const deleteSessionStmt = db.prepare('DELETE FROM sessioni WHERE token = ?');
+  const deletePresenceStmt = db.prepare(`
+    DELETE FROM utenti_presenze
+    WHERE user_id = ? AND session_key = ?
+  `);
   const updateUserStmt = db.prepare(`
     UPDATE utenti
-    SET rimborso_km = ?, updated_at = datetime('now', 'localtime')
-    WHERE id = ?
+    SET rimborso_km = ?,
+        updated_at = datetime('now', 'localtime'),
+        row_version = row_version + 1
+    WHERE id = ? AND row_version = ?
   `);
   const createRefreshTokenStmt = db.prepare(`
     INSERT INTO refresh_tokens (user_id, token_hash, expires_at)
@@ -120,6 +126,7 @@ function createRouter(db) {
           mezzo: user.mezzo || '',
           targa: user.targa || '',
           rimborso_km: user.rimborso_km || 0,
+          row_version: user.row_version,
         },
       });
     } catch (error) {
@@ -200,24 +207,37 @@ function createRouter(db) {
       mezzo: user?.mezzo || '',
       targa: user?.targa || '',
       rimborso_km: user?.rimborso_km || 0,
+      row_version: user?.row_version,
     });
   });
 
   router.put('/me', authMiddleware(db), (req, res) => {
     try {
-      const { rimborso_km } = req.body || {};
+      const { rimborso_km, row_version } = req.body || {};
       const value = Number(rimborso_km);
 
       if (!Number.isFinite(value) || value < 0) {
         return res.status(400).json({ error: 'Costo km non valido' });
       }
+      if (!Number.isInteger(Number(row_version))) {
+        return res.status(400).json({ error: 'row_version obbligatorio' });
+      }
 
-      updateUserStmt.run(value, req.user.id);
+      const result = updateUserStmt.run(value, req.user.id, row_version);
+      if (result.changes === 0) {
+        const user = getUserStmt.get(req.user.username);
+        if (!user) {
+          return res.status(404).json({ error: 'Utente non trovato' });
+        }
+        return res.status(409).json({ error: 'Conflitto di aggiornamento', current: user });
+      }
       Logger.info('Aggiornato rimborso km', { username: req.user.username, value });
+      const updated = getUserStmt.get(req.user.username);
       return res.json({
-        username: req.user.username,
-        role: req.user.role,
-        rimborso_km: value,
+        username: updated?.username || req.user.username,
+        role: updated?.role || req.user.role,
+        rimborso_km: updated?.rimborso_km ?? value,
+        row_version: updated?.row_version,
       });
     } catch (error) {
       Logger.error('Errore PUT /auth/me', error);
@@ -228,6 +248,9 @@ function createRouter(db) {
   router.post('/logout', authMiddleware(db), (req, res) => {
     try {
       deleteSessionStmt.run(req.user.token);
+      if (req.user?.token) {
+        deletePresenceStmt.run(req.user.id, hashToken(req.user.token));
+      }
       const refreshToken = req.body?.refreshToken;
       if (refreshToken && typeof refreshToken === 'string') {
         const tokenHash = hashToken(refreshToken);

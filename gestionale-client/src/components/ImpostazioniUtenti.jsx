@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import api from '../services/api'
+import ConfirmDeleteModal from './ConfirmDeleteModal'
 
 function ImpostazioniUtenti({ currentUser, onUserUpdated, onUsersChanged, onBack, toast, showHeader = true, title = 'Impostazioni utenti' }) {
   const [utenti, setUtenti] = useState([])
@@ -7,8 +8,11 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onUsersChanged, onBack
   const [error, setError] = useState(null)
   const [editingId, setEditingId] = useState(null)
   const [editData, setEditData] = useState({})
+  const [showPasswordEdit, setShowPasswordEdit] = useState(false)
   const [saving, setSaving] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
+  const [deleteUtente, setDeleteUtente] = useState(null)
+  const [deleteUtenteLoading, setDeleteUtenteLoading] = useState(false)
   const [createData, setCreateData] = useState({
     username: '',
     password: '',
@@ -44,7 +48,7 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onUsersChanged, onBack
     try {
       setLoading(true)
       showError(null)
-      const data = await api.getUtenti()
+      const data = await api.getUtenti(true)
       setUtenti(data)
     } catch (err) {
       console.error('Errore caricamento utenti:', err)
@@ -60,6 +64,7 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onUsersChanged, onBack
 
   const startEdit = (utente) => {
     setEditingId(utente.id)
+    setShowPasswordEdit(false)
     setEditData({
       username: utente.username || '',
       password: '',
@@ -70,13 +75,15 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onUsersChanged, onBack
       cognome: utente.cognome || '',
       mezzo: utente.mezzo || '',
       targa: utente.targa || '',
-      rimborso_km: utente.rimborso_km ?? 0
+      rimborso_km: utente.rimborso_km ?? 0,
+      row_version: utente.row_version
     })
   }
 
   const cancelEdit = () => {
     setEditingId(null)
     setEditData({})
+    setShowPasswordEdit(false)
   }
 
   const handleCreate = async () => {
@@ -130,6 +137,10 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onUsersChanged, onBack
       showError('Costo km non valido.')
       return
     }
+    if (!Number.isInteger(Number(editData.row_version))) {
+      showError('Versione dati non disponibile. Ricarica la lista utenti.')
+      return
+    }
 
     try {
       setSaving(true)
@@ -141,6 +152,9 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onUsersChanged, onBack
       const updateData = {
         ...editData,
         rimborso_km: rimborso
+      }
+      if (!showPasswordEdit) {
+        delete updateData.password
       }
       // Rimuovi password se è vuota o non definita
       if (!updateData.password || updateData.password.trim() === '') {
@@ -163,25 +177,49 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onUsersChanged, onBack
       }
     } catch (err) {
       console.error('Errore aggiornamento utente:', err)
-      const errorMsg = err.message || 'Errore nel salvataggio utente.'
-      showError(errorMsg)
-      toast?.showError(errorMsg, 'Errore salvataggio')
+      if (err?.status === 409 && err.current) {
+        const current = err.current
+        setUtenti((prev) => prev.map((u) => (u.id === current.id ? current : u)))
+        if (editingId === current.id) {
+          setEditData((prev) => ({
+            ...prev,
+            username: current.username || '',
+            role: current.role || 'user',
+            email: current.email || '',
+            telefono: current.telefono || '',
+            nome: current.nome || '',
+            cognome: current.cognome || '',
+            mezzo: current.mezzo || '',
+            targa: current.targa || '',
+            rimborso_km: current.rimborso_km ?? 0,
+            row_version: current.row_version
+          }))
+        }
+        const conflictMsg = 'Conflitto di aggiornamento: dati aggiornati da un altro utente. Riprova.'
+        showError(conflictMsg)
+        toast?.showError(conflictMsg, 'Conflitto aggiornamento')
+      } else {
+        const errorMsg = err.message || 'Errore nel salvataggio utente.'
+        showError(errorMsg)
+        toast?.showError(errorMsg, 'Errore salvataggio')
+      }
     } finally {
       setSaving(false)
     }
   }
 
-  const handleDelete = async (utente) => {
-    if (!window.confirm(`Eliminare l'utente ${utente.username}?`)) {
-      return
-    }
+  const handleDelete = (utente) => {
+    setDeleteUtente(utente)
+  }
 
+  const confirmDeleteUtente = async () => {
+    if (!deleteUtente?.id) return
     try {
-      setSaving(true)
+      setDeleteUtenteLoading(true)
       showError(null)
       const loadingToastId = toast?.showLoading('Eliminazione in corso...', 'Eliminazione utente')
-      await api.deleteUtente(utente.id)
-      setUtenti((prev) => prev.filter((u) => u.id !== utente.id))
+      await api.deleteUtente(deleteUtente.id)
+      setUtenti((prev) => prev.filter((u) => u.id !== deleteUtente.id))
       if (onUsersChanged) {
         onUsersChanged()
       }
@@ -196,11 +234,13 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onUsersChanged, onBack
       showError(errorMsg)
       toast?.showError(errorMsg, 'Errore eliminazione')
     } finally {
-      setSaving(false)
+      setDeleteUtenteLoading(false)
+      setDeleteUtente(null)
     }
   }
 
   return (
+    <>
     <div>
       {showHeader && (
         <div className="d-flex justify-content-between align-items-center mb-4">
@@ -487,13 +527,33 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onUsersChanged, onBack
                         <td>
                           {isEditing ? (
                             <>
-                              <input
-                                type="password"
-                                className="form-control mb-2"
-                                placeholder="Nuova password (opzionale)"
-                                value={editData.password}
-                                onChange={(e) => setEditData((prev) => ({ ...prev, password: e.target.value }))}
-                              />
+                              <div className="d-flex align-items-center gap-2 mb-2">
+                                <button
+                                  type="button"
+                                  className="btn btn-outline-secondary btn-sm"
+                                  onClick={() => {
+                                    setShowPasswordEdit((prev) => {
+                                      const next = !prev
+                                      if (!next) {
+                                        setEditData((data) => ({ ...data, password: '' }))
+                                      }
+                                      return next
+                                    })
+                                  }}
+                                >
+                                  {showPasswordEdit ? 'Annulla password' : 'Cambia password'}
+                                </button>
+                              </div>
+                              {showPasswordEdit && (
+                                <input
+                                  type="password"
+                                  className="form-control mb-2"
+                                  placeholder="Nuova password"
+                                  value={editData.password}
+                                  autoComplete="new-password"
+                                  onChange={(e) => setEditData((prev) => ({ ...prev, password: e.target.value }))}
+                                />
+                              )}
                               <div className="d-flex gap-2 justify-content-center">
                                 <button className="btn btn-primary btn-sm" onClick={() => handleSave(utente.id)} disabled={saving}>
                                   Salva
@@ -529,7 +589,20 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onUsersChanged, onBack
         </div>
       </div>
     </div>
+
+    <ConfirmDeleteModal
+      show={Boolean(deleteUtente)}
+      title="Elimina utente"
+      message={`Eliminare l'utente ${deleteUtente?.username || ''}?`}
+      loading={deleteUtenteLoading}
+      onClose={() => {
+        if (!deleteUtenteLoading) setDeleteUtente(null)
+      }}
+      onConfirm={confirmDeleteUtente}
+    />
+    </>
   )
 }
 
 export default ImpostazioniUtenti
+

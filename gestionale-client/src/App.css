@@ -377,6 +377,124 @@ header .logo {
   filter: drop-shadow(0 6px 12px rgba(34, 28, 22, 0.12));
 }
 
+.header-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.header-actions .btn {
+  height: 44px;
+  padding-top: 0;
+  padding-bottom: 0;
+  display: inline-flex;
+  align-items: center;
+}
+
+.active-users {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 0.75rem;
+  height: 44px;
+  background: var(--bg-1);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  min-width: 0;
+  width: max-content;
+  box-shadow: 0 6px 16px rgba(34, 28, 22, 0.08), inset 0 0 0 1px rgba(138, 106, 84, 0.08);
+}
+
+.active-users-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-500);
+  font-weight: 700;
+}
+
+.active-users-count {
+  background: var(--bg-2);
+  border: 1px solid var(--border-soft);
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  color: var(--ink-600);
+}
+
+.active-users-avatars {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.active-users-empty {
+  font-size: 0.7rem;
+  color: var(--ink-500);
+}
+
+.active-users-error {
+  font-size: 0.72rem;
+  color: #b45309;
+}
+
+.active-user-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--bg-2);
+  border: 1px solid var(--border-soft);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--ink-700);
+  box-shadow: inset 0 0 0 1px rgba(90, 70, 55, 0.08);
+}
+
+.active-user-avatar:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: -36px;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--ink-800);
+  background: var(--bg-1);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-1);
+  z-index: 10;
+}
+
+.active-user-initials {
+  letter-spacing: 0.06em;
+}
+
+.active-user-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: #10b981;
+  color: #fff;
+  border-radius: 999px;
+  font-size: 0.52rem;
+  font-weight: 700;
+  padding: 0.02rem 0.22rem;
+  border: 1px solid #0f766e;
+}
+
 .team-card-title,
 .commessa-card-title,
 .team-panel-title,
@@ -460,7 +578,7 @@ header .logo {
   background: transparent;
   color: var(--ink-600);
   font-weight: 600;
-  font-size: 1rem;
+  font-size: 1.05rem;
   padding: 0.45rem 0.9rem;
   border-radius: var(--radius-sm);
   transition: var(--transition-fast);
@@ -487,7 +605,7 @@ header .logo {
 
   .topbar-link {
     padding: 0.45rem 0.7rem;
-    font-size: 1rem;
+    font-size: 1.02rem;
   }
 }
 
@@ -1613,6 +1731,15 @@ header .logo {
     font-size: 1.6rem;
   }
 
+  .header-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .active-users {
+    width: 100%;
+  }
+
   .app-layout {
     margin-top: 1rem;
   }
@@ -1714,6 +1841,54 @@ header .logo {
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   user-select: none;
   -webkit-user-select: none;
+}
+
+.kanban-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 0.65rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed var(--border-soft);
+}
+
+.kanban-card-action {
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.25rem 0.6rem;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.kanban-card-action.is-complete {
+  border-color: #10b981;
+  background: #10b981;
+  color: #fff;
+}
+
+.kanban-card-action.is-delete {
+  border-color: #ef4444;
+  background: transparent;
+  color: #ef4444;
+}
+
+.kanban-card-action.is-disabled {
+  border-color: var(--border-soft);
+  background: var(--bg-2);
+  color: var(--ink-500);
+  cursor: default;
+}
+
+.kanban-card-action.is-complete:hover {
+  filter: brightness(0.95);
+}
+
+.kanban-card-action.is-delete:hover {
+  background: rgba(239, 68, 68, 0.08);
 }
 
 .kanban-card:hover {

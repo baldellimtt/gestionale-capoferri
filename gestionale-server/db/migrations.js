@@ -378,6 +378,8 @@ class Migrations {
     this.ensureContattiColumns(db);
     this.ensureKanbanColumns(db);
     this.ensureKanbanCommentiTable(db);
+    this.ensureUserPresenceTable(db);
+    this.ensureRowVersionColumns(db);
     this.ensureDefaultUser(db);
     this.ensureDatiAziendaliInitialized(db);
     this.ensureDatiFiscaliInitialized(db);
@@ -433,6 +435,70 @@ class Migrations {
     } catch (error) {
       console.log('[MIGRATIONS] Errore verifica tabella commenti:', error.message);
     }
+  }
+
+  ensureUserPresenceTable(db) {
+    try {
+      const tableInfo = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='utenti_presenze'").get();
+      if (!tableInfo) {
+        db.exec(`
+          CREATE TABLE utenti_presenze (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            session_key TEXT NOT NULL,
+            last_seen_at TEXT NOT NULL,
+            last_view TEXT,
+            user_agent TEXT,
+            ip_address TEXT,
+            created_at TEXT DEFAULT (datetime('now', 'localtime')),
+            updated_at TEXT DEFAULT (datetime('now', 'localtime')),
+            UNIQUE(user_id, session_key),
+            FOREIGN KEY (user_id) REFERENCES utenti(id) ON DELETE CASCADE
+          );
+          CREATE INDEX IF NOT EXISTS idx_utenti_presenze_last_seen ON utenti_presenze(last_seen_at);
+          CREATE INDEX IF NOT EXISTS idx_utenti_presenze_user_id ON utenti_presenze(user_id);
+        `);
+        console.log('[MIGRATIONS] Tabella utenti_presenze creata');
+      }
+    } catch (error) {
+      console.log('[MIGRATIONS] Errore verifica tabella utenti_presenze:', error.message);
+    }
+  }
+
+  ensureRowVersionColumns(db) {
+    const tables = [
+      'clienti',
+      'clienti_contatti',
+      'attivita',
+      'utenti',
+      'commesse',
+      'commesse_cartelle_anni',
+      'note_spese',
+      'commesse_ore',
+      'dati_aziendali',
+      'dati_fiscali',
+      'documenti_aziendali',
+      'kanban_colonne',
+      'kanban_card',
+      'kanban_scadenze',
+      'kanban_notifiche',
+      'kanban_card_commenti'
+    ];
+
+    const addRowVersion = (table) => {
+      try {
+        const columns = db.prepare(`PRAGMA table_info(${table})`).all().map((col) => col.name);
+        if (!columns.includes('row_version')) {
+          db.exec(`ALTER TABLE ${table} ADD COLUMN row_version INTEGER DEFAULT 1`);
+          db.exec(`UPDATE ${table} SET row_version = 1 WHERE row_version IS NULL`);
+          console.log(`[MIGRATIONS] Aggiunta colonna row_version a ${table}`);
+        }
+      } catch (error) {
+        console.log(`[MIGRATIONS] Errore aggiunta row_version a ${table}:`, error.message);
+      }
+    };
+
+    tables.forEach(addRowVersion);
   }
 
   ensureContattiColumns(db) {
