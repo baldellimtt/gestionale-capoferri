@@ -295,7 +295,7 @@ class Migrations {
         commessa_id INTEGER,
         titolo TEXT NOT NULL,
         descrizione TEXT,
-        colonna_id INTEGER NOT NULL,
+        colonna_id INTEGER,
         priorita TEXT DEFAULT 'media',
         responsabile_id INTEGER,
         cliente_id INTEGER,
@@ -311,7 +311,7 @@ class Migrations {
         created_at TEXT DEFAULT (datetime('now', 'localtime')),
         updated_at TEXT DEFAULT (datetime('now', 'localtime')),
         FOREIGN KEY (commessa_id) REFERENCES commesse(id) ON DELETE SET NULL,
-        FOREIGN KEY (colonna_id) REFERENCES kanban_colonne(id) ON DELETE RESTRICT,
+        FOREIGN KEY (colonna_id) REFERENCES kanban_colonne(id) ON DELETE SET NULL,
         FOREIGN KEY (responsabile_id) REFERENCES utenti(id) ON DELETE SET NULL,
         FOREIGN KEY (cliente_id) REFERENCES clienti(id) ON DELETE SET NULL,
         FOREIGN KEY (created_by) REFERENCES utenti(id) ON DELETE SET NULL
@@ -405,6 +405,7 @@ class Migrations {
     this.ensureKanbanColumns(db);
     this.ensureKanbanCommentiTable(db);
     this.ensureUserPresenceTable(db);
+    this.ensureKanbanCardColumnNullable(db);
     this.ensureRowVersionColumns(db);
     this.ensureDefaultUser(db);
     this.ensureDatiAziendaliInitialized(db);
@@ -461,6 +462,85 @@ class Migrations {
       }
     } catch (error) {
       console.log('[MIGRATIONS] Errore verifica tabella commenti:', error.message);
+    }
+  }
+
+  ensureKanbanCardColumnNullable(db) {
+    try {
+      const tableInfo = db.prepare("PRAGMA table_info(kanban_card)").all();
+      if (!tableInfo || tableInfo.length === 0) {
+        return;
+      }
+      const colonna = tableInfo.find((col) => col.name === 'colonna_id');
+      const foreignKeys = db.prepare("PRAGMA foreign_key_list(kanban_card)").all();
+      const colonnaFk = foreignKeys.find((fk) => fk.from === 'colonna_id');
+      const needsNullable = colonna && colonna.notnull === 1;
+      const needsSetNull = colonnaFk && String(colonnaFk.on_delete || '').toUpperCase() !== 'SET NULL';
+      if (!needsNullable && !needsSetNull) {
+        return;
+      }
+
+      db.exec('PRAGMA foreign_keys=OFF');
+      db.exec('BEGIN');
+      db.exec(`
+        CREATE TABLE kanban_card_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          commessa_id INTEGER,
+          titolo TEXT NOT NULL,
+          descrizione TEXT,
+          colonna_id INTEGER,
+          priorita TEXT DEFAULT 'media',
+          responsabile_id INTEGER,
+          cliente_id INTEGER,
+          cliente_nome TEXT,
+          ordine INTEGER DEFAULT 0,
+          avanzamento INTEGER DEFAULT 0,
+          data_inizio TEXT,
+          data_fine_prevista TEXT,
+          data_fine_effettiva TEXT,
+          budget REAL DEFAULT 0,
+          tags TEXT,
+          created_by INTEGER,
+          created_at TEXT DEFAULT (datetime('now', 'localtime')),
+          updated_at TEXT DEFAULT (datetime('now', 'localtime')),
+          row_version INTEGER DEFAULT 1,
+          FOREIGN KEY (commessa_id) REFERENCES commesse(id) ON DELETE SET NULL,
+          FOREIGN KEY (colonna_id) REFERENCES kanban_colonne(id) ON DELETE SET NULL,
+          FOREIGN KEY (responsabile_id) REFERENCES utenti(id) ON DELETE SET NULL,
+          FOREIGN KEY (cliente_id) REFERENCES clienti(id) ON DELETE SET NULL,
+          FOREIGN KEY (created_by) REFERENCES utenti(id) ON DELETE SET NULL
+        );
+      `);
+      db.exec(`
+        INSERT INTO kanban_card_new (
+          id, commessa_id, titolo, descrizione, colonna_id, priorita, responsabile_id, cliente_id,
+          cliente_nome, ordine, avanzamento, data_inizio, data_fine_prevista, data_fine_effettiva,
+          budget, tags, created_by, created_at, updated_at, row_version
+        )
+        SELECT
+          id, commessa_id, titolo, descrizione, colonna_id, priorita, responsabile_id, cliente_id,
+          cliente_nome, ordine, avanzamento, data_inizio, data_fine_prevista, data_fine_effettiva,
+          budget, tags, created_by, created_at, updated_at, COALESCE(row_version, 1)
+        FROM kanban_card;
+      `);
+      db.exec('DROP TABLE kanban_card');
+      db.exec('ALTER TABLE kanban_card_new RENAME TO kanban_card');
+      db.exec('CREATE INDEX IF NOT EXISTS idx_kanban_card_colonna ON kanban_card(colonna_id)');
+      db.exec('CREATE INDEX IF NOT EXISTS idx_kanban_card_commessa ON kanban_card(commessa_id)');
+      db.exec('CREATE INDEX IF NOT EXISTS idx_kanban_card_responsabile ON kanban_card(responsabile_id)');
+      db.exec('CREATE INDEX IF NOT EXISTS idx_kanban_card_cliente ON kanban_card(cliente_id)');
+      db.exec('CREATE INDEX IF NOT EXISTS idx_kanban_card_created_at ON kanban_card(created_at)');
+      db.exec('COMMIT');
+      db.exec('PRAGMA foreign_keys=ON');
+      console.log('[MIGRATIONS] kanban_card colonna_id reso nullable e FK aggiornato a SET NULL');
+    } catch (error) {
+      try {
+        db.exec('ROLLBACK');
+      } catch {}
+      try {
+        db.exec('PRAGMA foreign_keys=ON');
+      } catch {}
+      console.log('[MIGRATIONS] Errore migrazione kanban_card colonna_id:', error.message);
     }
   }
 

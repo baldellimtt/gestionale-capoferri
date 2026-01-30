@@ -308,11 +308,23 @@ class KanbanController {
   deleteColonna(req, res) {
     try {
       const { id } = req.params;
-      // Verifica che non ci siano card nella colonna
-      const cardCount = this.db.prepare('SELECT COUNT(*) as count FROM kanban_card WHERE colonna_id = ?').get(id);
-      if (cardCount.count > 0) {
-        return res.status(400).json({ error: 'Impossibile eliminare colonna con card associate' });
+      // Verifica che non ci siano card attive nella colonna
+      const activeCount = this.db.prepare(`
+        SELECT COUNT(*) as count
+        FROM kanban_card
+        WHERE colonna_id = ? AND data_fine_effettiva IS NULL
+      `).get(id);
+      if (activeCount.count > 0) {
+        return res.status(400).json({ error: 'Impossibile eliminare colonna con card non completate' });
       }
+      // Scollega eventuali card completate prima della delete
+      this.db.prepare(`
+        UPDATE kanban_card
+        SET colonna_id = NULL,
+            updated_at = datetime('now', 'localtime'),
+            row_version = row_version + 1
+        WHERE colonna_id = ? AND data_fine_effettiva IS NOT NULL
+      `).run(id);
       const result = this.stmt.deleteColonna.run(id);
       if (result.changes === 0) {
         return res.status(404).json({ error: 'Colonna non trovata' });
