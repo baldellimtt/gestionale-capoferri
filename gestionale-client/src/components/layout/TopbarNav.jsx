@@ -6,6 +6,7 @@ const NAV_ITEMS = [
   { id: 'commesse', label: 'Commesse' },
   { id: 'tracking', label: 'Tracking ore' },
   { id: 'consuntivi', label: 'Consuntivi' },
+  { id: 'fatturazione', label: 'Fatturazione' },
   { id: 'anagrafica', label: 'Clienti' }
 ]
 

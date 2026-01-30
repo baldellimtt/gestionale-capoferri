@@ -1432,11 +1432,11 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false, targetUse
                 </div>
                 <div className="total-item">
                   <div className="total-item-label">Costo KM</div>
-                  <div className="total-item-value">€ {Number(rimborsoKm || 0).toFixed(2)}</div>
+                  <div className="total-item-value">&euro; {Number(rimborsoKm || 0).toFixed(2)}</div>
                 </div>
                 <div className="total-item">
                   <div className="total-item-label">Rimborso KM</div>
-                  <div className="total-item-value">€ {rimborsoTotale.toFixed(2)}</div>
+                  <div className="total-item-value">&euro; {rimborsoTotale.toFixed(2)}</div>
                 </div>
               </div>
             )}

@@ -188,6 +188,12 @@ app.use('/api/tracking', require('./routes/tracking')(db));
 app.use('/api/note-spese', require('./routes/noteSpese')(db));
 app.use('/api/kanban', require('./routes/kanban')(db));
 app.use('/api/presence', require('./routes/presence')(db));
+app.use('/api/fatturazione', (req, res, next) => {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ error: 'Permesso negato' });
+  }
+  return next();
+}, require('./routes/fatturazione')(db));
 
 // SPA fallback (solo se serve static)
 if (serveStaticEnabled) {

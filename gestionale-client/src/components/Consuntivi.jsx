@@ -18,7 +18,7 @@ const TIPI_LAVORO = [
   'Documentazione per pratica edilizia'
 ]
 
-function Consuntivi() {
+function Consuntivi({ onCreateFattura }) {
   const [commesse, setCommesse] = useState([])
   const [clienti, setClienti] = useState([])
   const [loading, setLoading] = useState(true)
@@ -176,6 +176,17 @@ function Consuntivi() {
     () => filteredCommesse.filter((commessa) => consuntivoIds.includes(commessa.id)),
     [filteredCommesse, consuntivoIds]
   )
+  const selectedClienteIds = useMemo(() => {
+    const set = new Set()
+    consuntivoCommesse.forEach((commessa) => {
+      if (commessa?.cliente_id) {
+        set.add(String(commessa.cliente_id))
+      }
+    })
+    return set
+  }, [consuntivoCommesse])
+  const canCreateFattura = consuntivoCommesse.length > 0 && selectedClienteIds.size === 1
+  const selectedClienteId = canCreateFattura ? Array.from(selectedClienteIds)[0] : ''
   const consuntivoTotale = useMemo(
     () => consuntivoCommesse.reduce((sum, commessa) => {
       const value = parseNumber(commessa.importo_totale ?? 0)
@@ -435,7 +446,7 @@ function Consuntivi() {
                       {commessa.cliente_nome || 'Cliente'} - {commessa.titolo}
                     </span>
                     <span className="consuntivo-value">
-                      € {Number(parseNumber(commessa.importo_totale ?? 0) || 0).toFixed(2)}
+                      &euro; {Number(parseNumber(commessa.importo_totale ?? 0) || 0).toFixed(2)}
                     </span>
                   </label>
                 ))}
@@ -446,7 +457,7 @@ function Consuntivi() {
               <div className="consuntivo-summary">
                 <div className="consuntivo-row">
                   <span>Totale commesse selezionate</span>
-                  <strong>€ {consuntivoTotale.toFixed(2)}</strong>
+                  <strong>&euro; {consuntivoTotale.toFixed(2)}</strong>
                 </div>
                 <div className="consuntivo-row">
                   <label className="form-label mb-1">Sconto</label>
@@ -458,7 +469,7 @@ function Consuntivi() {
                       style={{ width: 'auto' }}
                     >
                       <option value="percent">%</option>
-                      <option value="value">€</option>
+                      <option value="value">&euro;</option>
                     </select>
                   <input
                     className="form-control"
@@ -471,11 +482,11 @@ function Consuntivi() {
                 </div>
                 <div className="consuntivo-row">
                   <span>Sconto applicato</span>
-                  <strong>- € {consuntivoScontoValue.toFixed(2)}</strong>
+                  <strong>- &euro; {consuntivoScontoValue.toFixed(2)}</strong>
                 </div>
                 <div className="consuntivo-row consuntivo-final">
                   <span>Conto finale</span>
-                  <strong>€ {consuntivoFinale.toFixed(2)}</strong>
+                  <strong>&euro; {consuntivoFinale.toFixed(2)}</strong>
                 </div>
                 <div className="consuntivo-actions">
                   <button
@@ -489,6 +500,30 @@ function Consuntivi() {
                   <button
                     type="button"
                     className="btn btn-secondary btn-sm"
+                    disabled={!canCreateFattura}
+                    onClick={() => {
+                      if (!canCreateFattura) return
+                      const items = consuntivoCommesse.map((commessa) => ({
+                        name: commessa.titolo || 'Commessa',
+                        qty: 1,
+                        net_price: Number(parseNumber(commessa.importo_totale ?? 0) || 0)
+                      }))
+                      const draft = {
+                        clienteId: Number(selectedClienteId),
+                        commessaIds: consuntivoCommesse.map((commessa) => commessa.id),
+                        items,
+                        visibleSubject: `Consuntivo commesse (${consuntivoCommesse.length})`
+                      }
+                      if (onCreateFattura) {
+                        onCreateFattura(draft)
+                      }
+                    }}
+                  >
+                    Crea fattura
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
                     onClick={() => {
                       setConsuntivoIds([])
                       setConsuntivoSconto('')
@@ -498,6 +533,11 @@ function Consuntivi() {
                     Reset selezione
                   </button>
                 </div>
+                {!canCreateFattura && consuntivoCommesse.length > 1 && (
+                  <div className="text-muted small">
+                    Seleziona commesse dello stesso cliente per creare una fattura unica.
+                  </div>
+                )}
               </div>
             </div>
           </div>

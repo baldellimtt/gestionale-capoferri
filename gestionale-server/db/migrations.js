@@ -252,6 +252,32 @@ class Migrations {
 
       CREATE INDEX IF NOT EXISTS idx_documenti_aziendali_created_at ON documenti_aziendali(created_at);
 
+      -- Tabella Fatture (log locale fatture emesse via Fatture in Cloud)
+      CREATE TABLE IF NOT EXISTS fatture (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        fic_document_id TEXT,
+        fic_company_id TEXT,
+        cliente_id INTEGER,
+        commessa_ids TEXT,
+        numero TEXT,
+        data TEXT,
+        tipo_documento TEXT,
+        stato TEXT,
+        totale REAL DEFAULT 0,
+        valuta TEXT,
+        descrizione TEXT,
+        payload_json TEXT,
+        response_json TEXT,
+        row_version INTEGER DEFAULT 1,
+        created_at TEXT DEFAULT (datetime('now', 'localtime')),
+        updated_at TEXT DEFAULT (datetime('now', 'localtime')),
+        FOREIGN KEY (cliente_id) REFERENCES clienti(id) ON DELETE SET NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_fatture_created_at ON fatture(created_at);
+      CREATE INDEX IF NOT EXISTS idx_fatture_cliente_id ON fatture(cliente_id);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_fatture_fic_unique ON fatture(fic_company_id, fic_document_id);
+
       -- Tabella Colonne Kanban
       CREATE TABLE IF NOT EXISTS kanban_colonne (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -384,6 +410,7 @@ class Migrations {
     this.ensureDatiAziendaliInitialized(db);
     this.ensureDatiFiscaliInitialized(db);
     this.ensureDocumentiAziendaliTable(db);
+    this.ensureFattureTable(db);
 
     console.log('[MIGRATIONS] Schema database creato/verificato');
   }
@@ -478,6 +505,7 @@ class Migrations {
       'dati_aziendali',
       'dati_fiscali',
       'documenti_aziendali',
+      'fatture',
       'kanban_colonne',
       'kanban_card',
       'kanban_scadenze',
@@ -729,6 +757,42 @@ class Migrations {
       }
     } catch (error) {
       console.log('[MIGRATIONS] Errore verifica tabella documenti_aziendali:', error.message);
+    }
+  }
+
+  ensureFattureTable(db) {
+    try {
+      const tableInfo = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='fatture'").get();
+      if (!tableInfo) {
+        db.exec(`
+          CREATE TABLE fatture (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            fic_document_id TEXT,
+            fic_company_id TEXT,
+            cliente_id INTEGER,
+            commessa_ids TEXT,
+            numero TEXT,
+            data TEXT,
+            tipo_documento TEXT,
+            stato TEXT,
+            totale REAL DEFAULT 0,
+            valuta TEXT,
+            descrizione TEXT,
+            payload_json TEXT,
+            response_json TEXT,
+            row_version INTEGER DEFAULT 1,
+            created_at TEXT DEFAULT (datetime('now', 'localtime')),
+            updated_at TEXT DEFAULT (datetime('now', 'localtime')),
+            FOREIGN KEY (cliente_id) REFERENCES clienti(id) ON DELETE SET NULL
+          );
+          CREATE INDEX IF NOT EXISTS idx_fatture_created_at ON fatture(created_at);
+          CREATE INDEX IF NOT EXISTS idx_fatture_cliente_id ON fatture(cliente_id);
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_fatture_fic_unique ON fatture(fic_company_id, fic_document_id);
+        `);
+        console.log('[MIGRATIONS] Tabella fatture creata');
+      }
+    } catch (error) {
+      console.log('[MIGRATIONS] Errore verifica tabella fatture:', error.message);
     }
   }
 }
