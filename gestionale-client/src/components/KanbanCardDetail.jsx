@@ -39,6 +39,7 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
   const [allDay, setAllDay] = useState(true)
   const [timeStart, setTimeStart] = useState('')
   const [timeEnd, setTimeEnd] = useState('')
+  const [noDeadline, setNoDeadline] = useState(false)
   const [scadenze, setScadenze] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -78,7 +79,7 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
       ...formData,
       tags: formData.tags && formData.tags.length > 0 ? formData.tags : null,
       data_inizio: buildDateTime(formData.data_inizio, timeStart),
-      data_fine_prevista: buildDateTime(formData.data_fine_prevista, timeEnd),
+      data_fine_prevista: noDeadline ? '' : buildDateTime(formData.data_fine_prevista, timeEnd),
       row_version: card?.row_version,
       commessa_id: (() => {
         if (!formData.commessa_id || formData.commessa_id === '' || formData.commessa_id === 0) return null;
@@ -112,6 +113,7 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
       setTimeStart(start.time)
       setTimeEnd(end.time)
       setAllDay(!start.time && !end.time)
+      setNoDeadline(!end.date)
       setClienteSearch(card.cliente_nome || '')
       // Imposta commessa search se esiste commessa_id
       if (card.commessa_id) {
@@ -146,6 +148,7 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
       setAllDay(true)
       setTimeStart('')
       setTimeEnd('')
+      setNoDeadline(true)
       setClienteSearch('')
       setCommessaSearch('')
       setScadenze([])
@@ -944,7 +947,27 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
                     className="form-control"
                     value={formData.data_fine_prevista}
                     onChange={(e) => setFormData({ ...formData, data_fine_prevista: e.target.value })}
+                    disabled={noDeadline}
                   />
+                  <div className="form-check form-switch mt-2">
+                    <input
+                      id="kanban-no-deadline"
+                      type="checkbox"
+                      className="form-check-input"
+                      checked={noDeadline}
+                      onChange={(e) => {
+                        const next = e.target.checked
+                        setNoDeadline(next)
+                        if (next) {
+                          setFormData((prev) => ({ ...prev, data_fine_prevista: '' }))
+                          setTimeEnd('')
+                        }
+                      }}
+                    />
+                    <label className="form-check-label" htmlFor="kanban-no-deadline">
+                      Senza scadenza
+                    </label>
+                  </div>
                 </div>
                 <div className="col-md-3">
                   <label className="form-label">Intera giornata</label>

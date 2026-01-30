@@ -166,6 +166,7 @@ function KanbanCard({ card, commesse = [], onCardClick, onQuickUpdate, onDelete 
 
   const prioritaColor = getPrioritaColor(card.priorita)
   const dataFine = formatDateTime(card.data_fine_prevista)
+  const noDeadline = !card.data_fine_prevista
   const dataInizio = formatDateTime(card.data_inizio)
   const scaduta = dataFine && isScaduta(card.data_fine_prevista)
   const scadenzaProssima = dataFine && isScadenzaProssima(card.data_fine_prevista)
@@ -411,7 +412,7 @@ function KanbanCard({ card, commesse = [], onCardClick, onQuickUpdate, onDelete 
             </button>
           </div>
         )}
-        {!dataFine && !isEditingDueDate && (
+        {noDeadline && !isEditingDueDate && (
           <div
             onClick={(e) => {
               e.stopPropagation()
@@ -420,7 +421,8 @@ function KanbanCard({ card, commesse = [], onCardClick, onQuickUpdate, onDelete 
             title="Click per aggiungere scadenza"
             style={{ color: 'var(--ink-500)', cursor: 'pointer' }}
           >
-            <strong>Scadenza:</strong> -
+            <strong>Scadenza:</strong>{' '}
+            <span className="kanban-no-deadline">Senza scadenza</span>
             {isHovered && (
               <span style={{ fontSize: '0.7rem', color: 'var(--ink-500)', marginLeft: '0.4rem' }}>
                 Click per aggiungere

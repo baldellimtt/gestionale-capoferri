@@ -1887,6 +1887,51 @@ header .logo {
   cursor: default;
 }
 
+.kanban-no-deadline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #475569;
+  background: rgba(148, 163, 184, 0.2);
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+}
+
+.completed-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.completed-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.45rem 0.6rem;
+  border-bottom: 1px dashed var(--border-soft);
+  font-size: 0.9rem;
+  color: var(--ink-700);
+}
+
+.completed-item:last-child {
+  border-bottom: none;
+}
+
+.completed-title {
+  font-weight: 600;
+  color: var(--ink-800);
+}
+
+.completed-date {
+  font-size: 0.85rem;
+  color: var(--ink-500);
+}
+
 .kanban-card-action.is-complete:hover {
   filter: brightness(0.95);
 }

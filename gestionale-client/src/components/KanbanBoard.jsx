@@ -21,6 +21,7 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
   const [deleteCardId, setDeleteCardId] = useState(null)
   const [deleteCardLoading, setDeleteCardLoading] = useState(false)
   const [showColonneManager, setShowColonneManager] = useState(false)
+  const [showCompleted, setShowCompleted] = useState(false)
   const [deleteColonnaTarget, setDeleteColonnaTarget] = useState(null)
   const [colonneDrafts, setColonneDrafts] = useState({})
   const [colonnaCreating, setColonnaCreating] = useState(false)
@@ -44,26 +45,20 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
     data_fine_a: ''
   })
 
-  const completedColonna = useMemo(() => {
-    return colonne.find((col) => String(col?.nome || '').trim().toLowerCase() === 'completati') || null
-  }, [colonne])
-
-  const virtualCompletedColonna = useMemo(() => ({
-    id: '__completati__',
-    nome: 'Completati',
-    colore: '#10b981',
-    ordine: 9999
-  }), [])
-
-  const resolvedCompletedColonna = completedColonna || virtualCompletedColonna
-
-  const displayColonne = useMemo(() => {
-    if (completedColonna) return colonne
-    return [...colonne, virtualCompletedColonna]
-  }, [colonne, completedColonna, virtualCompletedColonna])
+  const visibleColonne = useMemo(() => (
+    colonne.filter((col) => String(col?.nome || '').trim().toLowerCase() !== 'completati')
+  ), [colonne])
 
   const activeCards = useMemo(() => card.filter((item) => !item.data_fine_effettiva), [card])
-  const completedCards = useMemo(() => card.filter((item) => item.data_fine_effettiva), [card])
+  const completedCardsSorted = useMemo(() => (
+    [...card]
+      .filter((item) => item.data_fine_effettiva)
+      .sort((a, b) => {
+        const aTime = new Date(a.data_fine_effettiva || a.updated_at || 0).getTime()
+        const bTime = new Date(b.data_fine_effettiva || b.updated_at || 0).getTime()
+        return bTime - aTime
+      })
+  ), [card])
 
   useEffect(() => {
     loadData()
@@ -198,6 +193,17 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
     return date.toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })
   }
 
+  const formatCompletedDate = (dateStr) => {
+    if (!dateStr) return ''
+    const normalized = dateStr.includes('T') ? dateStr : dateStr.replace(' ', 'T')
+    const parsed = new Date(normalized)
+    if (Number.isNaN(parsed.getTime())) {
+      const fallback = parseDateOnly(dateStr)
+      return fallback ? fallback.toLocaleDateString('it-IT') : ''
+    }
+    return parsed.toLocaleDateString('it-IT')
+  }
+
   const scadenzeInbox = useMemo(() => {
     const today = normalizeDate(new Date())
     const items = scadenze
@@ -298,13 +304,12 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
   const handleQuickUpdate = async (cardId, patch) => {
     const existing = card.find((item) => item.id === cardId)
     if (!existing) return
-    const shouldMoveToCompleted = Boolean(patch?.data_fine_effettiva) && completedColonna?.id
     const payload = {
       row_version: existing.row_version,
       commessa_id: existing.commessa_id || null,
       titolo: patch.titolo ?? existing.titolo,
       descrizione: patch.descrizione ?? existing.descrizione,
-      colonna_id: patch.colonna_id ?? (shouldMoveToCompleted ? completedColonna.id : existing.colonna_id),
+      colonna_id: patch.colonna_id ?? existing.colonna_id,
       priorita: patch.priorita ?? existing.priorita,
       responsabile_id: patch.responsabile_id ?? existing.responsabile_id,
       cliente_id: patch.cliente_id ?? existing.cliente_id,
@@ -647,6 +652,18 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
               </div>
               <KanbanNotifications onNotificationClick={handleNotificationClick} />
               <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => setShowCompleted((prev) => !prev)}
+                style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '0.5rem',
+                  height: '38px'
+                }}
+              >
+                {showCompleted ? 'Nascondi completati' : 'Completati'}
+              </button>
+              <button
                 className="btn btn-primary btn-sm"
                 onClick={() => {
                   setSelectedCard(null)
@@ -693,7 +710,7 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
             </div>
           </div>
 
-          {!showColonneManager && viewMode === 'kanban' && (
+          {!showColonneManager && viewMode === 'kanban' && !showCompleted && (
             <div
               className="mb-3 p-3"
               style={{
@@ -795,16 +812,37 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
             </div>
           )}
 
-          {!showColonneManager && (
+          {!showColonneManager && !showCompleted && (
             <div className="mb-3">
               <KanbanFilters
-                colonne={colonne}
+                colonne={visibleColonne}
                 clienti={clienti}
                 filters={filters}
                 onFiltersChange={setFilters}
               />
             </div>
           )}
+
+          {!showColonneManager && viewMode === 'kanban' && showCompleted && (
+            <div className="card mb-3">
+              <div className="card-header">Completati</div>
+              <div className="card-body">
+                {completedCardsSorted.length === 0 ? (
+                  <div className="text-muted">Nessuna attivitÃ  completata.</div>
+                ) : (
+                  <div className="completed-list">
+                    {completedCardsSorted.map((item) => (
+                      <div key={item.id} className="completed-item">
+                        <span className="completed-title">{item.titolo || 'AttivitÃ '}</span>
+                        <span className="completed-date">{formatCompletedDate(item.data_fine_effettiva)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
 
           {user?.role === 'admin' && showColonneManager && (
             <div className="card mb-3">
@@ -942,44 +980,44 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
 
       {viewMode === 'kanban' ? (
         !showColonneManager && (
-          <div
-            className="kanban-board-container"
-            style={{
-              display: 'flex',
-              gap: '1rem',
-              overflowX: 'auto',
-              paddingBottom: '1rem',
-              minHeight: '600px',
-              scrollBehavior: 'smooth',
-              WebkitOverflowScrolling: 'touch'
-            }}
-          >
-              {displayColonne.map((colonna) => {
-                const isCompletedColumn = colonna.id === resolvedCompletedColonna.id
-                const isVirtualColumn = colonna.id === '__completati__'
-                const allowReorder = !isVirtualColumn && !colonnaReorderBusy
-                return (
-                <KanbanColumn
-                  key={colonna.id}
-                  colonna={colonna}
-                  card={isCompletedColumn ? card : activeCards}
-                  cardsOverride={isCompletedColumn ? completedCards : null}
-                  disableDrop={isCompletedColumn}
-                  commesse={commesse}
-                  onCardClick={handleCardClick}
-                  onMoveCard={handleCardMove}
-                  onQuickUpdate={handleQuickUpdate}
-                  onDelete={handleCardDelete}
-                  onColumnDragStart={allowReorder ? handleColumnDragStart(colonna.id) : null}
-                  onColumnDragEnd={handleColumnDragEnd}
-                  onColumnDrop={allowReorder ? handleColumnDrop(colonna.id) : null}
-                  columnDragDisabled={!allowReorder}
-                  isColumnDragging={colonnaDragId === colonna.id}
-                  columnDragId={colonnaDragId}
-                />
-              )
-              })}
-          </div>
+          showCompleted ? null : (
+            <div
+              className="kanban-board-container"
+              style={{
+                display: 'flex',
+                gap: '1rem',
+                overflowX: 'auto',
+                paddingBottom: '1rem',
+                minHeight: '600px',
+                scrollBehavior: 'smooth',
+                WebkitOverflowScrolling: 'touch'
+              }}
+            >
+                {visibleColonne.map((colonna) => {
+                  const allowReorder = !colonnaReorderBusy
+                  return (
+                  <KanbanColumn
+                    key={colonna.id}
+                    colonna={colonna}
+                    card={activeCards}
+                    cardsOverride={null}
+                    disableDrop={false}
+                    commesse={commesse}
+                    onCardClick={handleCardClick}
+                    onMoveCard={handleCardMove}
+                    onQuickUpdate={handleQuickUpdate}
+                    onDelete={handleCardDelete}
+                    onColumnDragStart={allowReorder ? handleColumnDragStart(colonna.id) : null}
+                    onColumnDragEnd={handleColumnDragEnd}
+                    onColumnDrop={allowReorder ? handleColumnDrop(colonna.id) : null}
+                    columnDragDisabled={!allowReorder}
+                    isColumnDragging={colonnaDragId === colonna.id}
+                    columnDragId={colonnaDragId}
+                  />
+                )
+                })}
+            </div>
+          )
         )
       ) : (
         <KanbanCalendar
@@ -1000,7 +1038,7 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
       {showCardDetail && (
         <KanbanCardDetail
           card={selectedCard}
-          colonne={colonne}
+          colonne={visibleColonne}
           clienti={clienti}
           commesse={commesse}
           currentUser={user}
