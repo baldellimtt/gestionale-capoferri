@@ -33,7 +33,7 @@ function CommessaForm({
       <div className="card-header d-flex justify-content-between align-items-center">
         <span>
           {editingId
-            ? `Scheda Commessa${formData?.titolo ? ` - ${formData.titolo}` : ''}`
+            ? `Scheda Commessa${formData?.titolo ? ` ${formData.titolo}` : ''}`
             : 'Nuova commessa'}
         </span>
         {editingId && onOpenTracking && (
