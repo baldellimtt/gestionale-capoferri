@@ -1287,6 +1287,10 @@ header .logo {
   margin-bottom: 1rem;
 }
 
+.commessa-form-label-row {
+  margin-bottom: 0.5rem;
+}
+
 .tipologie-lavoro-grid {
   display: flex;
   flex-wrap: wrap;

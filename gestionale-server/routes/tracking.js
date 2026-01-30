@@ -71,7 +71,7 @@ class TrackingController {
       stopEntry: this.db.prepare(`
         UPDATE commesse_ore
         SET end_time = datetime('now', 'localtime'),
-            durata_minuti = CAST((julianday(datetime('now', 'localtime')) - julianday(start_time)) * 24 * 60 AS INTEGER),
+            durata_minuti = ?,
             updated_at = datetime('now', 'localtime'),
             row_version = row_version + 1
         WHERE id = ? AND end_time IS NULL AND row_version = ?
@@ -103,6 +103,11 @@ class TrackingController {
     if (value == null || value === '') return NaN;
     const parsed = Number(String(value).replace(',', '.'));
     return Number.isFinite(parsed) ? parsed : NaN;
+  }
+
+  roundMinutesUpToHalfHour(minutesValue) {
+    if (!Number.isFinite(minutesValue) || minutesValue <= 0) return 0;
+    return Math.ceil(minutesValue / 30) * 30;
   }
 
   buildEntryResponse(entry) {
@@ -215,7 +220,16 @@ class TrackingController {
         return res.status(409).json({ error: 'Tracking già fermato', entry: this.buildEntryResponse(existing) });
       }
 
-      const result = this.stmt.stopEntry.run(id, row_version);
+      let durationMinutes = 0;
+      if (existing.start_time) {
+        const parsedStart = new Date(String(existing.start_time).replace(' ', 'T'));
+        if (!Number.isNaN(parsedStart.getTime())) {
+          const elapsedMinutes = Math.max(0, (Date.now() - parsedStart.getTime()) / 60000);
+          durationMinutes = this.roundMinutesUpToHalfHour(elapsedMinutes);
+        }
+      }
+
+      const result = this.stmt.stopEntry.run(durationMinutes, id, row_version);
       if (result.changes === 0) {
         const current = this.stmt.getEntryById.get(id);
         if (!current) {
@@ -250,7 +264,7 @@ class TrackingController {
         return res.status(400).json({ error: 'Ore non valide' });
       }
 
-      const durataMinuti = Math.round(oreValue * 60);
+      const durataMinuti = this.roundMinutesUpToHalfHour(oreValue * 60);
       const startTime = `${data} 00:00:00`;
 
       const result = this.stmt.createManualEntry.run(
@@ -312,7 +326,7 @@ class TrackingController {
         if (!Number.isFinite(oreValue) || oreValue < 0) {
           return res.status(400).json({ error: 'Ore non valide' });
         }
-        nextDuration = Math.round(oreValue * 60);
+        nextDuration = this.roundMinutesUpToHalfHour(oreValue * 60);
       }
 
       if (hasData || hasOre) {

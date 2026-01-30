@@ -31,7 +31,11 @@ function CommessaForm({
   return (
     <div className="card mb-4">
       <div className="card-header d-flex justify-content-between align-items-center">
-        <span>{editingId ? 'Scheda Commessa' : 'Nuova commessa'}</span>
+        <span>
+          {editingId
+            ? `Scheda Commessa${formData?.titolo ? ` - ${formData.titolo}` : ''}`
+            : 'Nuova commessa'}
+        </span>
         {editingId && onOpenTracking && (
           <button
             type="button"
@@ -71,7 +75,7 @@ function CommessaForm({
             />
           </div>
           <div className={`col-md-3 importo-pagato-row ${isConsuntivoPagamenti ? 'is-consuntivo' : ''}`}>
-            <div className="d-flex align-items-center justify-content-between">
+            <div className="d-flex align-items-center justify-content-between commessa-form-label-row">
               <label className="form-label mb-0">Cliente</label>
               {!allowClienteEdit && (
                 <button

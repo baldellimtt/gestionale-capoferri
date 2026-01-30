@@ -270,12 +270,8 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
 
   const handleStopEntry = async (entry) => {
     if (!entry?.id) return
-    const roundedStopHours = roundUpToHalfHour(getEntryMinutes(entry) / 60)
     try {
       await api.stopTracking(entry.id, entry.row_version)
-      if (roundedStopHours > 0) {
-        await api.updateTrackingEntry(entry.id, { ore: roundedStopHours.toFixed(2), row_version: entry.row_version })
-      }
       toast?.showSuccess('Tracking fermato', 'Tracking ore')
       await refreshActive()
       if (selectedId) {

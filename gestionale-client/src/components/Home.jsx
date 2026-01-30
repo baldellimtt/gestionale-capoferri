@@ -43,11 +43,6 @@ const getUserLabel = (entry) => {
   return fullName || entry?.username || (entry?.user_id ? `Utente #${entry.user_id}` : 'Utente')
 }
 
-const roundUpToHalfHour = (hoursValue) => {
-  if (!Number.isFinite(hoursValue) || hoursValue <= 0) return 0
-  return Math.ceil(hoursValue * 2) / 2
-}
-
 function Home({ clienti, user, toast, onOpenTracking }) {
   const [activeEntries, setActiveEntries] = useState([])
   const [commesse, setCommesse] = useState([])
@@ -155,12 +150,8 @@ function Home({ clienti, user, toast, onOpenTracking }) {
   const handleStopActiveEntry = useCallback(async (entry) => {
     if (!entry?.id) return
     setStoppingId(entry.id)
-    const roundedHours = roundUpToHalfHour(computeElapsedMinutes(entry) / 60)
     try {
-      await api.stopTracking(entry.id)
-      if (roundedHours > 0) {
-        await api.updateTrackingEntry(entry.id, { ore: roundedHours.toFixed(2), row_version: entry.row_version })
-      }
+      await api.stopTracking(entry.id, entry.row_version)
       toast?.showSuccess('Tracking fermato', 'Home')
       await loadActiveTracking()
     } catch (err) {
