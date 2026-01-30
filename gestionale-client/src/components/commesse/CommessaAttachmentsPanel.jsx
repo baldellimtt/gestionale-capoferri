@@ -1,14 +1,50 @@
-import React from 'react'
+import React, { useState } from 'react'
 
 function CommessaAttachmentsPanel({
   selectedCommessa,
   selectedCommessaId,
   selectedAllegati,
   uploading,
+  uploadStatus,
+  uploadMessage,
   onUpload,
   onDeleteAllegato,
   onDownloadAllegato
 }) {
+  const [isDragActive, setIsDragActive] = useState(false)
+  const isUploading = uploading[selectedCommessaId]
+  const isDisabled = !selectedCommessaId || isUploading
+  const totalUploads = uploadStatus?.total || 0
+  const doneUploads = uploadStatus?.done || 0
+  const failedUploads = uploadStatus?.failed || 0
+  const progressValue = totalUploads ? Math.round((doneUploads / totalUploads) * 100) : 0
+
+  const handleFiles = (files) => {
+    if (!files || files.length === 0) return
+    onUpload(selectedCommessaId, Array.from(files))
+  }
+
+  const handleChange = (event) => {
+    handleFiles(event.target.files)
+    event.target.value = ''
+  }
+
+  const handleDragOver = (event) => {
+    event.preventDefault()
+    if (!isDisabled) setIsDragActive(true)
+  }
+
+  const handleDragLeave = () => {
+    setIsDragActive(false)
+  }
+
+  const handleDrop = (event) => {
+    event.preventDefault()
+    setIsDragActive(false)
+    if (isDisabled) return
+    handleFiles(event.dataTransfer.files)
+  }
+
   return (
     <div className="card mb-4">
       <div className="card-header">Allegati commessa</div>
@@ -19,27 +55,65 @@ function CommessaAttachmentsPanel({
           <>
             <div className="row g-3 align-items-end">
               <div className="col-md-12">
-                <label className="form-label">Carica nuovo allegato</label>
-                <div className="commessa-attachment-actions">
+                <label className="form-label">Carica nuovi allegati</label>
+                <div
+                  className={`commessa-dropzone ${isDragActive ? 'is-dragover' : ''} ${isDisabled ? 'is-disabled' : ''}`}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                >
                   <input
                     id="commessa-file-global"
                     type="file"
+                    multiple
                     className="commessa-file-input"
-                    onChange={(e) => onUpload(selectedCommessaId, e.target.files?.[0])}
-                    disabled={!selectedCommessaId || uploading[selectedCommessaId]}
+                    onChange={handleChange}
+                    disabled={isDisabled}
                   />
-                  <label
-                    className="btn btn-secondary btn-sm btn-icon"
-                    htmlFor="commessa-file-global"
-                    title="Carica allegato"
-                  >
-                    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 10.5V16a5 5 0 0 1-5 5H8a5 5 0 0 1 0-10h8a3 3 0 0 1 0 6H9a1 1 0 0 1 0-2h7" />
-                    </svg>
-                  </label>
-                  {uploading[selectedCommessaId] && (
-                    <span className="commessa-meta">Caricamento...</span>
-                  )}
+                  <div className="commessa-dropzone-content">
+                    <div className="commessa-dropzone-title">
+                      Trascina qui i file oppure selezionali
+                    </div>
+                    <div className="commessa-attachment-actions">
+                      <label
+                        className="btn btn-secondary btn-sm btn-icon"
+                        htmlFor="commessa-file-global"
+                        title="Carica allegati"
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 10.5V16a5 5 0 0 1-5 5H8a5 5 0 0 1 0-10h8a3 3 0 0 1 0 6H9a1 1 0 0 1 0-2h7" />
+                        </svg>
+                        <span>Seleziona file</span>
+                      </label>
+                      {isUploading && (
+                        <span className="commessa-meta">Caricamento...</span>
+                      )}
+                    </div>
+                    {totalUploads > 0 && (
+                      <div className="commessa-upload-status">
+                        <div className="commessa-upload-text">
+                          Caricati {doneUploads} di {totalUploads}
+                          {failedUploads > 0 ? ` (errori: ${failedUploads})` : ''}
+                        </div>
+                        <div className="progress commessa-upload-progress">
+                          <div
+                            className="progress-bar"
+                            role="progressbar"
+                            style={{ width: `${progressValue}%` }}
+                            aria-valuenow={progressValue}
+                            aria-valuemin="0"
+                            aria-valuemax="100"
+                          />
+                        </div>
+                      </div>
+                    )}
+                    {uploadMessage && (
+                      <div className="commessa-upload-message">{uploadMessage}</div>
+                    )}
+                    <div className="commessa-dropzone-hint">
+                      Puoi selezionare o trascinare piu file insieme.
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

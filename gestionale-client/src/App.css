@@ -1143,6 +1143,76 @@ header .logo {
   margin-top: 0.4rem;
 }
 
+.commessa-dropzone {
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.25rem;
+  background: var(--bg-2);
+  transition: var(--transition-fast);
+}
+
+.commessa-dropzone.is-dragover {
+  border-color: var(--brand-500);
+  background: var(--brand-300);
+  box-shadow: var(--glow);
+}
+
+.commessa-dropzone.is-disabled {
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+.commessa-dropzone-content {
+  display: grid;
+  gap: 0.5rem;
+  text-align: left;
+}
+
+.commessa-dropzone-title {
+  font-weight: 600;
+  color: var(--ink-800);
+}
+
+.commessa-dropzone-hint {
+  font-size: 0.85rem;
+  color: var(--ink-500);
+}
+
+.commessa-dropzone .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.commessa-upload-status {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.4rem;
+}
+
+.commessa-upload-text {
+  font-size: 0.85rem;
+  color: var(--ink-600);
+}
+
+.commessa-upload-message {
+  font-size: 0.85rem;
+  color: var(--ink-700);
+  font-weight: 600;
+  margin-top: 0.35rem;
+}
+
+.commessa-upload-progress {
+  height: 8px;
+  background: var(--bg-1);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.commessa-upload-progress .progress-bar {
+  background: linear-gradient(90deg, var(--brand-500), var(--brand-700));
+}
+
 .commessa-file-input {
   display: none;
 }

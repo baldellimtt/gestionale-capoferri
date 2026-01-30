@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import api from '../services/api'
 import ConfirmDeleteModal from './ConfirmDeleteModal'
 import CommessaTrackingPanel from './commesse/CommessaTrackingPanel'
@@ -83,8 +83,11 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
   const [allegatiByCommessa, setAllegatiByCommessa] = useState({})
   const [initialAllegati, setInitialAllegati] = useState([])
   const [uploading, setUploading] = useState({})
+  const [uploadStatusByCommessa, setUploadStatusByCommessa] = useState({})
   const [allegatiError, setAllegatiError] = useState(null)
   const [selectedCommessaId, setSelectedCommessaId] = useState('')
+  const [uploadMessageByCommessa, setUploadMessageByCommessa] = useState({})
+  const uploadMessageTimers = useRef({})
   const [utenti, setUtenti] = useState([])
   const [commessaAudit, setCommessaAudit] = useState([])
   const [commessaAuditLoading, setCommessaAuditLoading] = useState(false)
@@ -809,22 +812,72 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
     }
   }
 
-  const handleUpload = async (commessaId, file) => {
-    if (!file) return
+  const handleUpload = async (commessaId, filesInput) => {
+    const files = Array.isArray(filesInput)
+      ? filesInput.filter(Boolean)
+      : filesInput
+        ? [filesInput]
+        : []
+    if (!files.length) return
+
     setUploading((prev) => ({ ...prev, [commessaId]: true }))
     setAllegatiError(null)
-    try {
-      const created = await api.uploadCommessaAllegato(commessaId, file)
-      setAllegatiByCommessa((prev) => ({
-        ...prev,
-        [commessaId]: [created, ...(prev[commessaId] || [])]
-      }))
-    } catch (err) {
-      console.error('Errore upload allegato:', err)
-      setAllegatiError(err.message || 'Errore nel caricamento allegato.')
-    } finally {
-      setUploading((prev) => ({ ...prev, [commessaId]: false }))
+    setUploadStatusByCommessa((prev) => ({
+      ...prev,
+      [commessaId]: { total: files.length, done: 0, failed: 0 }
+    }))
+    setUploadMessageByCommessa((prev) => ({ ...prev, [commessaId]: '' }))
+    let firstError = null
+    let failedCount = 0
+
+    for (const file of files) {
+      try {
+        const created = await api.uploadCommessaAllegato(commessaId, file)
+        setAllegatiByCommessa((prev) => ({
+          ...prev,
+          [commessaId]: [created, ...(prev[commessaId] || [])]
+        }))
+        setUploadStatusByCommessa((prev) => ({
+          ...prev,
+          [commessaId]: {
+            ...prev[commessaId],
+            done: (prev[commessaId]?.done || 0) + 1
+          }
+        }))
+      } catch (err) {
+        console.error('Errore upload allegato:', err)
+        if (!firstError) {
+          firstError = err
+        }
+        failedCount += 1
+        setUploadStatusByCommessa((prev) => ({
+          ...prev,
+          [commessaId]: {
+            ...prev[commessaId],
+            done: (prev[commessaId]?.done || 0) + 1,
+            failed: (prev[commessaId]?.failed || 0) + 1
+          }
+        }))
+      }
     }
+
+    if (firstError) {
+      setAllegatiError(firstError.message || 'Alcuni allegati non sono stati caricati.')
+    }
+
+    setUploading((prev) => ({ ...prev, [commessaId]: false }))
+
+    const completedMessage = failedCount
+      ? `Caricamento completato con ${failedCount} errori.`
+      : 'Caricamento completato.'
+    setUploadMessageByCommessa((prev) => ({ ...prev, [commessaId]: completedMessage }))
+
+    if (uploadMessageTimers.current[commessaId]) {
+      clearTimeout(uploadMessageTimers.current[commessaId])
+    }
+    uploadMessageTimers.current[commessaId] = setTimeout(() => {
+      setUploadMessageByCommessa((prev) => ({ ...prev, [commessaId]: '' }))
+    }, 3000)
   }
 
   const handleDeleteAllegato = async (commessaId, allegatoId) => {
@@ -1316,6 +1369,8 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
           selectedCommessaId={selectedCommessaId}
           selectedAllegati={selectedAllegati}
           uploading={uploading}
+          uploadStatus={uploadStatusByCommessa[selectedCommessaId]}
+          uploadMessage={uploadMessageByCommessa[selectedCommessaId]}
           onUpload={handleUpload}
           onDeleteAllegato={handleDeleteAllegato}
           onDownloadAllegato={handleDownloadAllegato}
