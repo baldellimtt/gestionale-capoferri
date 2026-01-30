@@ -834,7 +834,15 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
                   <div className="completed-list">
                     {completedCardsSorted.map((item) => (
                       <div key={item.id} className="completed-item">
+                        <div className="completed-main">
                         <span className="completed-title">{item.titolo || 'AttivitÃ '}</span>
+                        <span className="completed-meta">
+                          {(() => {
+                            const commessaRef = commesse.find((c) => String(c.id) === String(item.commessa_id))
+                            return commessaRef?.titolo || (item.commessa_id ? `Commessa #${item.commessa_id}` : '')
+                          })()}
+                        </span>
+                        </div>
                         <span className="completed-date">{formatCompletedDate(item.data_fine_effettiva)}</span>
                       </div>
                     ))}

@@ -2085,6 +2085,17 @@ header .logo {
   color: var(--ink-800);
 }
 
+.completed-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.completed-meta {
+  font-size: 0.8rem;
+  color: var(--ink-500);
+}
+
 .completed-date {
   font-size: 0.85rem;
   color: var(--ink-500);
