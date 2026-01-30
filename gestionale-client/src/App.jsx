@@ -1,10 +1,15 @@
-import { useState, useEffect, Suspense, lazy, useRef } from 'react'
+import { useState, Suspense, lazy } from 'react'
 import './App.css'
 import ErrorBoundary from './components/ErrorBoundary'
-import api from './services/api'
 import { ToastContainer } from './components/Toast'
 import { useToast } from './hooks/useToast'
 import { AttivitaProvider } from './contexts/AttivitaContext'
+import { useAuth } from './hooks/useAuth'
+import { useAppData } from './hooks/useAppData'
+import { usePresence } from './hooks/usePresence'
+import AppHeader from './components/layout/AppHeader'
+import TopbarNav from './components/layout/TopbarNav'
+import AppLayout from './components/layout/AppLayout'
 
 // Lazy loading dei componenti principali per code splitting
 const Login = lazy(() => import('./components/Login'))
@@ -31,189 +36,42 @@ const LoadingFallback = () => (
 
 function App() {
   const [activeView, setActiveView] = useState('home')
-  const [clienti, setClienti] = useState([])
-  const [utenti, setUtenti] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [user, setUser] = useState(null)
   const [trackingCommessaId, setTrackingCommessaId] = useState(null)
   const [commessaOpenId, setCommessaOpenId] = useState(null)
-  const [authChecking, setAuthChecking] = useState(true)
-  const [authLoading, setAuthLoading] = useState(false)
-  const [authError, setAuthError] = useState(null)
-  const [activeUsers, setActiveUsers] = useState([])
-  const [presenceLoading, setPresenceLoading] = useState(false)
-  const [presenceError, setPresenceError] = useState(null)
-  const presenceBusyRef = useRef(false)
   const toast = useToast()
-
-  // Verifica autenticazione
-  useEffect(() => {
-    const checkAuth = async () => {
-      if (!api.getToken()) {
-        // Se non c'è token, resetta eventuali errori precedenti e mostra login
-        setAuthError(null)
-        setAuthChecking(false)
-        return
-      }
-
-      try {
-        const me = await api.me()
-        setUser(me)
-        setAuthError(null) // Reset errori se il login è riuscito
-      } catch (err) {
-        // Gestione errori specifica per rate limiting
-        if (err.status === 429) {
-          console.warn('Rate limit raggiunto per /auth/me:', err.retryAfter, 'secondi')
-          // Evita di bloccare la schermata di login con un errore "troppe richieste"
-          api.clearTokens()
-          setUser(null)
-          setAuthError(null)
-        } else if (err.status === 401) {
-          // Non forzare il logout automatico su 401
-          setAuthError('Sessione scaduta. Riprova più tardi.')
-        } else {
-          // Per altri errori, mostra un messaggio generico
-          setAuthError('Errore di connessione. Riprova.')
-        }
-      } finally {
-        setAuthChecking(false)
-      }
-    }
-
-    checkAuth()
-  }, [])
-
-  // Carica clienti e utenti dal server quando autenticato
-  useEffect(() => {
-    if (user) {
-      loadClienti()
-      loadUtenti()
-    }
-  }, [user])
-
-  useEffect(() => {
-    if (!user) {
-      setActiveUsers([])
-      setPresenceError(null)
-      return
-    }
-
-    let cancelled = false
-    const runPresence = async () => {
-      if (presenceBusyRef.current) return
-      presenceBusyRef.current = true
-      setPresenceLoading(true)
-      try {
-        await api.presenceHeartbeat(activeView)
-        const data = await api.getActiveUsers(2)
-        if (!cancelled) {
-          setActiveUsers(Array.isArray(data) ? data : [])
-          setPresenceError(null)
-        }
-      } catch (err) {
-        console.error('Errore presenza utenti:', err)
-        if (!cancelled) {
-          setPresenceError('Presenze non disponibili')
-        }
-      } finally {
-        if (!cancelled) {
-          setPresenceLoading(false)
-        }
-        presenceBusyRef.current = false
-      }
-    }
-
-    runPresence()
-    const intervalId = setInterval(runPresence, 30000)
-    const handleVisibility = () => {
-      if (document.visibilityState === 'visible') {
-        runPresence()
-      }
-    }
-
-    window.addEventListener('focus', runPresence)
-    document.addEventListener('visibilitychange', handleVisibility)
-
-    return () => {
-      cancelled = true
-      clearInterval(intervalId)
-      window.removeEventListener('focus', runPresence)
-      document.removeEventListener('visibilitychange', handleVisibility)
-    }
-  }, [user, activeView])
-
-  const loadClienti = async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      const data = await api.getClienti()
-      setClienti(data)
-    } catch (err) {
-      console.error('Errore caricamento clienti:', err)
-      if (err.status === 401) {
-        setError('Sessione scaduta. Riprova più tardi.')
-      } else {
-        setError('Errore nel caricamento dei clienti. Verifica che il server sia avviato.')
-      }
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // Aggiorna clienti (ricarica dal server)
-  const updateClienti = async () => {
-    await loadClienti()
-  }
-
-  const loadUtenti = async () => {
-    try {
-      const data = await api.getUtenti()
-      setUtenti(data || [])
-    } catch (err) {
-      console.error('Errore caricamento utenti:', err)
-      setUtenti([])
-    }
-  }
-
+  const {
+    user,
+    setUser,
+    authChecking,
+    authLoading,
+    authError,
+    login,
+    logout
+  } = useAuth()
+  const {
+    clienti,
+    utenti,
+    loading,
+    error,
+    loadUtenti,
+    updateClienti,
+    resetData
+  } = useAppData(user)
+  const {
+    activeUsers,
+    presenceLoading,
+    presenceError
+  } = usePresence(user, activeView)
   const handleLogin = async (credentials) => {
-    try {
-      setAuthLoading(true)
-      setAuthError(null)
-      const data = await api.login(credentials)
-      setUser(data.user)
-      setAuthError(null) // Reset errori se il login è riuscito
-    } catch (err) {
-      console.error('Errore login:', err)
-      // Mostra messaggi di errore più specifici
-      if (err.status === 401) {
-        setAuthError('Credenziali non valide. Riprova.')
-      } else if (err.status === 429) {
-        setAuthError(`Troppe richieste. Riprova tra ${err.retryAfter || 60} secondi.`)
-      } else if (err.message && err.message.includes('fetch')) {
-        setAuthError('Errore di connessione. Verifica che il server sia avviato.')
-      } else {
-        setAuthError(err.message || 'Errore durante il login. Riprova.')
-      }
-    } finally {
-      setAuthLoading(false)
-    }
+    await login(credentials)
   }
 
   const handleLogout = async () => {
-    try {
-      await api.logout()
-    } catch (err) {
-      // Ignora errori di logout, pulisci comunque lo stato locale
-      console.error('Errore durante logout:', err)
-    } finally {
-      api.clearTokens()
-      setUser(null)
-      setClienti([])
-      setTrackingCommessaId(null)
-      setCommessaOpenId(null)
-      setActiveView('home')
-    }
+    await logout()
+    resetData()
+    setTrackingCommessaId(null)
+    setCommessaOpenId(null)
+    setActiveView('home')
   }
 
   const handleHomeTrackingOpen = (commessaId) => {
@@ -232,42 +90,20 @@ function App() {
   return (
     <ErrorBoundary>
       <div className="app container-fluid py-3">
-        <header>
-          <img
-            src="/logo-studio-ingegneria-removebg-preview.png"
-            alt="Studio Capoferri"
-            className="logo"
-            onClick={() => setActiveView('home')}
-            style={{ cursor: 'pointer' }}
-            onError={(e) => {
-              // Fallback se il logo non è disponibile
-              e.target.style.display = 'none'
-            }}
-          />
-          <div className="header-title">
-            <h1>Gestionale</h1>
-            {user && (
-              <span className="header-sub">Benvenuto, {user.username} ({user.role})</span>
-            )}
-          </div>
-          {user && (
-            <div className="header-actions">
-              <Suspense fallback={null}>
-                <ActiveUsers
-                  users={activeUsers}
-                  loading={presenceLoading}
-                  error={presenceError}
-                />
-              </Suspense>
-              <button
-                className="btn btn-secondary"
-                onClick={handleLogout}
-              >
-                Logout
-              </button>
-            </div>
-          )}
-        </header>
+        <AppHeader
+          user={user}
+          onLogoClick={() => setActiveView('home')}
+          onLogout={handleLogout}
+          activeUsersSlot={user ? (
+            <Suspense fallback={null}>
+              <ActiveUsers
+                users={activeUsers}
+                loading={presenceLoading}
+                error={presenceError}
+              />
+            </Suspense>
+          ) : null}
+        />
 
         {error && (
           <div className="alert alert-warning mb-3">
@@ -278,150 +114,101 @@ function App() {
         {authChecking ? (
           <LoadingFallback />
         ) : user ? (
-          <div className="app-layout">
-            <nav className="topbar-nav">
-              <button
-                className={`topbar-link ${activeView === 'kanban' ? 'active' : ''}`}
-                onClick={() => setActiveView('kanban')}
-                type="button"
-              >
-                Kanban
-              </button>
-              <button
-                className={`topbar-link ${activeView === 'team' ? 'active' : ''}`}
-                onClick={() => setActiveView('team')}
-                type="button"
-              >
-                Team
-              </button>
-              <button
-                className={`topbar-link ${activeView === 'commesse' ? 'active' : ''}`}
-                onClick={() => setActiveView('commesse')}
-                type="button"
-              >
-                Commesse
-              </button>
-              <button
-                className={`topbar-link ${activeView === 'tracking' ? 'active' : ''}`}
-                onClick={() => setActiveView('tracking')}
-                type="button"
-              >
-                Tracking ore
-              </button>
-              <button
-                className={`topbar-link ${activeView === 'consuntivi' ? 'active' : ''}`}
-                onClick={() => setActiveView('consuntivi')}
-                type="button"
-              >
-                Consuntivi
-              </button>
-              <button
-                className={`topbar-link ${activeView === 'anagrafica' ? 'active' : ''}`}
-                onClick={() => setActiveView('anagrafica')}
-                type="button"
-              >
-                Clienti
-              </button>
-              {user?.role === 'admin' && (
-                <button
-                  className={`topbar-link ${activeView === 'dati-aziendali' ? 'active' : ''}`}
-                  onClick={() => setActiveView('dati-aziendali')}
-                  type="button"
-                >
-                  Dati aziendali
-                </button>
-              )}
-            </nav>
-            <div className="content-col">
-              <main className="content-area">
-                {loading ? (
-                  <LoadingFallback />
-                ) : (
-                  <AttivitaProvider>
-                    <Suspense fallback={<LoadingFallback />}>
-                      {activeView === 'home' && (
-                        <Home
-                          key="home"
-                          clienti={clienti}
-                          user={user}
-                          toast={toast}
-                          onOpenTracking={handleHomeTrackingOpen}
-                        />
-                      )}
-                      {activeView === 'attivita' && (
-                        <TabellaAttivita key="attivita" clienti={clienti} user={user} toast={toast} />
-                      )}
-                      {activeView === 'commesse' && (
-                        <Commesse
-                          clienti={clienti}
-                          toast={toast}
-                          openCommessaId={commessaOpenId}
-                          onOpenCommessaHandled={() => setCommessaOpenId(null)}
-                          onOpenTracking={(commessaId) => {
-                            setTrackingCommessaId(commessaId)
-                            setActiveView('tracking')
-                          }}
-                        />
-                      )}
-                      {activeView === 'consuntivi' && (
-                        <Consuntivi />
-                      )}
-                      {activeView === 'tracking' && (
-                        <TrackingOre
-                          clienti={clienti}
-                          user={user}
-                          toast={toast}
-                          selectedCommessaId={trackingCommessaId}
-                          onSelectCommessa={setTrackingCommessaId}
-                          onOpenCommessa={(commessaId) => {
-                            setCommessaOpenId(commessaId)
-                            setActiveView('commesse')
-                          }}
-                        />
-                      )}
-                      {activeView === 'team' && (
-                        <Team
-                          clienti={clienti}
-                          user={user}
-                          utenti={utenti}
-                          toast={toast}
-                          onUserUpdated={handleUserUpdated}
-                          onUsersChanged={loadUtenti}
-                        />
-                      )}
-                      {activeView === 'anagrafica' && (
-                        <AnagraficaClienti
-                          clienti={clienti}
-                          onUpdateClienti={updateClienti}
-                          onBack={() => setActiveView('home')}
-                          currentUser={user}
-                          toast={toast}
-                        />
-                      )}
-                      {activeView === 'kanban' && (
-                        <KanbanBoard clienti={clienti} user={user} toast={toast} />
-                      )}
-                      {activeView === 'dati-aziendali' && user?.role === 'admin' && (
-                        <div>
-                          <div className="d-flex justify-content-between align-items-center mb-4">
-                            <h2 className="section-title mb-0 no-title-line">Dati aziendali</h2>
-                          </div>
-                          <div className="row g-4">
-                            <div className="col-12">
-                              <DatiAziendali showHeader={false} toast={toast} />
-                            </div>
-                            <div className="col-12">
-                              <DatiFiscali showHeader={false} toast={toast} />
-                            </div>
-                          </div>
+          <AppLayout
+            nav={(
+              <TopbarNav
+                activeView={activeView}
+                onChangeView={setActiveView}
+                isAdmin={user?.role === 'admin'}
+              />
+            )}
+          >
+            {loading ? (
+              <LoadingFallback />
+            ) : (
+              <AttivitaProvider>
+                <Suspense fallback={<LoadingFallback />}>
+                  {activeView === 'home' && (
+                    <Home
+                      key="home"
+                      clienti={clienti}
+                      user={user}
+                      toast={toast}
+                      onOpenTracking={handleHomeTrackingOpen}
+                    />
+                  )}
+                  {activeView === 'attivita' && (
+                    <TabellaAttivita key="attivita" clienti={clienti} user={user} toast={toast} />
+                  )}
+                  {activeView === 'commesse' && (
+                    <Commesse
+                      clienti={clienti}
+                      toast={toast}
+                      openCommessaId={commessaOpenId}
+                      onOpenCommessaHandled={() => setCommessaOpenId(null)}
+                      onOpenTracking={(commessaId) => {
+                        setTrackingCommessaId(commessaId)
+                        setActiveView('tracking')
+                      }}
+                    />
+                  )}
+                  {activeView === 'consuntivi' && (
+                    <Consuntivi />
+                  )}
+                  {activeView === 'tracking' && (
+                    <TrackingOre
+                      clienti={clienti}
+                      user={user}
+                      toast={toast}
+                      selectedCommessaId={trackingCommessaId}
+                      onSelectCommessa={setTrackingCommessaId}
+                      onOpenCommessa={(commessaId) => {
+                        setCommessaOpenId(commessaId)
+                        setActiveView('commesse')
+                      }}
+                    />
+                  )}
+                  {activeView === 'team' && (
+                    <Team
+                      clienti={clienti}
+                      user={user}
+                      utenti={utenti}
+                      toast={toast}
+                      onUserUpdated={handleUserUpdated}
+                      onUsersChanged={loadUtenti}
+                    />
+                  )}
+                  {activeView === 'anagrafica' && (
+                    <AnagraficaClienti
+                      clienti={clienti}
+                      onUpdateClienti={updateClienti}
+                      onBack={() => setActiveView('home')}
+                      currentUser={user}
+                      toast={toast}
+                    />
+                  )}
+                  {activeView === 'kanban' && (
+                    <KanbanBoard clienti={clienti} user={user} toast={toast} />
+                  )}
+                  {activeView === 'dati-aziendali' && user?.role === 'admin' && (
+                    <div>
+                      <div className="d-flex justify-content-between align-items-center mb-4">
+                        <h2 className="section-title mb-0 no-title-line">Dati aziendali</h2>
+                      </div>
+                      <div className="row g-4">
+                        <div className="col-12">
+                          <DatiAziendali showHeader={false} toast={toast} />
                         </div>
-                      )}
-                    </Suspense>
-                  </AttivitaProvider>
-                )}
-              </main>
-            </div>
-          </div>
+                        <div className="col-12">
+                          <DatiFiscali showHeader={false} toast={toast} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </Suspense>
+              </AttivitaProvider>
+            )}
+          </AppLayout>
         ) : (
           <Suspense fallback={<LoadingFallback />}>
             <Login onLogin={handleLogin} loading={authLoading} error={authError} />
