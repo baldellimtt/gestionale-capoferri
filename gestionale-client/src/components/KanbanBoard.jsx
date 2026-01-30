@@ -580,7 +580,8 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
       await loadData()
     } catch (err) {
       console.error('Errore eliminazione colonna:', err)
-      toast?.showError('Errore eliminazione colonna', 'Errore')
+      const message = err?.message || 'Errore eliminazione colonna'
+      toast?.showError(message, 'Errore')
     } finally {
       setColonnaDeletingId(null)
       setDeleteColonnaTarget(null)
