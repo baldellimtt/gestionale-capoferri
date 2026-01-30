@@ -19,6 +19,7 @@ const Team = lazy(() => import('./components/Team'))
 const DatiAziendali = lazy(() => import('./components/DatiAziendali'))
 const DatiFiscali = lazy(() => import('./components/DatiFiscali'))
 const ActiveUsers = lazy(() => import('./components/ActiveUsers'))
+const Fatturazione = lazy(() => import('./components/Fatturazione'))
 
 // Componente di loading per Suspense
 const LoadingFallback = () => (
@@ -44,6 +45,7 @@ function App() {
   const [activeUsers, setActiveUsers] = useState([])
   const [presenceLoading, setPresenceLoading] = useState(false)
   const [presenceError, setPresenceError] = useState(null)
+  const [fatturazioneDraft, setFatturazioneDraft] = useState(null)
   const presenceBusyRef = useRef(false)
   const toast = useToast()
 
@@ -222,6 +224,12 @@ function App() {
     setActiveView('tracking')
   }
 
+  const openFatturazioneDraft = (draft) => {
+    if (!draft) return
+    setFatturazioneDraft(draft)
+    setActiveView('fatturazione')
+  }
+
   const handleUserUpdated = (updated) => {
     setUser((prev) => ({
       ...(prev || {}),
@@ -316,6 +324,13 @@ function App() {
                 Consuntivi
               </button>
               <button
+                className={`topbar-link ${activeView === 'fatturazione' ? 'active' : ''}`}
+                onClick={() => setActiveView('fatturazione')}
+                type="button"
+              >
+                Fatturazione
+              </button>
+              <button
                 className={`topbar-link ${activeView === 'anagrafica' ? 'active' : ''}`}
                 onClick={() => setActiveView('anagrafica')}
                 type="button"
@@ -357,6 +372,7 @@ function App() {
                           toast={toast}
                           openCommessaId={commessaOpenId}
                           onOpenCommessaHandled={() => setCommessaOpenId(null)}
+                          onCreateFattura={openFatturazioneDraft}
                           onOpenTracking={(commessaId) => {
                             setTrackingCommessaId(commessaId)
                             setActiveView('tracking')
@@ -364,7 +380,15 @@ function App() {
                         />
                       )}
                       {activeView === 'consuntivi' && (
-                        <Consuntivi />
+                        <Consuntivi onCreateFattura={openFatturazioneDraft} />
+                      )}
+                      {activeView === 'fatturazione' && (
+                        <Fatturazione
+                          clienti={clienti}
+                          toast={toast}
+                          draft={fatturazioneDraft}
+                          onDraftConsumed={() => setFatturazioneDraft(null)}
+                        />
                       )}
                       {activeView === 'tracking' && (
                         <TrackingOre
@@ -373,6 +397,7 @@ function App() {
                           toast={toast}
                           selectedCommessaId={trackingCommessaId}
                           onSelectCommessa={setTrackingCommessaId}
+                          onCreateFattura={openFatturazioneDraft}
                           onOpenCommessa={(commessaId) => {
                             setCommessaOpenId(commessaId)
                             setActiveView('commesse')

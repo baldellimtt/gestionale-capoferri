@@ -965,6 +965,55 @@ class ApiService {
     });
   }
 
+  // Fatturazione (Fatture in Cloud)
+  async getFatturazioneStatus() {
+    return this.request('/fatturazione/status');
+  }
+
+  async getFattureLocali() {
+    return this.request('/fatturazione/fatture');
+  }
+
+  async getFatturePrecreateInfo(type = 'invoice') {
+    return this.request(`/fatturazione/precreate-info?type=${encodeURIComponent(type)}`);
+  }
+
+  async getFattureInCloud(params = {}) {
+    const search = new URLSearchParams();
+    Object.entries(params || {}).forEach(([key, value]) => {
+      if (value !== null && value !== undefined && value !== '') {
+        search.append(key, String(value));
+      }
+    });
+    const query = search.toString();
+    const endpoint = query ? `/fatturazione/issued-documents?${query}` : '/fatturazione/issued-documents';
+    return this.request(endpoint);
+  }
+
+  async createFatturaInCloud(payload) {
+    return this.request('/fatturazione/issued-documents', {
+      method: 'POST',
+      body: payload,
+    });
+  }
+
+  async getFatturaInCloudUrls(id) {
+    if (!id) throw new Error('ID documento mancante');
+    return this.request(`/fatturazione/issued-documents/${id}/urls`);
+  }
+
+  async syncFattureInCloud(params = {}) {
+    const search = new URLSearchParams();
+    Object.entries(params || {}).forEach(([key, value]) => {
+      if (value !== null && value !== undefined && value !== '') {
+        search.append(key, String(value));
+      }
+    });
+    const query = search.toString();
+    const endpoint = query ? `/fatturazione/sync?${query}` : '/fatturazione/sync';
+    return this.request(endpoint);
+  }
+
   // Kanban API
   // Colonne
   async getKanbanColonne() {
@@ -1143,3 +1192,5 @@ export default new ApiService();
 
 
 
+
+

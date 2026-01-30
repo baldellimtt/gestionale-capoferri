@@ -29,7 +29,7 @@ const roundUpToHalfHour = (hoursValue) => {
   return Math.ceil(hoursValue * 2) / 2
 }
 
-function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommessa, onOpenCommessa }) {
+function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommessa, onOpenCommessa, onCreateFattura }) {
   const [commesse, setCommesse] = useState([])
   const [selectedId, setSelectedId] = useState(selectedCommessaId ? String(selectedCommessaId) : '')
   const [selectedCommessa, setSelectedCommessa] = useState(null)
@@ -217,6 +217,24 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
   const handleOpenCommessa = () => {
     if (!selectedCommessa?.id || !onOpenCommessa) return
     onOpenCommessa(selectedCommessa.id)
+  }
+
+  const handleCreateFattura = () => {
+    if (!selectedCommessa?.id || !onCreateFattura) return
+    const amount = Number(String(selectedCommessa.importo_totale || 0).replace(',', '.')) || 0
+    const draft = {
+      clienteId: selectedCommessa.cliente_id,
+      commessaIds: [selectedCommessa.id],
+      items: [
+        {
+          name: selectedCommessa.titolo || 'Commessa',
+          qty: 1,
+          net_price: amount
+        }
+      ],
+      visibleSubject: `Commessa ${selectedCommessa.titolo || selectedCommessa.id}`
+    }
+    onCreateFattura(draft)
   }
 
   const handleOpenCommessaById = (commessaId) => {
@@ -527,6 +545,15 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
                       onClick={handleOpenCommessa}
                     >
                       Apri scheda commessa
+                    </button>
+                  )}
+                  {onCreateFattura && (
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary btn-sm mt-2"
+                      onClick={handleCreateFattura}
+                    >
+                      Crea fattura
                     </button>
                   )}
                 </div>

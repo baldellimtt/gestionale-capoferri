@@ -60,7 +60,7 @@ const getTodayDate = () => {
   return `${year}-${month}-${day}`
 }
 
-function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommessaHandled }) {
+function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommessaHandled, onCreateFattura }) {
   const [commesse, setCommesse] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -275,6 +275,26 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
     if (value == null || value === '') return 0
     const parsed = Number(String(value).replace(',', '.'))
     return Number.isFinite(parsed) ? parsed : NaN
+  }
+
+  const handleCreateFattura = (commessaId) => {
+    if (!onCreateFattura) return
+    const commessa = commesse.find((item) => String(item.id) === String(commessaId || editingId))
+    if (!commessa?.id) return
+    const amount = Number(String(commessa.importo_totale || 0).replace(',', '.')) || 0
+    const draft = {
+      clienteId: commessa.cliente_id,
+      commessaIds: [commessa.id],
+      items: [
+        {
+          name: commessa.titolo || 'Commessa',
+          qty: 1,
+          net_price: amount
+        }
+      ],
+      visibleSubject: `Commessa ${commessa.titolo || commessa.id}`
+    }
+    onCreateFattura(draft)
   }
 
   const parseTipologie = (value) => {
@@ -1283,6 +1303,7 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
         <CommessaForm
           editingId={editingId}
           onOpenTracking={onOpenTracking}
+          onCreateFattura={onCreateFattura ? handleCreateFattura : null}
           formTab={formTab}
           setFormTab={setFormTab}
           formData={formData}

@@ -3,6 +3,7 @@ import React from 'react'
 function CommessaForm({
   editingId,
   onOpenTracking,
+  onCreateFattura,
   formTab,
   setFormTab,
   formData,
@@ -36,15 +37,26 @@ function CommessaForm({
             ? `Scheda Commessa${formData?.titolo ? ` ${formData.titolo}` : ''}`
             : 'Nuova commessa'}
         </span>
-        {editingId && onOpenTracking && (
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={() => onOpenTracking(editingId)}
-          >
-            Tracking ore
-          </button>
-        )}
+        <div className="d-flex gap-2">
+          {editingId && onCreateFattura && (
+            <button
+              type="button"
+              className="btn btn-outline-secondary btn-sm"
+              onClick={() => onCreateFattura(editingId)}
+            >
+              Crea fattura
+            </button>
+          )}
+          {editingId && onOpenTracking && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => onOpenTracking(editingId)}
+            >
+              Tracking ore
+            </button>
+          )}
+        </div>
       </div>
       <div className="card-body">
         <div className="commessa-form-tabs">
@@ -303,7 +315,7 @@ function CommessaForm({
             </select>
           </div>
           <div className="col-md-3">
-            <label className="form-label">Importo preventivo (€)</label>
+            <label className="form-label">Importo preventivo (&euro;)</label>
             <input
               className="form-control"
               value={formData.importo_preventivo}
@@ -314,7 +326,7 @@ function CommessaForm({
             />
           </div>
           <div className="col-md-3">
-            <label className="form-label">Importo totale (€)</label>
+            <label className="form-label">Importo totale (&euro;)</label>
             <input
               className="form-control"
               value={formData.importo_totale}
@@ -324,7 +336,7 @@ function CommessaForm({
             />
           </div>
           <div className="col-md-3">
-            <label className="form-label">Importo pagato (€)</label>
+            <label className="form-label">Importo pagato (&euro;)</label>
             <input
               className="form-control"
               value={formData.importo_pagato}
