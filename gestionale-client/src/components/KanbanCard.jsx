@@ -385,11 +385,11 @@ function KanbanCard({ card, commesse = [], onCardClick, onQuickUpdate, onDelete 
               </svg>
             )}
           </div>
-        ) : dataInizio ? (
+        ) : (dataInizio && !noDeadline) ? (
           <div style={{ color: 'var(--ink-600)' }}>
             <strong>Quando:</strong> {dataInizio}
           </div>
-        ) : (
+        ) : (!noDeadline) ? (
           <div style={{ color: 'var(--ink-600)' }}>
             <strong>Scadenza:</strong>{' '}
             <button
@@ -411,25 +411,7 @@ function KanbanCard({ card, commesse = [], onCardClick, onQuickUpdate, onDelete 
               aggiungi
             </button>
           </div>
-        )}
-        {noDeadline && !isEditingDueDate && (
-          <div
-            onClick={(e) => {
-              e.stopPropagation()
-              setIsEditingDueDate(true)
-            }}
-            title="Click per aggiungere scadenza"
-            style={{ color: 'var(--ink-500)', cursor: 'pointer' }}
-          >
-            <strong>Scadenza:</strong>{' '}
-            <span className="kanban-no-deadline">Senza scadenza</span>
-            {isHovered && (
-              <span style={{ fontSize: '0.7rem', color: 'var(--ink-500)', marginLeft: '0.4rem' }}>
-                Click per aggiungere
-              </span>
-            )}
-          </div>
-        )}
+        ) : null}
         {isEditingDueDate && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
             <strong style={{ color: 'var(--ink-600)' }}>Scadenza:</strong>
