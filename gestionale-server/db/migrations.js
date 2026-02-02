@@ -305,6 +305,8 @@ class Migrations {
         data_inizio TEXT,
         data_fine_prevista TEXT,
         data_fine_effettiva TEXT,
+        recurrence_enabled INTEGER DEFAULT 0,
+        recurrence_type TEXT,
         budget REAL DEFAULT 0,
         tags TEXT,
         created_by INTEGER,
@@ -406,6 +408,7 @@ class Migrations {
     this.ensureKanbanCommentiTable(db);
     this.ensureUserPresenceTable(db);
     this.ensureKanbanCardColumnNullable(db);
+    this.ensureKanbanRecurrenceColumns(db);
     this.ensureRowVersionColumns(db);
     this.ensureDefaultUser(db);
     this.ensureDatiAziendaliInitialized(db);
@@ -498,6 +501,8 @@ class Migrations {
           data_inizio TEXT,
           data_fine_prevista TEXT,
           data_fine_effettiva TEXT,
+          recurrence_enabled INTEGER DEFAULT 0,
+          recurrence_type TEXT,
           budget REAL DEFAULT 0,
           tags TEXT,
           created_by INTEGER,
@@ -515,12 +520,12 @@ class Migrations {
         INSERT INTO kanban_card_new (
           id, commessa_id, titolo, descrizione, colonna_id, priorita, responsabile_id, cliente_id,
           cliente_nome, ordine, avanzamento, data_inizio, data_fine_prevista, data_fine_effettiva,
-          budget, tags, created_by, created_at, updated_at, row_version
+          recurrence_enabled, recurrence_type, budget, tags, created_by, created_at, updated_at, row_version
         )
         SELECT
           id, commessa_id, titolo, descrizione, colonna_id, priorita, responsabile_id, cliente_id,
           cliente_nome, ordine, avanzamento, data_inizio, data_fine_prevista, data_fine_effettiva,
-          budget, tags, created_by, created_at, updated_at, COALESCE(row_version, 1)
+          COALESCE(recurrence_enabled, 0), recurrence_type, budget, tags, created_by, created_at, updated_at, COALESCE(row_version, 1)
         FROM kanban_card;
       `);
       db.exec('DROP TABLE kanban_card');
@@ -541,6 +546,26 @@ class Migrations {
         db.exec('PRAGMA foreign_keys=ON');
       } catch {}
       console.log('[MIGRATIONS] Errore migrazione kanban_card colonna_id:', error.message);
+    }
+  }
+
+  ensureKanbanRecurrenceColumns(db) {
+    try {
+      const tableInfo = db.prepare("PRAGMA table_info(kanban_card)").all();
+      if (!tableInfo || tableInfo.length === 0) {
+        return;
+      }
+      const columns = tableInfo.map((col) => col.name);
+      if (!columns.includes('recurrence_enabled')) {
+        db.exec("ALTER TABLE kanban_card ADD COLUMN recurrence_enabled INTEGER DEFAULT 0");
+        console.log('[MIGRATIONS] Aggiunta colonna recurrence_enabled a kanban_card');
+      }
+      if (!columns.includes('recurrence_type')) {
+        db.exec("ALTER TABLE kanban_card ADD COLUMN recurrence_type TEXT");
+        console.log('[MIGRATIONS] Aggiunta colonna recurrence_type a kanban_card');
+      }
+    } catch (error) {
+      console.log('[MIGRATIONS] Errore aggiunta colonne ricorrenza kanban_card:', error.message);
     }
   }
 

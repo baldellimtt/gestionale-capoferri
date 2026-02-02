@@ -34,7 +34,9 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
     commessa_id: '',
     data_inizio: '',
     data_fine_prevista: '',
-    tags: []
+    tags: [],
+    recurrence_enabled: false,
+    recurrence_type: 'mensile'
   })
   const [allDay, setAllDay] = useState(true)
   const [timeStart, setTimeStart] = useState('')
@@ -68,6 +70,46 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
   const [deleteScadenzaId, setDeleteScadenzaId] = useState(null)
   const [deleteScadenzaLoading, setDeleteScadenzaLoading] = useState(false)
 
+  const normalizeDatePart = (value) => {
+    if (!value) return ''
+    const clean = String(value).trim()
+    if (!clean) return ''
+    if (clean.includes('T')) return clean.split('T')[0]
+    if (clean.includes(' ')) return clean.split(' ')[0]
+    return clean
+  }
+
+  const addMonthsToDate = (dateValue, monthsToAdd) => {
+    if (!dateValue) return ''
+    const [yearStr, monthStr, dayStr] = normalizeDatePart(dateValue).split('-')
+    const year = Number(yearStr)
+    const month = Number(monthStr) - 1
+    const day = Number(dayStr)
+    if (!year || Number.isNaN(month) || !day) return ''
+    const base = new Date(year, month, 1)
+    base.setMonth(base.getMonth() + monthsToAdd)
+    const lastDay = new Date(base.getFullYear(), base.getMonth() + 1, 0).getDate()
+    const finalDay = Math.min(day, lastDay)
+    base.setDate(finalDay)
+    const y = base.getFullYear()
+    const m = String(base.getMonth() + 1).padStart(2, '0')
+    const d = String(base.getDate()).padStart(2, '0')
+    return `${y}-${m}-${d}`
+  }
+
+  const addMonthsToDateTime = (value, monthsToAdd) => {
+    if (!value) return ''
+    const clean = String(value).trim()
+    if (!clean) return ''
+    if (!clean.includes('T') && !clean.includes(' ')) {
+      return addMonthsToDate(clean, monthsToAdd)
+    }
+    const [datePart, timePart] = clean.includes('T') ? clean.split('T') : clean.split(' ')
+    const nextDate = addMonthsToDate(datePart, monthsToAdd)
+    if (!nextDate) return ''
+    return `${nextDate}${clean.includes('T') ? 'T' : ' '}${timePart}`
+  }
+
   const buildCardPayload = () => {
     const buildDateTime = (dateValue, timeValue) => {
       if (!dateValue) return ''
@@ -80,6 +122,8 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
       tags: formData.tags && formData.tags.length > 0 ? formData.tags : null,
       data_inizio: buildDateTime(formData.data_inizio, timeStart),
       data_fine_prevista: noDeadline ? '' : buildDateTime(formData.data_fine_prevista, timeEnd),
+      recurrence_enabled: !!formData.recurrence_enabled,
+      recurrence_type: formData.recurrence_type || 'mensile',
       row_version: card?.row_version,
       commessa_id: (() => {
         if (!formData.commessa_id || formData.commessa_id === '' || formData.commessa_id === 0) return null;
@@ -108,7 +152,9 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
         commessa_id: card.commessa_id || '',
         data_inizio: start.date,
         data_fine_prevista: end.date,
-        tags: card.tags ? (typeof card.tags === 'string' ? JSON.parse(card.tags) : card.tags) : []
+        tags: card.tags ? (typeof card.tags === 'string' ? JSON.parse(card.tags) : card.tags) : [],
+        recurrence_enabled: !!card.recurrence_enabled,
+        recurrence_type: card.recurrence_type || 'mensile'
       })
       setTimeStart(start.time)
       setTimeEnd(end.time)
@@ -143,12 +189,14 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
         commessa_id: '',
         data_inizio: '',
         data_fine_prevista: '',
-        tags: []
+        tags: [],
+        recurrence_enabled: false,
+        recurrence_type: 'mensile'
       })
-      setAllDay(true)
+      setAllDay(false)
       setTimeStart('')
       setTimeEnd('')
-      setNoDeadline(true)
+      setNoDeadline(false)
       setClienteSearch('')
       setCommessaSearch('')
       setScadenze([])
@@ -606,6 +654,29 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
         avanzamento: 100
       }
       await onSave({ ...payload, id: card.id })
+      if (formData.recurrence_enabled) {
+        const typeToMonths = {
+          mensile: 1,
+          trimestrale: 3,
+          semestrale: 6,
+          annuale: 12
+        }
+        const monthsToAdd = typeToMonths[formData.recurrence_type] || 1
+        const baseDate = payload.data_fine_prevista || payload.data_inizio || getTodayDate()
+        const nextFine = addMonthsToDateTime(baseDate, monthsToAdd)
+        const nextInizio = payload.data_inizio
+          ? addMonthsToDateTime(payload.data_inizio, monthsToAdd)
+          : ''
+        const nextCard = {
+          ...payload,
+          data_inizio: nextInizio,
+          data_fine_prevista: nextFine,
+          data_fine_effettiva: null,
+          avanzamento: 0
+        }
+        await api.createKanbanCard(nextCard)
+        await onRefresh()
+      }
       if (loadingToastId) {
         toast?.updateToast(loadingToastId, { type: 'success', title: 'Completato', message: 'Card completata', duration: 3000 })
       } else {
@@ -931,85 +1002,142 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
                     <option value="urgente" style={{ color: '#ef4444', backgroundColor: 'var(--bg-1)' }}>Urgente</option>
                   </select>
                 </div>
-                <div className="col-md-3">
-                  <label className="form-label">Data Inizio</label>
-                  <input
-                    type="date"
-                    className="form-control"
-                    value={formData.data_inizio}
-                    onChange={(e) => setFormData({ ...formData, data_inizio: e.target.value })}
-                  />
-                </div>
-                <div className="col-md-3">
-                  <label className="form-label">Data Fine Prevista</label>
-                  <input
-                    type="date"
-                    className="form-control"
-                    value={formData.data_fine_prevista}
-                    onChange={(e) => setFormData({ ...formData, data_fine_prevista: e.target.value })}
-                    disabled={noDeadline}
-                  />
-                  <div className="form-check form-switch mt-2">
-                    <input
-                      id="kanban-no-deadline"
-                      type="checkbox"
-                      className="form-check-input"
-                      checked={noDeadline}
-                      onChange={(e) => {
-                        const next = e.target.checked
-                        setNoDeadline(next)
-                        if (next) {
-                          setFormData((prev) => ({ ...prev, data_fine_prevista: '' }))
-                          setTimeEnd('')
-                        }
-                      }}
-                    />
-                    <label className="form-check-label" htmlFor="kanban-no-deadline">
-                      Senza scadenza
-                    </label>
+                <div className="col-12">
+                  <div className={`kanban-date-panel ${noDeadline ? 'is-no-deadline' : ''}`}>
+                    <div className="kanban-date-header">
+                      <div className="kanban-date-header-text">
+                        <div className="kanban-date-title">Date e orari</div>
+                        <div className="kanban-date-subtitle">Definisci inizio, scadenza e orari della card.</div>
+                      </div>
+                      <div className="kanban-date-actions">
+                        <label className="form-check form-switch kanban-date-toggle">
+                          <input
+                            id="kanban-no-deadline"
+                            type="checkbox"
+                            className="form-check-input"
+                            checked={noDeadline}
+                            onChange={(e) => {
+                              const next = e.target.checked
+                              setNoDeadline(next)
+                              if (next) {
+                                setFormData((prev) => ({ ...prev, data_fine_prevista: '' }))
+                                setTimeEnd('')
+                              }
+                            }}
+                          />
+                          <span className="form-check-label">Senza scadenza</span>
+                        </label>
+                        <label className="form-check form-switch kanban-date-toggle">
+                          <input
+                            id="kanban-all-day"
+                            type="checkbox"
+                            className="form-check-input"
+                            checked={allDay}
+                            onChange={(e) => {
+                              const next = e.target.checked
+                              setAllDay(next)
+                              if (next) {
+                                setTimeStart('')
+                                setTimeEnd('')
+                              }
+                            }}
+                          />
+                          <span className="form-check-label">Senza orario</span>
+                        </label>
+                      </div>
+                    </div>
+                    <div className="row g-3 kanban-date-grid">
+                      <div className="col-md-4">
+                        <label className="form-label">Data Inizio</label>
+                        <input
+                          type="date"
+                          className="form-control"
+                          value={formData.data_inizio}
+                          onChange={(e) => setFormData({ ...formData, data_inizio: e.target.value })}
+                          disabled={noDeadline}
+                        />
+                      </div>
+                      <div className="col-md-4">
+                        <label className="form-label">Data Fine Prevista</label>
+                        {noDeadline ? (
+                          <div className="form-control kanban-date-placeholder" aria-disabled="true">
+                            Nessuna scadenza
+                          </div>
+                        ) : (
+                          <input
+                            type="date"
+                            className="form-control"
+                            value={formData.data_fine_prevista}
+                            onChange={(e) => setFormData({ ...formData, data_fine_prevista: e.target.value })}
+                          />
+                        )}
+                      </div>
+                      <div className="col-md-4">
+                        <label className="form-label">Ora Inizio</label>
+                        <input
+                          type="time"
+                          className="form-control"
+                          value={timeStart}
+                          onChange={(e) => setTimeStart(e.target.value)}
+                          disabled={allDay}
+                        />
+                      </div>
+                      <div className="col-md-4">
+                        <label className="form-label">Ora Fine</label>
+                        <input
+                          type="time"
+                          className="form-control"
+                          value={timeEnd}
+                          onChange={(e) => setTimeEnd(e.target.value)}
+                          disabled={allDay}
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
-                <div className="col-md-3">
-                  <label className="form-label">Intera giornata</label>
-                  <div className="form-check form-switch">
-                    <input
-                      id="kanban-all-day"
-                      type="checkbox"
-                      className="form-check-input"
-                      checked={allDay}
-                      onChange={(e) => {
-                        const next = e.target.checked
-                        setAllDay(next)
-                        if (next) {
-                          setTimeStart('')
-                          setTimeEnd('')
-                        }
-                      }}
-                    />
-                    <label className="form-check-label" htmlFor="kanban-all-day">
-                      Senza orario
-                    </label>
+                <div className="col-12">
+                  <div className={`kanban-plan-panel ${formData.recurrence_enabled ? 'is-recurring' : ''}`}>
+                    <div className="kanban-plan-header">
+                      <div className="kanban-plan-title">Pianificazione</div>
+                      <label className="form-check form-switch kanban-plan-toggle">
+                        <input
+                          id="kanban-recurring"
+                          type="checkbox"
+                          className="form-check-input"
+                          checked={!!formData.recurrence_enabled}
+                          onChange={(e) => {
+                            const next = e.target.checked
+                            setFormData((prev) => ({
+                              ...prev,
+                              recurrence_enabled: next
+                            }))
+                          }}
+                        />
+                        <span className="form-check-label">Ricorrente</span>
+                      </label>
+                    </div>
+                    <div className="row g-3 kanban-plan-grid">
+                      <div className="col-md-4">
+                        <label className="form-label">Frequenza</label>
+                        <select
+                          className="form-select"
+                          value={formData.recurrence_type}
+                          onChange={(e) => setFormData((prev) => ({ ...prev, recurrence_type: e.target.value }))}
+                          disabled={!formData.recurrence_enabled}
+                        >
+                          <option value="mensile">Mensile</option>
+                          <option value="trimestrale">Trimestrale</option>
+                          <option value="semestrale">Semestrale</option>
+                          <option value="annuale">Annuale</option>
+                        </select>
+                      </div>
+                      <div className="col-md-8">
+                        <div className="kanban-plan-hint">
+                          Alla chiusura della card ne verrà creata automaticamente una nuova con la prossima data.
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </div>
-                <div className="col-md-3">
-                  <label className="form-label">Ora Inizio</label>
-                  <input
-                    type="time"
-                    className="form-control"
-                    value={timeStart}
-                    onChange={(e) => setTimeStart(e.target.value)}
-                    disabled={allDay}
-                  />
-                </div>
-                <div className="col-md-3">
-                  <label className="form-label">Ora Fine</label>
-                  <input
-                    type="time"
-                    className="form-control"
-                    value={timeEnd}
-                    onChange={(e) => setTimeEnd(e.target.value)}
-                    disabled={allDay}
-                  />
                 </div>
                 <div className="col-md-6">
                   <label className="form-label">Cliente</label>
@@ -1077,119 +1205,6 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
                 </div>
               </div>
             </form>
-
-            <div className="mt-4" style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '1.5rem' }}>
-              <div className="d-flex justify-content-between align-items-center mb-3">
-                <h6 style={{ margin: 0 }}>Cronologia commessa</h6>
-                <button
-                  type="button"
-                  className="btn btn-sm btn-secondary"
-                  onClick={() => {
-                    if (!formData.commessa_id) return
-                    setShowCommessaAudit(prev => !prev)
-                  }}
-                  disabled={!formData.commessa_id}
-                >
-                  {showCommessaAudit ? 'Nascondi' : 'Mostra'}
-                </button>
-              </div>
-              {!formData.commessa_id && (
-                <div className="text-muted" style={{ fontSize: '0.85rem' }}>
-                  Associa una commessa per vedere la cronologia.
-                </div>
-              )}
-              {formData.commessa_id && showCommessaAudit && (
-                <div className="card" style={{ border: '1px solid var(--border-soft)' }}>
-                  <div className="card-body" style={{ padding: '0.75rem' }}>
-                    <div className="row g-2 align-items-end mb-3">
-                      <div className="col-md-3">
-                        <label className="form-label">Data</label>
-                        <input
-                          type="date"
-                          className="form-control"
-                          value={auditNoteDate}
-                          onChange={(e) => setAuditNoteDate(e.target.value)}
-                        />
-                      </div>
-                      <div className="col-md-7">
-                        <label className="form-label">Nota</label>
-                        <input
-                          className="form-control"
-                          value={auditNoteText}
-                          onChange={(e) => setAuditNoteText(e.target.value)}
-                          placeholder="Es. relazione inviata"
-                        />
-                      </div>
-                      <div className="col-md-2 d-grid">
-                        <button
-                          type="button"
-                          className="btn btn-primary"
-                          onClick={handleAddAuditNote}
-                          disabled={auditNoteSaving}
-                        >
-                          {auditNoteSaving ? 'Salvataggio...' : 'Aggiungi'}
-                        </button>
-                      </div>
-                    </div>
-                    {commessaAuditLoading && (
-                      <div className="text-muted" style={{ fontSize: '0.85rem' }}>
-                        Caricamento cronologia...
-                      </div>
-                    )}
-                    {commessaAuditError && (
-                      <div className="alert alert-warning mb-0">
-                        {commessaAuditError}
-                      </div>
-                    )}
-                    {!commessaAuditLoading && !commessaAuditError && commessaAudit.length === 0 && (
-                      <div className="text-muted" style={{ fontSize: '0.85rem' }}>
-                        Nessuna modifica registrata.
-                      </div>
-                    )}
-                    {!commessaAuditLoading && !commessaAuditError && commessaAudit.length > 0 && (
-                      <div className="audit-list">
-                        {commessaAudit.map((entry) => (
-                          <div key={entry.id} className="audit-item">
-                            <div className="audit-header">
-                              <div>
-                                <div className="audit-title">{formatAuditAction(entry)}</div>
-                                <div className="audit-meta">Da: {formatAuditUser(entry)}</div>
-                              </div>
-                              <div className="audit-meta">{formatAuditDate(entry.created_at)}</div>
-                            </div>
-                            {entry.action === 'note' && entry.changes && typeof entry.changes === 'object' && (
-                              <div className="audit-changes">
-                                {entry.changes.date && (
-                                  <div>Data nota: {formatAuditDate(entry.changes.date)}</div>
-                                )}
-                                <div>{entry.changes.note || entry.changes.nota || '-'}</div>
-                              </div>
-                            )}
-                            {getAuditChangeList(entry).length > 0 && (
-                              <div className="audit-changes">
-                                {getAuditChangeList(entry).map((change, idx) => (
-                                  <div key={`${entry.id}-change-${idx}`}>
-                                    {formatFieldLabel(change.field)}: {formatChangeValue(change.from, change.field)} -&gt; {formatChangeValue(change.to, change.field)}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                            {!Array.isArray(entry.changes) && entry.changes && entry.action?.startsWith('attachment') && (
-                              <div className="audit-changes">
-                                <div>Allegato: {entry.changes.original_name || 'N/D'}</div>
-                                {entry.changes.version && (
-                                  <div>Versione: {entry.changes.version}</div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
 
             {card?.id && (
               <div className="mt-4" style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '1.5rem' }}>

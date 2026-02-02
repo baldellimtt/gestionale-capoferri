@@ -699,6 +699,14 @@ const ValidationSchemas = {
             return dateOnlyRegex.test(value) || dateTimeRegex.test(value);
           })
           .withMessage('Data fine prevista non valida'),
+        body('recurrence_enabled')
+          .optional({ nullable: true })
+          .isBoolean()
+          .withMessage('recurrence_enabled deve essere true o false'),
+        body('recurrence_type')
+          .optional({ nullable: true, checkFalsy: true })
+          .isIn(['mensile', 'trimestrale', 'semestrale', 'annuale'])
+          .withMessage('Tipo ricorrenza non valido'),
         body('tags')
           .optional({ nullable: true, checkFalsy: false })
           .custom((value) => {
@@ -967,6 +975,14 @@ ValidationSchemas.kanban.card.update = [
       return /^\d{4}-\d{2}-\d{2}$/.test(value) || /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value);
     })
     .withMessage('Data fine prevista non valida'),
+  body('recurrence_enabled')
+    .optional({ nullable: true })
+    .isBoolean()
+    .withMessage('recurrence_enabled deve essere true o false'),
+  body('recurrence_type')
+    .optional({ nullable: true, checkFalsy: true })
+    .isIn(['mensile', 'trimestrale', 'semestrale', 'annuale'])
+    .withMessage('Tipo ricorrenza non valido'),
   body('tags')
     .optional({ nullable: true, checkFalsy: true })
     .custom((value) => {

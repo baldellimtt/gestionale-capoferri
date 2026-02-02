@@ -70,15 +70,16 @@ class KanbanController {
         INSERT INTO kanban_card (
           commessa_id, titolo, descrizione, colonna_id, priorita,
           responsabile_id, cliente_id, cliente_nome, ordine,
-          avanzamento, data_inizio, data_fine_prevista, data_fine_effettiva, budget, tags, created_by
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          avanzamento, data_inizio, data_fine_prevista, data_fine_effettiva,
+          recurrence_enabled, recurrence_type, budget, tags, created_by
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `),
       updateCard: this.db.prepare(`
         UPDATE kanban_card SET
           commessa_id = ?, titolo = ?, descrizione = ?, colonna_id = ?,
           priorita = ?, responsabile_id = ?, cliente_id = ?, cliente_nome = ?,
           ordine = ?, avanzamento = ?, data_inizio = ?, data_fine_prevista = ?,
-          data_fine_effettiva = ?, budget = ?, tags = ?,
+          data_fine_effettiva = ?, recurrence_enabled = ?, recurrence_type = ?, budget = ?, tags = ?,
           updated_at = datetime('now', 'localtime'),
           row_version = row_version + 1
         WHERE id = ? AND row_version = ?
@@ -427,7 +428,8 @@ class KanbanController {
       const {
         commessa_id, titolo, descrizione, colonna_id, priorita,
         responsabile_id, cliente_id, cliente_nome, ordine,
-        avanzamento, data_inizio, data_fine_prevista, budget, tags
+        avanzamento, data_inizio, data_fine_prevista, budget, tags,
+        recurrence_enabled, recurrence_type
       } = req.body;
       
       if (!titolo) {
@@ -465,6 +467,8 @@ class KanbanController {
         data_inizio || null,
         data_fine_prevista || null,
         null, // data_fine_effettiva
+        recurrence_enabled ? 1 : 0,
+        recurrence_type || null,
         budget || 0,
         tagsJson,
         req.user?.id || null
@@ -495,7 +499,8 @@ class KanbanController {
       const {
         commessa_id, titolo, descrizione, colonna_id, priorita,
         responsabile_id, cliente_id, cliente_nome, ordine,
-        avanzamento, data_inizio, data_fine_prevista, data_fine_effettiva, budget, tags, row_version
+        avanzamento, data_inizio, data_fine_prevista, data_fine_effettiva, budget, tags, row_version,
+        recurrence_enabled, recurrence_type
       } = req.body;
       
       if (!titolo) {
@@ -526,6 +531,8 @@ class KanbanController {
         data_inizio || null,
         data_fine_prevista || null,
         data_fine_effettiva || null,
+        recurrence_enabled ? 1 : 0,
+        recurrence_type || null,
         budget || 0,
         tagsJson,
         id,
