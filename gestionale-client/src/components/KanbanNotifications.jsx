@@ -225,7 +225,7 @@ function KanbanNotifications({ onNotificationClick }) {
             onClick={() => setShowDropdown(false)}
           />
           <div
-            className="card"
+            className="card ds-card"
             style={{
               position: 'absolute',
               top: '100%',
@@ -245,7 +245,7 @@ function KanbanNotifications({ onNotificationClick }) {
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="card-header d-flex justify-content-between align-items-center">
+            <div className="card-header ds-card-header d-flex justify-content-between align-items-center">
               <strong>Notifiche</strong>
               {unreadCount > 0 && (
                 <button
@@ -257,16 +257,17 @@ function KanbanNotifications({ onNotificationClick }) {
                 </button>
               )}
             </div>
-            <div className="card-body p-0" style={{ maxHeight: '450px', overflowY: 'auto' }}>
+            <div className="card-body ds-card-body p-0" style={{ maxHeight: '450px', overflowY: 'auto' }}>
               {loading ? (
-                <div className="text-center py-3">
-                  <div className="spinner-border spinner-border-sm" role="status">
-                    <span className="visually-hidden">Caricamento...</span>
-                  </div>
+                <div className="empty-state">
+                  <div className="skeleton skeleton-line" style={{ width: '70%' }} />
+                  <div className="skeleton skeleton-line" style={{ width: '90%' }} />
+                  <div className="skeleton skeleton-line" style={{ width: '55%' }} />
                 </div>
               ) : notifiche.length === 0 ? (
-                <div className="text-center py-4 text-muted">
-                  Nessuna notifica
+                <div className="empty-state">
+                  <div className="empty-state-title">Nessuna notifica</div>
+                  <div className="empty-state-subtitle">Quando arrivano, le troverai qui.</div>
                 </div>
               ) : (
                 <div className="list-group list-group-flush">
@@ -345,4 +346,3 @@ function KanbanNotifications({ onNotificationClick }) {
 }
 
 export default KanbanNotifications
-

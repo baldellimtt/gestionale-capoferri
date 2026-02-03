@@ -253,7 +253,10 @@ function Home({ clienti, user, toast, onOpenTracking }) {
           </div>
         )}
         {!loadingActive && !activeCards.length && !activeError && (
-          <div className="home-hero-empty">Nessun tracking attività</div>
+          <div className="empty-state">
+            <div className="empty-state-title">Nessun tracking attività</div>
+            <div className="empty-state-subtitle">Inizia da una commessa per vedere le attività attive.</div>
+          </div>
         )}
       </section>
 

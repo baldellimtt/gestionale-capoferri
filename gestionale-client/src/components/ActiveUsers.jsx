@@ -27,9 +27,13 @@ function ActiveUsers({ users = [], loading = false, error = null }) {
       ) : (
         <div className="active-users-avatars">
           {loading && users.length === 0 ? (
-            <div className="active-users-empty">...</div>
+            <div className="empty-state">
+              <div className="skeleton skeleton-line" style={{ width: '60%' }} />
+            </div>
           ) : users.length === 0 ? (
-            <div className="active-users-empty">Nessuno</div>
+            <div className="empty-state">
+              <div className="empty-state-title">Nessuno</div>
+            </div>
           ) : (
             users.map((user) => (
               <div
