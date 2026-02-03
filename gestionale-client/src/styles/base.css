@@ -1,0 +1,53 @@
+﻿@import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap');
+:root {
+  --font-sans: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'Fraunces', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --ink-900: #10151a;
+  --ink-800: #1b2430;
+  --ink-700: #263141;
+  --ink-600: #3a4a5e;
+  --ink-500: #55657b;
+  --ink-400: #7a8aa0;
+
+  --brand-700: #1f4c6b;
+  --brand-600: #25648a;
+  --brand-500: #2f7db0;
+  --brand-300: #c6dff0;
+  --accent-500: #7c3aed;
+  --accent-400: #8b5cf6;
+
+  --bg-0: #f5f7fb;
+  --bg-1: #fafcff;
+  --bg-2: #edf2f7;
+  --bg-3: #e1e8f0;
+
+  --border-soft: rgba(16, 21, 26, 0.1);
+  --border-strong: rgba(47, 125, 176, 0.28);
+  --shadow-1: 0 10px 24px rgba(11, 18, 27, 0.1);
+  --shadow-2: 0 22px 50px rgba(11, 18, 27, 0.18);
+  --glow: 0 0 0 4px rgba(47, 125, 176, 0.18);
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  --title-xl: 1.8rem;
+  --title-lg: 1.5rem;
+  --title-md: 1.2rem;
+  --title-sm: 1.05rem;
+  --title-xs: 0.95rem;
+
+  --transition-fast: 140ms ease;
+  --transition-slow: 280ms ease;
+}
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  color: var(--ink-900);
+  background: radial-gradient(circle at top left, var(--bg-1) 0%, #e7eef6 45%, #d6e0ee 100%);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+

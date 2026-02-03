@@ -1,0 +1,457 @@
+﻿.commesse-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+.commessa-card {
+  text-align: left;
+  padding: 1.2rem 1.3rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-soft);
+  background: linear-gradient(180deg, var(--bg-1) 0%, var(--bg-2) 100%);
+  color: var(--ink-800);
+  transition: var(--transition-fast);
+  box-shadow: var(--shadow-1);
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  cursor: pointer;
+}
+.commessa-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-2);
+}
+.commessa-card-title {
+  font-weight: 700;
+  font-size: var(--title-md);
+  color: var(--brand-700);
+}
+.commessa-card-meta-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.4rem 0.6rem;
+}
+.commessa-card-meta {
+  font-size: 0.85rem;
+  color: var(--ink-600);
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: 12px;
+  border: 1px solid var(--border-soft);
+  background: var(--bg-2);
+}
+.commessa-card-meta-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-500);
+}
+.commessa-card-meta-value {
+  font-weight: 600;
+  color: var(--ink-800);
+}
+.payments-box {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid var(--border-soft);
+  background: var(--bg-1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--brand-700);
+}
+.payments-box.is-paid {
+  border-color: var(--brand-500);
+  box-shadow: inset 0 0 0 1px var(--brand-200);
+}
+.payments-box-euro {
+  font-size: 0.9rem;
+  line-height: 1;
+}
+.payments-box-check {
+  font-size: 0.7rem;
+  line-height: 1;
+  min-height: 0.7rem;
+  color: var(--brand-600);
+}
+.team-card-title,
+.commessa-card-title,
+.team-panel-title,
+.card-header,
+.cliente-card h3 {
+  font-family: var(--font-display);
+  font-size: var(--title-md);
+}
+.tracking-summary-title,
+.commessa-title,
+.audit-title {
+  font-family: var(--font-display);
+  font-size: var(--title-sm);
+}
+.commesse-section {
+  margin-top: 0;
+}
+.commesse-table th:nth-child(1),
+.commesse-table td:nth-child(1) {
+  min-width: 240px;
+  text-align: left;
+}
+.commesse-table th:nth-child(2),
+.commesse-table td:nth-child(2) {
+  min-width: 200px;
+}
+.commesse-table th:nth-child(3),
+.commesse-table td:nth-child(3) {
+  min-width: 140px;
+}
+.commesse-table th:nth-child(4),
+.commesse-table td:nth-child(4) {
+  min-width: 220px;
+}
+.commesse-table th:nth-child(5),
+.commesse-table td:nth-child(5) {
+  min-width: 180px;
+}
+.commesse-table.no-client-column th:nth-child(1),
+.commesse-table.no-client-column td:nth-child(1) {
+  min-width: 240px;
+  text-align: left;
+}
+.commesse-table.no-client-column th:nth-child(2),
+.commesse-table.no-client-column td:nth-child(2) {
+  min-width: 140px;
+}
+.commesse-table.no-client-column th:nth-child(3),
+.commesse-table.no-client-column td:nth-child(3) {
+  min-width: 220px;
+}
+.commesse-table.no-client-column th:nth-child(4),
+.commesse-table.no-client-column td:nth-child(4) {
+  min-width: 180px;
+}
+.commessa-title {
+  font-weight: 700;
+  color: var(--ink-800);
+  margin-bottom: 0.3rem;
+  text-align: left;
+}
+.commessa-row {
+  cursor: pointer;
+}
+.commessa-row:hover td {
+  background: #efe4d7;
+}
+.structure-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.structure-badge {
+  background: #e0f2fe;
+  color: #0369a1;
+  border-radius: 999px;
+  padding: 0.15rem 0.65rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.commessa-meta {
+  font-size: 0.85rem;
+  color: var(--ink-500);
+  text-align: left;
+}
+.commesse-table td,
+.commesse-table th {
+  padding-top: 1.15rem;
+  padding-bottom: 1.15rem;
+  font-size: 0.9rem;
+}
+.commessa-attachments {
+  margin-top: 0.5rem;
+  text-align: left;
+}
+.commessa-attachment-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+}
+.commessa-dropzone {
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.25rem;
+  background: var(--bg-2);
+  transition: var(--transition-fast);
+}
+.commessa-dropzone.is-dragover {
+  border-color: var(--brand-500);
+  background: var(--brand-300);
+  box-shadow: var(--glow);
+}
+.commessa-dropzone.is-disabled {
+  opacity: 0.65;
+  pointer-events: none;
+}
+.commessa-dropzone-content {
+  display: grid;
+  gap: 0.5rem;
+  text-align: left;
+}
+.commessa-dropzone-title {
+  font-weight: 600;
+  color: var(--ink-800);
+}
+.commessa-dropzone-hint {
+  font-size: 0.85rem;
+  color: var(--ink-500);
+}
+.commessa-dropzone .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.commessa-upload-btn {
+  white-space: nowrap;
+}
+.commessa-upload-btn svg {
+  width: 16px;
+  height: 16px;
+}
+.commessa-upload-status {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.4rem;
+}
+.commessa-upload-text {
+  font-size: 0.85rem;
+  color: var(--ink-600);
+}
+.commessa-upload-message {
+  font-size: 0.85rem;
+  color: var(--ink-700);
+  font-weight: 600;
+  margin-top: 0.35rem;
+}
+.commessa-upload-progress {
+  height: 8px;
+  background: var(--bg-1);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.commessa-upload-progress .progress-bar {
+  background: linear-gradient(90deg, var(--brand-500), var(--brand-700));
+}
+.commessa-file-input {
+  display: none;
+}
+.commessa-attachments-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.4rem 0 0.6rem;
+  display: grid;
+  gap: 0.35rem;
+}
+.commessa-attachments-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.commessa-attachment-name {
+  font-weight: 600;
+  color: var(--ink-800);
+}
+.commessa-attachments-list .commessa-attachment-actions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+.commessa-attachments-list a {
+  color: var(--brand-700);
+  text-decoration: none;
+  font-weight: 600;
+}
+.commessa-attachments-list a:hover {
+  text-decoration: underline;
+}
+.actions-sticky,
+.commessa-actions-sticky {
+  position: sticky;
+  bottom: 1rem;
+  z-index: 10;
+  background: rgba(246, 247, 251, 0.95);
+  border: 1px solid var(--border-soft);
+  box-shadow: var(--shadow-1);
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md);
+  align-items: center;
+  flex-wrap: wrap;
+}
+.substatus-badge {
+  background: rgba(234, 179, 8, 0.18);
+  color: #7a5200;
+  border-radius: var(--radius-sm);
+}
+.status-payments {
+  background: rgba(59, 130, 246, 0.16);
+  color: #1e3a8a;
+  border-radius: var(--radius-sm);
+}
+.status-payments.payments-non-iniziato {
+  background: rgba(239, 68, 68, 0.18);
+  color: #991b1b;
+}
+.status-payments.payments-parziale {
+  background: rgba(245, 158, 11, 0.2);
+  color: #92400e;
+}
+.status-payments.payments-consuntivo-con-altre-commesse {
+  background: rgba(138, 106, 84, 0.18);
+  color: var(--ink-800);
+}
+.status-payments.payments-saldo {
+  background: rgba(16, 185, 129, 0.2);
+  color: #0f766e;
+}
+.stato-pagamenti-select.payments-non-iniziato {
+  border-color: rgba(239, 68, 68, 0.55);
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.14);
+}
+.stato-pagamenti-select.payments-parziale {
+  border-color: rgba(245, 158, 11, 0.55);
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.14);
+}
+.stato-pagamenti-select.payments-consuntivo-con-altre-commesse {
+  border-color: rgba(148, 163, 184, 0.65);
+  box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.18);
+}
+.stato-pagamenti-select.payments-saldo {
+  border-color: rgba(16, 185, 129, 0.55);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.14);
+}
+.commessa-form-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+.commessa-form-label-row {
+  margin-bottom: 0.5rem;
+}
+.substatus-piano-di-sicurezza {
+  background: rgba(34, 197, 94, 0.18);
+  color: #166534;
+}
+.substatus-pratica-strutturale {
+  background: rgba(59, 130, 246, 0.18);
+  color: #1e3a8a;
+}
+.substatus-variante-pratica-edilizia {
+  background: rgba(249, 115, 22, 0.2);
+  color: #9a3412;
+}
+.substatus-variante-pratica-strutturale {
+  background: rgba(168, 85, 247, 0.2);
+  color: #5b21b6;
+}
+.substatus-fine-lavori {
+  background: rgba(20, 184, 166, 0.2);
+  color: #0f766e;
+}
+.substatus-accatastamento {
+  background: rgba(251, 191, 36, 0.25);
+  color: #854d0e;
+}
+.substatus-relazione-di-calcolo {
+  background: rgba(100, 116, 139, 0.2);
+  color: #334155;
+}
+.substatus-documentazione-per-pratica-strutturale {
+  background: rgba(56, 189, 248, 0.2);
+  color: #075985;
+}
+.substatus-documentazione-per-pratica-edilizia {
+  background: rgba(244, 114, 182, 0.22);
+  color: #9d174d;
+}
+.substatus-in-attesa-di-approvazione {
+  background: rgba(163, 163, 163, 0.25);
+  color: #374151;
+}
+.substatus-personalizzato {
+  background: rgba(148, 163, 184, 0.22);
+  color: #334155;
+}
+.audit-user-badge {
+  border-radius: var(--radius-sm);
+  text-transform: none;
+  font-weight: 600;
+}
+.cliente-card {
+  background: linear-gradient(180deg, var(--bg-1) 0%, var(--bg-2) 100%);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  box-shadow: var(--shadow-1);
+  transition: var(--transition-fast);
+}
+.cliente-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-2);
+  border-color: var(--border-strong);
+}
+.cliente-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+.cliente-card h3 {
+  margin: 0;
+  color: var(--ink-800);
+}
+.cliente-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+.audit-list {
+  display: grid;
+  gap: 0.85rem;
+}
+.audit-item {
+  padding: 1rem 1.25rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-soft);
+  background: var(--bg-1);
+  box-shadow: var(--shadow-1);
+}
+.audit-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+.audit-title {
+  font-weight: 600;
+  color: var(--ink-800);
+}
+.audit-meta {
+  font-size: 0.78rem;
+  color: var(--ink-500);
+}
+.audit-changes {
+  margin-top: 0.4rem;
+  display: grid;
+  gap: 0.2rem;
+  font-size: 0.85rem;
+  color: var(--ink-600);
+}
+

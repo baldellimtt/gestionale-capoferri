@@ -621,8 +621,10 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
     <div className="kanban-board">
       {!hideControls && (
         <>
-          <div className="d-flex justify-content-between align-items-center mb-4">
-            <h2 className="section-title mb-0 no-title-line">Kanban</h2>
+          <div className="d-flex justify-content-between align-items-center mb-4 kanban-toolbar">
+            <h2 className="section-title mb-0 no-title-line">
+              {viewMode === 'kanban' ? 'Kanban' : 'Calendario'}
+            </h2>
             <div className="d-flex gap-2 align-items-center">
               <div className="btn-group" role="group">
                 <button
@@ -813,7 +815,7 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
             </div>
           )}
 
-          {!showColonneManager && !showCompleted && (
+          {!showColonneManager && !showCompleted && viewMode === 'kanban' && (
             <div className="mb-3">
               <KanbanFilters
                 colonne={visibleColonne}

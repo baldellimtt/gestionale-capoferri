@@ -1,12 +1,14 @@
-import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react'
+﻿import React, { useMemo, useCallback } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import api from '../services/api'
 import ConfirmDeleteModal from './ConfirmDeleteModal'
 import useDebouncedRowSave from '../hooks/useDebouncedRowSave'
+import useTabellaAttivitaState from '../hooks/useTabellaAttivitaState'
+import useTabellaAttivitaEffects from '../hooks/useTabellaAttivitaEffects'
 import { formatDateEuropean, getDateGroups, getIsoDate, isWorkingDay } from '../utils/date'
 import {
-  buildServerFilters,
   calculateTotals,
   dedupeAttivita,
   filterAttivitaByDate,
@@ -14,56 +16,71 @@ import {
   normalizeAttivitaFromApi
 } from '../utils/attivita'
 import { useAttivita } from '../contexts/AttivitaContext'
-
 function TabellaAttivita({ clienti, user, toast, hideControls = false, targetUserId = null }) {
   // IMPORTANTE: NON usare mai i dati dal Context per evitare problemi con eliminazioni
   // I dati devono essere SEMPRE caricati direttamente dal server per garantire che le eliminazioni siano permanenti
   const { dataVersion, notifyAttivitaChanged } = useAttivita()
   const AUTO_CREATE_SUPPRESS_KEY = 'attivita_auto_create_suppressed_dates'
-  const [localAttivita, setLocalAttivita] = useState([])
-  const [loading, setLoading] = useState(true)
-  const lastDataVersionRef = useRef(0)
-  const hasLoadedFromServerRef = useRef(false) // Traccia se abbiamo caricato dal server dopo il mount
-  const isMountedRef = useRef(true) // Traccia se il componente è montato
-  const isLoadingRef = useRef(false) // Traccia se stiamo caricando per evitare loop
-  const suppressedAutoCreateDatesRef = useRef(new Set())
-  
+  const {
+    localAttivita,
+    setLocalAttivita,
+    loading,
+    setLoading,
+    lastDataVersionRef,
+    hasLoadedFromServerRef,
+    isMountedRef,
+    isLoadingRef,
+    suppressedAutoCreateDatesRef,
+    setAttivita,
+    error,
+    setError,
+    expanded,
+    setExpanded,
+    showForm,
+    setShowForm,
+    showSection,
+    setShowSection,
+    filterType,
+    setFilterType,
+    customStartDate,
+    setCustomStartDate,
+    customEndDate,
+    setCustomEndDate,
+    clienteSearch,
+    setClienteSearch,
+    showAutocomplete,
+    setShowAutocomplete,
+    portalAutocomplete,
+    setPortalAutocomplete,
+    editingRowId,
+    setEditingRowId,
+    saving,
+    setSaving,
+    deleteConfirm,
+    setDeleteConfirm,
+    deleting,
+    setDeleting,
+    deletedIds,
+    setDeletedIds,
+    hiddenTempDates,
+    setHiddenTempDates,
+    newRowDate,
+    setNewRowDate,
+    exportDate,
+    setExportDate,
+    lastCreatedDateRef,
+    clearEditingTimeoutRef,
+    tableScrollRef,
+    rimborsoKm,
+    setRimborsoKm
+  } = useTabellaAttivitaState({ user, getIsoDate })
+
+  const queryClient = useQueryClient()
+
   // IMPORTANTE: Usa SEMPRE i dati locali per garantire che le eliminazioni siano permanenti
   // Non usare mai i dati dal Context perché potrebbero essere vecchi e contenere righe eliminate
   // I dati locali vengono sempre aggiornati dal server quando si monta il componente
   const attivita = localAttivita
-  const setAttivita = useCallback((updater) => {
-    if (typeof updater === 'function') {
-      setLocalAttivita(prev => {
-        const newValue = updater(prev)
-        return newValue
-      })
-    } else {
-      setLocalAttivita(updater)
-    }
-  }, [])
-  const [error, setError] = useState(null)
-  const [expanded, setExpanded] = useState(false)
-  const [showForm, setShowForm] = useState(true)
-  const [showSection, setShowSection] = useState(true)
-  const [filterType, setFilterType] = useState('none')
-  const [customStartDate, setCustomStartDate] = useState('')
-  const [customEndDate, setCustomEndDate] = useState('')
-  const [clienteSearch, setClienteSearch] = useState({})
-  const [showAutocomplete, setShowAutocomplete] = useState({})
-  const [portalAutocomplete, setPortalAutocomplete] = useState(null)
-  const [editingRowId, setEditingRowId] = useState(null)
-  const [saving, setSaving] = useState({})
-  const [deleteConfirm, setDeleteConfirm] = useState({ show: false, id: null, isTemporary: false })
-  const [deleting, setDeleting] = useState(false)
-  const [deletedIds, setDeletedIds] = useState(new Set())
-  const [hiddenTempDates, setHiddenTempDates] = useState(new Set())
-  const [newRowDate, setNewRowDate] = useState(getIsoDate())
-  const [exportDate, setExportDate] = useState(getIsoDate())
-  const lastCreatedDateRef = useRef(null)
-  const clearEditingTimeoutRef = useRef(null)
-  const tableScrollRef = useRef(null)
-  const [rimborsoKm, setRimborsoKm] = useState(user?.rimborso_km ?? 0)
   const effectiveUserId = targetUserId ?? user?.id ?? null
 
   const ATTIVITA_OPTIONS = ['SOPRALLUOGO', 'TRASFERTA', 'AMMINISTRAZIONE', 'ALTRO']
@@ -105,25 +122,19 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false, targetUse
     persistSuppressedAutoCreateDates(next)
   }, [persistSuppressedAutoCreateDates])
 
-  useEffect(() => {
-    suppressedAutoCreateDatesRef.current = loadSuppressedAutoCreateDates()
-  }, [loadSuppressedAutoCreateDates])
-
-  useEffect(() => {
-    isMountedRef.current = true
-    return () => {
-      isMountedRef.current = false
-    }
-  }, [])
-
   const loadAttivita = useCallback(async (filters = {}, forceReset = false) => {
     try {
       isLoadingRef.current = true
       setLoading(true)
       setError(null)
-      // Se forceReset è true, forza refresh dal server (evita cache browser)
+      // Se forceReset Ã¨ true, forza refresh dal server (evita cache browser)
       const requestFilters = effectiveUserId ? { ...filters, userId: effectiveUserId } : filters
-      const data = await api.getAttivita(requestFilters, forceReset)
+      const queryKey = ['attivita', effectiveUserId ?? 'all', requestFilters, forceReset ? 'force' : 'cache']
+      const data = await queryClient.fetchQuery({
+        queryKey,
+        queryFn: () => api.getAttivita(requestFilters, forceReset),
+        staleTime: forceReset ? 0 : 30 * 1000
+      })
       
       // IMPORTANTE: Verifica che il componente sia ancora montato prima di aggiornare lo stato
       if (!isMountedRef.current) {
@@ -132,9 +143,9 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false, targetUse
       
       const formatted = data.map(normalizeAttivitaFromApi)
       
-      // IMPORTANTE: I dati dal server sono già la fonte di verità
-      // Non usiamo deletedIds per filtrare i dati dal server perché se il server
-      // ha eliminato il record, non sarà nei dati. deletedIds serve solo per
+      // IMPORTANTE: I dati dal server sono giÃ  la fonte di veritÃ 
+      // Non usiamo deletedIds per filtrare i dati dal server perchÃ© se il server
+      // ha eliminato il record, non sarÃ  nei dati. deletedIds serve solo per
       // ottimistiche update locali prima che il server confermi.
       
       // Rimuovi duplicati e filtra eventuali record temporanei
@@ -145,12 +156,12 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false, targetUse
       setLocalAttivita(unique) // Usa sempre setLocalAttivita per aggiornare lo stato locale
       hasLoadedFromServerRef.current = true // Marca che abbiamo caricato dal server
       
-      // Pulisci deletedIds perché i dati dal server sono la fonte di verità
+      // Pulisci deletedIds perchÃ© i dati dal server sono la fonte di veritÃ 
       setDeletedIds(new Set())
     } catch (err) {
-      console.error('Errore caricamento attività:', err)
+      console.error('Errore caricamento attivitÃ :', err)
       if (isMountedRef.current) {
-        setError('Errore nel caricamento delle attività. Verifica che il server sia avviato.')
+        setError('Errore nel caricamento delle attivitÃ . Verifica che il server sia avviato.')
       }
     } finally {
       if (isMountedRef.current) {
@@ -158,160 +169,37 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false, targetUse
         setLoading(false)
       }
     }
-  }, [])
+  }, [effectiveUserId, queryClient, setLoading, setError, setLocalAttivita, setDeletedIds])
 
-  // Quando dataVersion cambia (notifica di refresh globale dal Context), ricarica sempre dal server
-  // Non fidarti dei dati nel Context perché potrebbero essere vecchi
-  useEffect(() => {
-    if (dataVersion > lastDataVersionRef.current) {
-      lastDataVersionRef.current = dataVersion
-      // Ricarica sempre dal server quando dataVersion cambia per assicurarsi che i dati siano freschi
-      // Solo se il componente è già montato e ha caricato i dati iniziali
-      if (hasLoadedFromServerRef.current) {
-        loadAttivita({}, true).catch(err => {
-          console.error('Errore refresh attività:', err)
-        })
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataVersion])
-  
-  // IMPORTANTE: Carica SEMPRE dal server quando il componente si monta
-  // Questo garantisce che le eliminazioni siano permanenti quando si naviga via e si torna
-  useEffect(() => {
-    // Quando il componente si monta (ogni volta che si naviga verso questa vista),
-    // carica SEMPRE i dati freschi dal server per assicurarsi che siano sincronizzati
-    // Questo risolve il problema delle righe eliminate che riappaiono quando si naviga via e si ritorna
-    hasLoadedFromServerRef.current = false // Reset del flag
-    setLocalAttivita([]) // Reset dei dati locali per forzare il caricamento dal server
-    
-    // Forza il caricamento dal server con un timestamp per evitare cache
-    loadAttivita({}, true).catch(err => {
-      console.error('Errore caricamento iniziale attività:', err)
-    })
-    
-    // Cleanup: quando il componente si smonta, resetta i flag
-    return () => {
-      hasLoadedFromServerRef.current = false
-    }
-  }, []) // Esegui SOLO al mount, non quando loadAttivita cambia
-
-  useEffect(() => {
-    if (!effectiveUserId) return
-    setLocalAttivita([])
-    loadAttivita({}, true).catch(err => {
-      console.error('Errore caricamento attività per utente:', err)
-    })
-  }, [effectiveUserId])
-
-
-  useEffect(() => {
-    setRimborsoKm(user?.rimborso_km ?? 0)
-  }, [user])
-
-  // IMPORTANTE: Questo useEffect carica i dati quando cambiano i filtri
-  // Ma solo se il componente è già stato montato e ha caricato i dati iniziali
-  useEffect(() => {
-    // Non caricare se non abbiamo ancora caricato i dati iniziali o se stiamo ancora caricando
-    if (!hasLoadedFromServerRef.current || isLoadingRef.current) {
-      return
-    }
-    
-    // Carica i dati filtrati dal server
-    if (expanded) {
-      const filters = buildServerFilters(filterType, customStartDate, customEndDate)
-      loadAttivita(filters, true).catch(err => {
-        console.error('Errore caricamento filtrato attività:', err)
-      })
-    } else {
-      loadAttivita({}, true).catch(err => {
-        console.error('Errore caricamento attività:', err)
-      })
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expanded, filterType, customStartDate, customEndDate])
-
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (!e.target.closest('.autocomplete-container') && !e.target.closest('.autocomplete-portal')) {
-        setShowAutocomplete({})
-        setPortalAutocomplete(null)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
-
-  useEffect(() => {
-    // Non eseguire se stiamo ancora caricando o se non abbiamo ancora caricato i dati iniziali
-    if (loading || !hasLoadedFromServerRef.current) return
-
-    const today = getIsoDate()
-    const hasTodayRow = attivita.some(
-      (row) => row.data === today && row.id && typeof row.id === 'number' && !row.isTemporary
-    )
-
-    if (hasTodayRow) {
-      clearAutoCreateSuppression(today)
-      lastCreatedDateRef.current = today
-      return
-    }
-
-    if (lastCreatedDateRef.current === today) return
-    if (suppressedAutoCreateDatesRef.current.has(today)) {
-      lastCreatedDateRef.current = today
-      return
-    }
-    if (!isWorkingDay(today)) {
-      lastCreatedDateRef.current = today
-      return
-    }
-
-    if (!hasTodayRow) {
-      lastCreatedDateRef.current = today
-      api.createAttivita({
-        data: today,
-        userId: effectiveUserId || null,
-        clienteId: null,
-        clienteNome: '',
-        attivita: '',
-        km: 0,
-        indennita: 0,
-        note: null
-      })
-        .then((result) => {
-          // Verifica che il componente sia ancora montato
-          if (!isMountedRef.current) return
-          
-          const newRow = {
-            id: result.id,
-            data: today,
-            cliente: '',
-            clienteId: null,
-            attivita: '',
-            km: '',
-            indennita: false,
-            note: ''
-          }
-          setAttivita((prev) => {
-            const alreadyExists = prev.some(
-              (row) => row.id === result.id || (row.data === today && row.id && typeof row.id === 'number')
-            )
-            if (alreadyExists) return prev
-            return [newRow, ...prev]
-          })
-        })
-        .catch((err) => {
-          console.error('Errore creazione riga oggi:', err)
-          if (err.details) {
-            console.error('Dettagli validazione:', err.details)
-          }
-          lastCreatedDateRef.current = null
-        })
-    } else {
-      lastCreatedDateRef.current = today
-    }
-  }, [loading, attivita, clearAutoCreateSuppression])
+  useTabellaAttivitaEffects({
+    dataVersion,
+    lastDataVersionRef,
+    hasLoadedFromServerRef,
+    isMountedRef,
+    isLoadingRef,
+    suppressedAutoCreateDatesRef,
+    loadSuppressedAutoCreateDates,
+    loadAttivita,
+    setLocalAttivita,
+    loading,
+    effectiveUserId,
+    user,
+    setRimborsoKm,
+    expanded,
+    filterType,
+    customStartDate,
+    customEndDate,
+    setShowAutocomplete,
+    setPortalAutocomplete,
+    portalAutocomplete,
+    tableScrollRef,
+    attivita,
+    clearAutoCreateSuppression,
+    lastCreatedDateRef,
+    setAttivita,
+    clearEditingTimeoutRef,
+    notifyAttivitaChanged
+  })
 
   const saveRow = useCallback(async (row) => {
     if (saving[row.id]) return
@@ -346,7 +234,7 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false, targetUse
       }
       notifyAttivitaChanged?.()
     } catch (err) {
-      console.error('Errore salvataggio attività:', err)
+      console.error('Errore salvataggio attivitÃ :', err)
       const errorMsg = 'Errore nel salvataggio: ' + (err.message || 'Errore sconosciuto')
       setError(errorMsg)
       toast?.showError(errorMsg, 'Errore salvataggio')
@@ -383,7 +271,7 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false, targetUse
   const handleDeleteClick = (row) => {
     const id = row?.id
     if (id == null) {
-      setError('ID attività non valido')
+      setError('ID attivitÃ  non valido')
       return
     }
 
@@ -395,7 +283,7 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false, targetUse
 
     const numericId = typeof id === 'string' ? parseInt(id, 10) : id
     if (isNaN(numericId)) {
-      setError('ID attività non valido')
+      setError('ID attivitÃ  non valido')
       return
     }
 
@@ -434,7 +322,7 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false, targetUse
     setDeleting(true)
 
     // Ottimisticamente nascondi dall'UI usando deletedIds
-    // Non modifichiamo attivita direttamente perché sarà sostituito dal reload dal server
+    // Non modifichiamo attivita direttamente perchÃ© sarÃ  sostituito dal reload dal server
     setDeletedIds((prev) => {
       if (prev.has(idToDelete)) return prev
       const next = new Set(prev)
@@ -477,7 +365,7 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false, targetUse
         suppressAutoCreateForDate(deletedDate)
       }
       
-      // Pulisci deletedIds perché il record è stato eliminato con successo
+      // Pulisci deletedIds perchÃ© il record Ã¨ stato eliminato con successo
       setDeletedIds((prev) => {
         const next = new Set(prev)
         next.delete(idToDelete)
@@ -485,8 +373,8 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false, targetUse
       })
       
       // FORZA il Context a ricaricare per evitare che altri componenti abbiano dati vecchi
-      // Ma non aggiorniamo il Context direttamente perché potremmo avere dati vecchi
-      // Il Context verrà aggiornato quando i componenti si rimonteranno
+      // Ma non aggiorniamo il Context direttamente perchÃ© potremmo avere dati vecchi
+      // Il Context verrÃ  aggiornato quando i componenti si rimonteranno
       notifyAttivitaChanged?.()
     } catch (err) {
       console.error('Errore eliminazione API:', err)
@@ -551,14 +439,14 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false, targetUse
       notifyAttivitaChanged?.()
       
       // Ricarica dal server per assicurarsi che i dati siano sincronizzati
-      // Questo è importante quando si naviga tra le viste
+      // Questo Ã¨ importante quando si naviga tra le viste
       setTimeout(() => {
         loadAttivita({}, true).catch(err => {
           console.error('Errore refresh dopo creazione:', err)
         })
       }, 100)
     } catch (err) {
-      console.error('Errore creazione attività:', err)
+      console.error('Errore creazione attivitÃ :', err)
       setError('Errore nella creazione: ' + (err.message || 'Errore sconosciuto'))
     }
   }
@@ -717,50 +605,6 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false, targetUse
     })
   }, [attivita, setAttivita, updateRow])
   
-  // Cleanup timeout al unmount
-  useEffect(() => {
-    return () => {
-      if (clearEditingTimeoutRef.current) {
-        clearTimeout(clearEditingTimeoutRef.current)
-        clearEditingTimeoutRef.current = null
-      }
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!portalAutocomplete?.anchorEl) return
-
-    const repositionPortal = () => {
-      setPortalAutocomplete((prev) => {
-        if (!prev?.anchorEl) return prev
-        const rect = prev.anchorEl.getBoundingClientRect()
-        return {
-          ...prev,
-          top: rect.bottom + 6,
-          left: rect.left,
-          width: rect.width
-        }
-      })
-    }
-
-    const handleScroll = (e) => {
-      const tableEl = tableScrollRef.current
-      if (tableEl && e?.target && tableEl.contains(e.target)) {
-        repositionPortal()
-        return
-      }
-      setPortalAutocomplete(null)
-      setShowAutocomplete({})
-    }
-
-    window.addEventListener('scroll', handleScroll, true)
-    window.addEventListener('resize', repositionPortal)
-    return () => {
-      window.removeEventListener('scroll', handleScroll, true)
-      window.removeEventListener('resize', repositionPortal)
-    }
-  }, [portalAutocomplete])
-
   const buildPdf = async ({ rows, filterText, fileName } = {}) => {
     const rowsToExport = rows || filteredAttivita
     const totalsForRows = calculateTotals(rowsToExport)
@@ -867,7 +711,7 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false, targetUse
         row.attivita || '',
         row.km || '0',
         row.note || '',
-        row.indennita ? 'Sì' : 'No'
+        row.indennita ? 'SÃ¬' : 'No'
       ]
     })
 
@@ -1197,10 +1041,10 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false, targetUse
               <thead>
                 <tr>
                   <th>Destinazione</th>
-                  <th>Attività</th>
+                  <th>AttivitÃ </th>
                   <th>KM</th>
                   <th>Note</th>
-                  <th>Indennità</th>
+                  <th>IndennitÃ </th>
                   <th>Azioni</th>
                 </tr>
               </thead>
@@ -1427,7 +1271,7 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false, targetUse
                   <div className="total-item-value">{totals.totalKm.toFixed(2)}</div>
                 </div>
                 <div className="total-item">
-                  <div className="total-item-label">Indennità</div>
+                  <div className="total-item-label">IndennitÃ </div>
                   <div className="total-item-value">{totals.totalIndennita}</div>
                 </div>
                 <div className="total-item">
@@ -1484,4 +1328,14 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false, targetUse
 }
 
 export default TabellaAttivita
+
+
+
+
+
+
+
+
+
+
 

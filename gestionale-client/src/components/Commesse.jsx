@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+﻿import { useMemo } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '../services/api'
 import ConfirmDeleteModal from './ConfirmDeleteModal'
 import CommessaTrackingPanel from './commesse/CommessaTrackingPanel'
@@ -6,7 +7,8 @@ import CommessaAuditPanel from './commesse/CommessaAuditPanel'
 import CommessaAttachmentsPanel from './commesse/CommessaAttachmentsPanel'
 import CommessaFilters from './commesse/CommessaFilters'
 import CommessaForm from './commesse/CommessaForm'
-
+import useCommesseState from '../hooks/useCommesseState'
+import useCommesseEffects from '../hooks/useCommesseEffects'
 const STATI_COMMESSA = ['In corso', 'Preventivato', 'In attesa di approvazione', 'Richieste integrazioni', 'Personalizzato', 'Conclusa']
 const STATI_PAGAMENTI = ['Non iniziato', 'Parziale', 'Consuntivo con altre commesse', 'Saldo']
 const TIPI_LAVORO = [
@@ -61,224 +63,113 @@ const getTodayDate = () => {
 }
 
 function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommessaHandled, onCreateFattura }) {
-  const [commesse, setCommesse] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [filters, setFilters] = useState({ ...DEFAULT_FILTERS })
-  const [yearFilter, setYearFilter] = useState('')
-  const [clienteFilterInput, setClienteFilterInput] = useState('')
-  const [showClienteFilterAutocomplete, setShowClienteFilterAutocomplete] = useState(false)
-  const [clienteFormInput, setClienteFormInput] = useState('')
-  const [showClienteFormAutocomplete, setShowClienteFormAutocomplete] = useState(false)
-  const [allowClienteEdit, setAllowClienteEdit] = useState(false)
-  const [showForm, setShowForm] = useState(false)
-  const [formTab, setFormTab] = useState('essenziali')
-  const [editingId, setEditingId] = useState(null)
-  const [formData, setFormData] = useState(createEmptyForm())
-  const [initialFormData, setInitialFormData] = useState(createEmptyForm())
-  const [selectedClienteViewId, setSelectedClienteViewId] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [deleteConfirm, setDeleteConfirm] = useState({ show: false, id: null })
-  const [deleting, setDeleting] = useState(false)
-  const [allegatiByCommessa, setAllegatiByCommessa] = useState({})
-  const [initialAllegati, setInitialAllegati] = useState([])
-  const [uploading, setUploading] = useState({})
-  const [uploadStatusByCommessa, setUploadStatusByCommessa] = useState({})
-  const [allegatiError, setAllegatiError] = useState(null)
-  const [selectedCommessaId, setSelectedCommessaId] = useState('')
-  const [uploadMessageByCommessa, setUploadMessageByCommessa] = useState({})
-  const uploadMessageTimers = useRef({})
-  const [previewAllegato, setPreviewAllegato] = useState(null)
-  const [previewUrl, setPreviewUrl] = useState('')
-  const [previewLoading, setPreviewLoading] = useState(false)
-  const previewUrlRef = useRef('')
-  const [utenti, setUtenti] = useState([])
-  const [commessaAudit, setCommessaAudit] = useState([])
-  const [commessaAuditLoading, setCommessaAuditLoading] = useState(false)
-  const [commessaAuditError, setCommessaAuditError] = useState(null)
-  const [commessaAuditCommessaId, setCommessaAuditCommessaId] = useState(null)
-  const [showCommessaAudit, setShowCommessaAudit] = useState(false)
-  const [commessaTracking, setCommessaTracking] = useState(null)
-  const [commessaTrackingLoading, setCommessaTrackingLoading] = useState(false)
-  const [commessaTrackingError, setCommessaTrackingError] = useState(null)
-  const [auditNoteDate, setAuditNoteDate] = useState(() => getTodayDate())
-  const [auditNoteText, setAuditNoteText] = useState('')
-  const [auditNoteSaving, setAuditNoteSaving] = useState(false)
-  const [sortByLatest, setSortByLatest] = useState(false)
-  const [yearFoldersByCliente, setYearFoldersByCliente] = useState({})
-  const [yearFoldersLoading, setYearFoldersLoading] = useState(false)
-  const [showYearFolderForm, setShowYearFolderForm] = useState(false)
-  const [newYearFolder, setNewYearFolder] = useState('')
-  const [structureParentId, setStructureParentId] = useState(null)
+  const {
+    commesse,
+    setCommesse,
+    loading,
+    setLoading,
+    error,
+    setError,
+    filters,
+    setFilters,
+    yearFilter,
+    setYearFilter,
+    clienteFilterInput,
+    setClienteFilterInput,
+    showClienteFilterAutocomplete,
+    setShowClienteFilterAutocomplete,
+    clienteFormInput,
+    setClienteFormInput,
+    showClienteFormAutocomplete,
+    setShowClienteFormAutocomplete,
+    allowClienteEdit,
+    setAllowClienteEdit,
+    showForm,
+    setShowForm,
+    formTab,
+    setFormTab,
+    editingId,
+    setEditingId,
+    formData,
+    setFormData,
+    initialFormData,
+    setInitialFormData,
+    selectedClienteViewId,
+    setSelectedClienteViewId,
+    saving,
+    setSaving,
+    deleteConfirm,
+    setDeleteConfirm,
+    deleting,
+    setDeleting,
+    allegatiByCommessa,
+    setAllegatiByCommessa,
+    initialAllegati,
+    setInitialAllegati,
+    uploading,
+    setUploading,
+    uploadStatusByCommessa,
+    setUploadStatusByCommessa,
+    allegatiError,
+    setAllegatiError,
+    selectedCommessaId,
+    setSelectedCommessaId,
+    uploadMessageByCommessa,
+    setUploadMessageByCommessa,
+    uploadMessageTimers,
+    previewAllegato,
+    setPreviewAllegato,
+    previewUrl,
+    setPreviewUrl,
+    previewLoading,
+    setPreviewLoading,
+    previewUrlRef,
+    utenti,
+    setUtenti,
+    commessaAudit,
+    setCommessaAudit,
+    commessaAuditLoading,
+    setCommessaAuditLoading,
+    commessaAuditError,
+    setCommessaAuditError,
+    commessaAuditCommessaId,
+    setCommessaAuditCommessaId,
+    showCommessaAudit,
+    setShowCommessaAudit,
+    commessaTracking,
+    setCommessaTracking,
+    commessaTrackingLoading,
+    setCommessaTrackingLoading,
+    commessaTrackingError,
+    setCommessaTrackingError,
+    auditNoteDate,
+    setAuditNoteDate,
+    auditNoteText,
+    setAuditNoteText,
+    auditNoteSaving,
+    setAuditNoteSaving,
+    sortByLatest,
+    setSortByLatest,
+    yearFoldersByCliente,
+    setYearFoldersByCliente,
+    yearFoldersLoading,
+    setYearFoldersLoading,
+    showYearFolderForm,
+    setShowYearFolderForm,
+    newYearFolder,
+    setNewYearFolder,
+    structureParentId,
+    setStructureParentId
+  } = useCommesseState({ createEmptyForm, defaultFilters: DEFAULT_FILTERS, getTodayDate })
 
-  const loadCommesse = async (nextFilters = filters) => {
-    try {
-      setLoading(true)
-      setError(null)
-      const data = await api.getCommesse(nextFilters)
-      setCommesse(data)
-    } catch (err) {
-      console.error('Errore caricamento commesse:', err)
-      setError('Errore nel caricamento delle commesse. Verifica che il server sia avviato.')
-    } finally {
-      setLoading(false)
-    }
-  }
+  const commesseQuery = useQuery({
+    queryKey: ['commesse', filters],
+    queryFn: () => api.getCommesse(filters),
+    keepPreviousData: true
+  })
+  const queryClient = useQueryClient()
 
-  useEffect(() => {
-    loadCommesse()
-  }, [])
-
-  useEffect(() => {
-    loadCommesse(filters)
-  }, [filters])
-
-  useEffect(() => {
-    if (!openCommessaId) return
-    const openId = String(openCommessaId)
-    if (editingId && String(editingId) === openId) {
-      onOpenCommessaHandled?.()
-      return
-    }
-    const commessa = commesse.find((item) => String(item.id) === openId)
-    if (commessa) {
-      void handleEdit(commessa)
-      onOpenCommessaHandled?.()
-      return
-    }
-    const hasActiveFilters = Boolean(
-      filters.clienteId ||
-      filters.stato ||
-      filters.sottoStato ||
-      filters.statoPagamenti ||
-      yearFilter ||
-      selectedClienteViewId
-    )
-    if (hasActiveFilters) {
-      setLoading(true)
-      setFilters({ ...DEFAULT_FILTERS })
-      setYearFilter('')
-      setSelectedClienteViewId('')
-      setClienteFilterInput('')
-      setShowForm(false)
-      return
-    }
-    if (!loading) {
-      toast?.showError('Commessa non trovata.', 'Commesse')
-      onOpenCommessaHandled?.()
-    }
-  }, [openCommessaId, editingId, commesse, filters, yearFilter, selectedClienteViewId, loading, toast, onOpenCommessaHandled])
-
-  useEffect(() => {
-    const loadUtenti = async () => {
-      try {
-        const data = await api.getUtenti()
-        setUtenti(data || [])
-      } catch (err) {
-        console.warn('Impossibile caricare utenti per responsabile:', err)
-        setUtenti([])
-      }
-    }
-    loadUtenti()
-  }, [])
-
-  useEffect(() => {
-    if (formData.stato === 'Conclusa' && formData.sotto_stato.length) {
-      setFormData((prev) => ({ ...prev, sotto_stato: [], sotto_stato_custom: '' }))
-    }
-  }, [formData.stato, formData.sotto_stato])
-
-  useEffect(() => {
-    setShowYearFolderForm(false)
-    setNewYearFolder('')
-  }, [selectedClienteViewId])
-
-  useEffect(() => {
-    if (!selectedClienteViewId) return
-    let isActive = true
-    const loadFolders = async () => {
-      try {
-        setYearFoldersLoading(true)
-        const data = await api.getCommesseYearFolders(selectedClienteViewId)
-        if (!isActive) return
-        const years = Array.isArray(data) ? data.map((item) => String(item.anno)) : []
-        setYearFoldersByCliente((prev) => ({
-          ...prev,
-          [selectedClienteViewId]: years
-        }))
-      } catch (err) {
-        console.error('Errore caricamento cartelle anno:', err)
-        toast?.showError('Errore nel caricamento delle cartelle anno', 'Cartelle anno')
-      } finally {
-        if (isActive) setYearFoldersLoading(false)
-      }
-    }
-    loadFolders()
-    return () => {
-      isActive = false
-    }
-  }, [selectedClienteViewId, toast])
-
-  useEffect(() => {
-    if (!showForm || editingId) return
-    const clienteId = formData.cliente_id ? String(formData.cliente_id) : ''
-    if (!clienteId || yearFoldersByCliente[clienteId]) return
-    let isActive = true
-    const loadFolders = async () => {
-      try {
-        const data = await api.getCommesseYearFolders(clienteId)
-        if (!isActive) return
-        const years = Array.isArray(data) ? data.map((item) => String(item.anno)) : []
-        setYearFoldersByCliente((prev) => ({
-          ...prev,
-          [clienteId]: years
-        }))
-      } catch (err) {
-        console.error('Errore caricamento cartelle anno:', err)
-        toast?.showError('Errore nel caricamento delle cartelle anno', 'Cartelle anno')
-      }
-    }
-    loadFolders()
-    return () => {
-      isActive = false
-    }
-  }, [showForm, editingId, formData.cliente_id, yearFoldersByCliente, toast])
-
-  useEffect(() => {
-    if (commesse.length === 0) {
-      setAllegatiByCommessa({})
-      return
-    }
-
-    const loadAll = async () => {
-      try {
-        const ids = commesse.map((commessa) => commessa.id)
-        const allegatiList = await api.getCommesseAllegatiBulk(ids)
-        const next = {}
-        allegatiList.forEach((allegato) => {
-          const key = Number(allegato.commessa_id)
-          if (!next[key]) next[key] = []
-          next[key].push(allegato)
-        })
-        setAllegatiByCommessa(next)
-      } catch (err) {
-        console.error('Errore caricamento allegati:', err)
-        setAllegatiError('Errore nel caricamento degli allegati.')
-      }
-    }
-
-    loadAll()
-  }, [commesse])
-
-  useEffect(() => {
-    if (!editingId) {
-      setSelectedCommessaId('')
-      setCommessaTracking(null)
-      setCommessaTrackingError(null)
-    }
-  }, [editingId])
-
-  const parseNumber = (value) => {
+                        const parseNumber = (value) => {
     if (value == null || value === '') return 0
     const parsed = Number(String(value).replace(',', '.'))
     return Number.isFinite(parsed) ? parsed : NaN
@@ -568,6 +459,7 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
       if (editingId) {
         const editingCommessa = commesse.find((item) => String(item.id) === String(editingId))
         await api.updateCommessa(editingId, { ...payload, row_version: editingCommessa?.row_version })
+        queryClient.invalidateQueries({ queryKey: ['commesse'] })
         // Aggiorna gli allegati iniziali dopo il salvataggio per sincronizzare lo stato
         const currentAllegati = allegatiByCommessa[editingId] || []
         setInitialAllegati(JSON.parse(JSON.stringify(currentAllegati)))
@@ -578,6 +470,7 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
         }
       } else {
         await api.createCommessa(payload)
+        queryClient.invalidateQueries({ queryKey: ['commesse'] })
         if (loadingToastId) {
           toast?.updateToast(loadingToastId, { type: 'success', title: 'Completato', message: 'Commessa creata con successo', duration: 3000 })
         } else {
@@ -585,7 +478,7 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
         }
       }
       // Ricarica i dati dal server per assicurarsi che tutto sia aggiornato
-      await loadCommesse(filters)
+      await queryClient.invalidateQueries({ queryKey: ['commesse'] })
       resetForm()
     } catch (err) {
       console.error('Errore salvataggio commessa:', err)
@@ -638,7 +531,7 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
     setAuditNoteSaving(false)
     setFormData(nextForm)
     setInitialFormData(nextForm)
-    // Carica gli allegati se non sono già stati caricati e salva una snapshot come iniziali
+    // Carica gli allegati se non sono giÃ  stati caricati e salva una snapshot come iniziali
     let currentAllegati = allegatiByCommessa[commessa.id] || []
     if (!currentAllegati.length) {
       try {
@@ -741,9 +634,9 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
   const formatChangeValue = (value, field) => {
     if (value == null || value === '') return '-'
     if (field === 'preventivo') {
-      return Number(value) === 1 ? 'Sì' : 'No'
+      return Number(value) === 1 ? 'SÃ¬' : 'No'
     }
-    if (typeof value === 'boolean') return value ? 'Sì' : 'No'
+    if (typeof value === 'boolean') return value ? 'SÃ¬' : 'No'
     return String(value)
   }
 
@@ -977,11 +870,11 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
         toast?.updateToast(loadingToastId, {
           type: 'error',
           title: 'Errore',
-          message: 'Errore nel download dell’allegato',
+          message: 'Errore nel download dellâ€™allegato',
           duration: 3500
         })
       } else {
-        toast?.showError('Errore nel download dell’allegato', 'Allegati')
+        toast?.showError('Errore nel download dellâ€™allegato', 'Allegati')
       }
     }
   }
@@ -991,52 +884,7 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
     setPreviewAllegato(allegato)
   }
 
-  useEffect(() => {
-    let isActive = true
-    const loadPreview = async () => {
-      if (!previewAllegato?.id) {
-        if (previewUrlRef.current) {
-          URL.revokeObjectURL(previewUrlRef.current)
-          previewUrlRef.current = ''
-        }
-        setPreviewUrl('')
-        setPreviewLoading(false)
-        return
-      }
-      setPreviewLoading(true)
-      setPreviewUrl('')
-      try {
-        const { blob, contentType } = await api.downloadCommessaAllegato(previewAllegato.id)
-        if (!isActive) return
-        if (previewUrlRef.current) {
-          URL.revokeObjectURL(previewUrlRef.current)
-        }
-        const resolvedType = (contentType && contentType !== 'application/octet-stream')
-          ? contentType
-          : (getMimeFromName(previewAllegato.original_name) || blob.type || '')
-        const nextBlob = resolvedType && resolvedType !== blob.type
-          ? new Blob([blob], { type: resolvedType })
-          : blob
-        const nextUrl = URL.createObjectURL(nextBlob)
-        previewUrlRef.current = nextUrl
-        setPreviewUrl(nextUrl)
-      } catch (err) {
-        console.error('Errore preview allegato:', err)
-        if (isActive) {
-          toast?.showError('Errore nel caricamento anteprima', 'Allegati')
-          setPreviewAllegato(null)
-        }
-      } finally {
-        if (isActive) setPreviewLoading(false)
-      }
-    }
-    void loadPreview()
-    return () => {
-      isActive = false
-    }
-  }, [previewAllegato, toast])
-
-  const handleRowClick = (commessa) => {
+    const handleRowClick = (commessa) => {
     if (commessa.is_struttura) {
       setStructureParentId(String(commessa.id))
       setShowForm(false)
@@ -1110,6 +958,7 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
       const idToDelete = deleteConfirm.id
       const loadingToastId = toast?.showLoading('Eliminazione in corso...', 'Eliminazione commessa')
       await api.deleteCommessa(idToDelete)
+      queryClient.invalidateQueries({ queryKey: ['commesse'] })
       setCommesse((prev) => prev.filter((item) => item.id !== idToDelete))
       setAllegatiByCommessa((prev) => {
         const next = { ...prev }
@@ -1199,21 +1048,7 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
     })
   }, [commesseSorted, filters.sottoStato, filters.statoPagamenti, yearFilter])
 
-  useEffect(() => {
-    if (structureParentId && !structureParent) {
-      setStructureParentId(null)
-    }
-  }, [structureParentId, structureParent])
-
-  useEffect(() => {
-    if (!structureParentId) return
-    const stillVisible = filteredCommesse.some((commessa) => String(commessa.id) === String(structureParentId))
-    if (!stillVisible) {
-      setStructureParentId(null)
-    }
-  }, [filteredCommesse, structureParentId])
-
-  const clientiSorted = useMemo(() => {
+      const clientiSorted = useMemo(() => {
     return [...clienti].sort((a, b) => {
       return String(a?.denominazione || '').localeCompare(String(b?.denominazione || ''), 'it', { sensitivity: 'base' })
     })
@@ -1334,6 +1169,62 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
     return Array.from(years).sort((a, b) => b.localeCompare(a))
   }, [formYearFolders, selectedFormYear])
 
+  useCommesseEffects({
+    commesseQuery,
+    setCommesse,
+    setLoading,
+    setError,
+    filters,
+    openCommessaId,
+    editingId,
+    commesse,
+    onOpenCommessaHandled,
+    handleEdit,
+    setLoading,
+    setFilters,
+    defaultFilters: DEFAULT_FILTERS,
+    setYearFilter,
+    setSelectedClienteViewId,
+    setClienteFilterInput,
+    setShowForm,
+    yearFilter,
+    selectedClienteViewId,
+    toast,
+    loading,
+    setUtenti,
+    formData,
+    setFormData,
+    setShowYearFolderForm,
+    setNewYearFolder,
+    setYearFoldersLoading,
+    setYearFoldersByCliente,
+    showForm,
+    yearFoldersByCliente,
+    setAllegatiByCommessa,
+    setAllegatiError,
+    setSelectedCommessaId,
+    setCommessaTracking,
+    setCommessaTrackingError,
+    previewAllegato,
+    previewUrlRef,
+    setPreviewUrl,
+    setPreviewLoading,
+    setPreviewAllegato,
+    getMimeFromName,
+    structureParentId,
+    structureParent,
+    filteredCommesse,
+    setStructureParentId,
+    showCommessaAudit,
+    selectedCommessaId,
+    commessaAuditCommessaId,
+    setCommessaAudit,
+    setCommessaAuditError,
+    setCommessaAuditCommessaId,
+    loadCommessaAudit,
+    loadCommessaTracking
+  })
+
   const handleSelectYearFolder = (year) => {
     setYearFilter(year || '')
   }
@@ -1371,27 +1262,10 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
 
   const truncate = (value, max = 80) => {
     if (!value) return ''
-    return value.length > max ? `${value.slice(0, max)}…` : value
+    return value.length > max ? `${value.slice(0, max)}â€¦` : value
   }
 
-  useEffect(() => {
-    if (!showCommessaAudit) return
-    if (!selectedCommessaId) {
-      setCommessaAudit([])
-      setCommessaAuditError(null)
-      setCommessaAuditCommessaId(null)
-      return
-    }
-    if (commessaAuditCommessaId === String(selectedCommessaId)) return
-    loadCommessaAudit(selectedCommessaId)
-  }, [showCommessaAudit, selectedCommessaId])
-
-  useEffect(() => {
-    if (!editingId) return
-    loadCommessaTracking(editingId)
-  }, [editingId])
-
-  return (
+      return (
     <div className="commesse-section">
       {error && (
         <div className="alert alert-warning mb-3">
@@ -1844,4 +1718,11 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
 }
 
 export default Commesse
+
+
+
+
+
+
+
 

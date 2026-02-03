@@ -1,7 +1,9 @@
-import { useState, useEffect, useRef } from 'react'
+﻿import { useQueryClient } from '@tanstack/react-query'
 import api from '../services/api'
 import KanbanComments from './KanbanComments'
 import ConfirmDeleteModal from './ConfirmDeleteModal'
+import useKanbanCardDetailState from '../hooks/useKanbanCardDetailState'
+import useKanbanCardDetailEffects from '../hooks/useKanbanCardDetailEffects'
 
 const getTodayDate = () => {
   const today = new Date()
@@ -24,51 +26,60 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
     return { date: datePart.slice(0, 10), time }
   }
 
-  const [formData, setFormData] = useState({
-    titolo: '',
-    descrizione: '',
-    colonna_id: '',
-    priorita: 'media',
-    cliente_id: '',
-    cliente_nome: '',
-    commessa_id: '',
-    data_inizio: '',
-    data_fine_prevista: '',
-    tags: [],
-    recurrence_enabled: false,
-    recurrence_type: 'mensile'
-  })
-  const [allDay, setAllDay] = useState(true)
-  const [timeStart, setTimeStart] = useState('')
-  const [timeEnd, setTimeEnd] = useState('')
-  const [noDeadline, setNoDeadline] = useState(false)
-  const [scadenze, setScadenze] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
-  const [showScadenzaForm, setShowScadenzaForm] = useState(false)
-  const [clienteSearch, setClienteSearch] = useState('')
-  const [portalAutocomplete, setPortalAutocomplete] = useState(null)
-  const autocompleteRef = useRef(null)
-  const [commessaSearch, setCommessaSearch] = useState('')
-  const [portalCommessaAutocomplete, setPortalCommessaAutocomplete] = useState(null)
-  const commessaAutocompleteRef = useRef(null)
-  const [commessaAudit, setCommessaAudit] = useState([])
-  const [commessaAuditLoading, setCommessaAuditLoading] = useState(false)
-  const [commessaAuditError, setCommessaAuditError] = useState(null)
-  const [commessaAuditCommessaId, setCommessaAuditCommessaId] = useState(null)
-  const [showCommessaAudit, setShowCommessaAudit] = useState(false)
-  const [auditNoteDate, setAuditNoteDate] = useState(() => getTodayDate())
-  const [auditNoteText, setAuditNoteText] = useState('')
-  const [auditNoteSaving, setAuditNoteSaving] = useState(false)
-  const [scadenzaForm, setScadenzaForm] = useState({
-    titolo: '',
-    descrizione: '',
-    data_scadenza: '',
-    tipo: '',
-    priorita: 'media'
-  })
-  const [deleteScadenzaId, setDeleteScadenzaId] = useState(null)
-  const [deleteScadenzaLoading, setDeleteScadenzaLoading] = useState(false)
+  const {
+    formData,
+    setFormData,
+    allDay,
+    setAllDay,
+    timeStart,
+    setTimeStart,
+    timeEnd,
+    setTimeEnd,
+    noDeadline,
+    setNoDeadline,
+    scadenze,
+    setScadenze,
+    loading,
+    setLoading,
+    error,
+    setError,
+    showScadenzaForm,
+    setShowScadenzaForm,
+    clienteSearch,
+    setClienteSearch,
+    portalAutocomplete,
+    setPortalAutocomplete,
+    autocompleteRef,
+    commessaSearch,
+    setCommessaSearch,
+    portalCommessaAutocomplete,
+    setPortalCommessaAutocomplete,
+    commessaAutocompleteRef,
+    commessaAudit,
+    setCommessaAudit,
+    commessaAuditLoading,
+    setCommessaAuditLoading,
+    commessaAuditError,
+    setCommessaAuditError,
+    commessaAuditCommessaId,
+    setCommessaAuditCommessaId,
+    showCommessaAudit,
+    setShowCommessaAudit,
+    auditNoteDate,
+    setAuditNoteDate,
+    auditNoteText,
+    setAuditNoteText,
+    auditNoteSaving,
+    setAuditNoteSaving,
+    scadenzaForm,
+    setScadenzaForm,
+    deleteScadenzaId,
+    setDeleteScadenzaId,
+    deleteScadenzaLoading,
+    setDeleteScadenzaLoading
+  } = useKanbanCardDetailState({ getTodayDate })
+
+  const queryClient = useQueryClient()
 
   const normalizeDatePart = (value) => {
     if (!value) return ''
@@ -138,139 +149,6 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
     }
   }
 
-  useEffect(() => {
-    if (card) {
-      const start = parseDateTime(card.data_inizio)
-      const end = parseDateTime(card.data_fine_prevista)
-      setFormData({
-        titolo: card.titolo || '',
-        descrizione: card.descrizione || '',
-        colonna_id: card.colonna_id || '',
-        priorita: card.priorita || 'media',
-        cliente_id: card.cliente_id || '',
-        cliente_nome: card.cliente_nome || '',
-        commessa_id: card.commessa_id || '',
-        data_inizio: start.date,
-        data_fine_prevista: end.date,
-        tags: card.tags ? (typeof card.tags === 'string' ? JSON.parse(card.tags) : card.tags) : [],
-        recurrence_enabled: !!card.recurrence_enabled,
-        recurrence_type: card.recurrence_type || 'mensile'
-      })
-      setTimeStart(start.time)
-      setTimeEnd(end.time)
-      setAllDay(!start.time && !end.time)
-      setNoDeadline(!end.date)
-      setClienteSearch(card.cliente_nome || '')
-      // Imposta commessa search se esiste commessa_id
-      if (card.commessa_id) {
-        const commessa = commesse.find(c => c.id === card.commessa_id)
-        setCommessaSearch(commessa?.titolo || '')
-      } else {
-        setCommessaSearch('')
-      }
-      setCommessaAudit([])
-      setCommessaAuditError(null)
-      setCommessaAuditCommessaId(null)
-      setShowCommessaAudit(false)
-      setAuditNoteDate(getTodayDate())
-      setAuditNoteText('')
-      setAuditNoteSaving(false)
-      loadScadenze()
-    } else {
-      // Nuova card - imposta colonna predefinita (In Attesa)
-      const backlogColonna = colonne.find(c => c.nome === 'In Attesa')
-      setFormData({
-        titolo: '',
-        descrizione: '',
-        colonna_id: backlogColonna?.id || '',
-        priorita: 'media',
-        cliente_id: '',
-        cliente_nome: '',
-        commessa_id: '',
-        data_inizio: '',
-        data_fine_prevista: '',
-        tags: [],
-        recurrence_enabled: false,
-        recurrence_type: 'mensile'
-      })
-      setAllDay(false)
-      setTimeStart('')
-      setTimeEnd('')
-      setNoDeadline(false)
-      setClienteSearch('')
-      setCommessaSearch('')
-      setScadenze([])
-      setCommessaAudit([])
-      setCommessaAuditError(null)
-      setCommessaAuditCommessaId(null)
-      setShowCommessaAudit(false)
-      setAuditNoteDate(getTodayDate())
-      setAuditNoteText('')
-      setAuditNoteSaving(false)
-    }
-  }, [card, colonne])
-
-  // Gestione click outside per autocompletamento
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (!e.target.closest('.autocomplete-container') && !e.target.closest('.autocomplete-portal')) {
-        setPortalAutocomplete(null)
-        setPortalCommessaAutocomplete(null)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
-
-  // Reposizionamento portal autocompletamento cliente
-  useEffect(() => {
-    if (!portalAutocomplete?.anchorEl) return
-
-    const repositionPortal = () => {
-      setPortalAutocomplete((prev) => {
-        if (!prev?.anchorEl) return prev
-        const rect = prev.anchorEl.getBoundingClientRect()
-        return {
-          ...prev,
-          top: rect.bottom + 6,
-          left: rect.left,
-          width: rect.width
-        }
-      })
-    }
-
-    window.addEventListener('scroll', repositionPortal, true)
-    window.addEventListener('resize', repositionPortal)
-    return () => {
-      window.removeEventListener('scroll', repositionPortal, true)
-      window.removeEventListener('resize', repositionPortal)
-    }
-  }, [portalAutocomplete])
-
-  // Reposizionamento portal autocompletamento commessa
-  useEffect(() => {
-    if (!portalCommessaAutocomplete?.anchorEl) return
-
-    const repositionPortal = () => {
-      setPortalCommessaAutocomplete((prev) => {
-        if (!prev?.anchorEl) return prev
-        const rect = prev.anchorEl.getBoundingClientRect()
-        return {
-          ...prev,
-          top: rect.bottom + 6,
-          left: rect.left,
-          width: rect.width
-        }
-      })
-    }
-
-    window.addEventListener('scroll', repositionPortal, true)
-    window.addEventListener('resize', repositionPortal)
-    return () => {
-      window.removeEventListener('scroll', repositionPortal, true)
-      window.removeEventListener('resize', repositionPortal)
-    }
-  }, [portalCommessaAutocomplete])
 
   // Filtra clienti per autocompletamento
   const getFilteredClienti = (searchTerm) => {
@@ -328,7 +206,7 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
   const getFilteredCommesse = (searchTerm) => {
     let filtered = commesse
     
-    // Se è selezionato un cliente, filtra solo le commesse di quel cliente
+    // Se Ã¨ selezionato un cliente, filtra solo le commesse di quel cliente
     if (formData.cliente_id) {
       const clienteId = typeof formData.cliente_id === 'number' 
         ? formData.cliente_id 
@@ -340,7 +218,7 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
       }
     }
     
-    // Se c'è un termine di ricerca, filtra anche per quello
+    // Se c'Ã¨ un termine di ricerca, filtra anche per quello
     if (searchTerm && searchTerm.trim() !== '') {
       const searchLower = searchTerm.toLowerCase()
       filtered = filtered.filter((commessa) => 
@@ -463,9 +341,9 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
   const formatChangeValue = (value, field) => {
     if (value == null || value === '') return '-'
     if (field === 'preventivo') {
-      return Number(value) === 1 ? 'Sì' : 'No'
+      return Number(value) === 1 ? 'SÃ¬' : 'No'
     }
-    if (typeof value === 'boolean') return value ? 'Sì' : 'No'
+    if (typeof value === 'boolean') return value ? 'SÃ¬' : 'No'
     return String(value)
   }
 
@@ -500,7 +378,11 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
     setCommessaAuditLoading(true)
     setCommessaAuditError(null)
     try {
-      const data = await api.getCommessaAudit(commessaId)
+      const data = await queryClient.fetchQuery({
+        queryKey: ['commessa-audit', commessaId],
+        queryFn: () => api.getCommessaAudit(commessaId),
+        staleTime: 30 * 1000
+      })
       setCommessaAudit(Array.isArray(data) ? data : [])
       setCommessaAuditCommessaId(String(commessaId))
     } catch (err) {
@@ -545,28 +427,51 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
     }
   }
 
-  useEffect(() => {
-    if (!showCommessaAudit) return
-    const commessaId = formData.commessa_id
-    if (!commessaId) {
-      setCommessaAudit([])
-      setCommessaAuditError(null)
-      setCommessaAuditCommessaId(null)
-      return
-    }
-    if (commessaAuditCommessaId === String(commessaId)) return
-    loadCommessaAudit(commessaId)
-  }, [showCommessaAudit, formData.commessa_id])
-
   const loadScadenze = async () => {
     if (!card?.id) return
     try {
-      const data = await api.getKanbanScadenze(card.id)
+      const data = await queryClient.fetchQuery({
+        queryKey: ['kanban-scadenze', card.id],
+        queryFn: () => api.getKanbanScadenze(card.id),
+        staleTime: 30 * 1000
+      })
       setScadenze(data)
     } catch (err) {
       console.error('Errore caricamento scadenze:', err)
     }
   }
+
+  useKanbanCardDetailEffects({
+    card,
+    colonne,
+    commesse,
+    formData,
+    parseDateTime,
+    setFormData,
+    setTimeStart,
+    setTimeEnd,
+    setAllDay,
+    setNoDeadline,
+    setClienteSearch,
+    setCommessaSearch,
+    setScadenze,
+    setCommessaAudit,
+    setCommessaAuditError,
+    setCommessaAuditCommessaId,
+    setShowCommessaAudit,
+    setAuditNoteDate,
+    setAuditNoteText,
+    setAuditNoteSaving,
+    getTodayDate,
+    loadScadenze,
+    setPortalAutocomplete,
+    setPortalCommessaAutocomplete,
+    portalAutocomplete,
+    portalCommessaAutocomplete,
+    showCommessaAudit,
+    commessaAuditCommessaId,
+    loadCommessaAudit
+  })
 
   const handleSubmit = async (e) => {
     if (e && e.preventDefault) {
@@ -602,7 +507,7 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
         } else {
           toast?.showSuccess('Card aggiornata con successo')
         }
-        // Delay più lungo per permettere al toast di essere visibile prima di chiudere la modal
+        // Delay piÃ¹ lungo per permettere al toast di essere visibile prima di chiudere la modal
         // Il toast ha durata di 3000ms, aspettiamo almeno 800ms per essere sicuri che sia visibile
         await new Promise(resolve => setTimeout(resolve, 800))
         // Chiudi la modal dopo il salvataggio riuscito
@@ -624,7 +529,7 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
       console.error('Errore salvataggio card:', err)
       console.error('Dettagli errore:', err.details)
       console.error('Dati inviati:', cardData)
-      // Gestione errori più dettagliata
+      // Gestione errori piÃ¹ dettagliata
       let errorMsg = 'Errore nel salvataggio: ' + (err.message || 'Errore sconosciuto')
       if (err.status === 400) {
         errorMsg = err.message || 'Errore di validazione. Verifica i dati inseriti.'
@@ -699,13 +604,13 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
     const errors = []
     
     if (!scadenzaForm.titolo || !scadenzaForm.titolo.trim()) {
-      errors.push('Il titolo è obbligatorio')
+      errors.push('Il titolo Ã¨ obbligatorio')
     } else if (scadenzaForm.titolo.trim().length > 255) {
-      errors.push('Il titolo è troppo lungo (max 255 caratteri)')
+      errors.push('Il titolo Ã¨ troppo lungo (max 255 caratteri)')
     }
     
     if (!scadenzaForm.data_scadenza) {
-      errors.push('La data scadenza è obbligatoria')
+      errors.push('La data scadenza Ã¨ obbligatoria')
     } else {
       // Valida formato data
       const dateRegex = /^\d{4}-\d{2}-\d{2}$/
@@ -721,15 +626,15 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
     }
     
     if (scadenzaForm.descrizione && scadenzaForm.descrizione.length > 1000) {
-      errors.push('La descrizione è troppo lunga (max 1000 caratteri)')
+      errors.push('La descrizione Ã¨ troppo lunga (max 1000 caratteri)')
     }
     
     if (scadenzaForm.tipo && scadenzaForm.tipo.length > 50) {
-      errors.push('Il tipo è troppo lungo (max 50 caratteri)')
+      errors.push('Il tipo Ã¨ troppo lungo (max 50 caratteri)')
     }
     
     if (scadenzaForm.priorita && !['bassa', 'media', 'alta', 'urgente'].includes(scadenzaForm.priorita)) {
-      errors.push('Priorità non valida')
+      errors.push('PrioritÃ  non valida')
     }
     
     if (errors.length > 0) {
@@ -780,7 +685,7 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
       setError(null) // Pulisci eventuali errori precedenti
     } catch (err) {
       console.error('Errore creazione scadenza:', err)
-      // Gestione errori più dettagliata
+      // Gestione errori piÃ¹ dettagliata
       if (err.status === 400) {
         // Errore di validazione - mostra dettagli se disponibili
         let errorMsg = err.message || 'Errore di validazione. Verifica i dati inseriti.'
@@ -790,7 +695,7 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
         }
         setError(errorMsg)
       } else if (err.status === 401) {
-        // Errore di autenticazione - non dovrebbe succedere se il token è valido
+        // Errore di autenticazione - non dovrebbe succedere se il token Ã¨ valido
         // NON reindirizzare automaticamente, mostra solo errore
         setError('Sessione scaduta. Ricarica la pagina e riprova.')
       } else {
@@ -983,7 +888,7 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
                   />
                 </div>
                 <div className="col-md-3">
-                  <label className="form-label">Priorità</label>
+                  <label className="form-label">PrioritÃ </label>
                   <select
                     className="form-select"
                     value={formData.priorita}
@@ -1133,7 +1038,7 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
                       </div>
                       <div className="col-md-8">
                         <div className="kanban-plan-hint">
-                          Alla chiusura della card ne verrà creata automaticamente una nuova con la prossima data.
+                          La pianificazione usa la Data Fine Prevista; se assente, la Data Inizio.
                         </div>
                       </div>
                     </div>
@@ -1286,7 +1191,7 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
                               </select>
                             </div>
                             <div className="col-md-2">
-                              <label className="form-label" style={{ fontSize: '0.85rem' }}>Priorità</label>
+                              <label className="form-label" style={{ fontSize: '0.85rem' }}>PrioritÃ </label>
                               <select
                                 className="form-select form-select-sm"
                                 value={scadenzaForm.priorita}
@@ -1587,3 +1492,4 @@ function KanbanCardDetail({ card, colonne, clienti, commesse = [], currentUser, 
 }
 
 export default KanbanCardDetail
+
