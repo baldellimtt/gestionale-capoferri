@@ -30,6 +30,7 @@ function Consuntivi({ onCreateFattura }) {
   const [yearFilter, setYearFilter] = useState('')
   const [clienteFilterInput, setClienteFilterInput] = useState('')
   const [showClienteFilterAutocomplete, setShowClienteFilterAutocomplete] = useState(false)
+  const [completing, setCompleting] = useState(false)
 
   const parseNumber = (value) => {
     if (value == null || value === '') return 0
@@ -103,6 +104,9 @@ function Consuntivi({ onCreateFattura }) {
 
   const filteredCommesse = useMemo(() => {
     return commesseSorted.filter((commessa) => {
+      if (commessa?.consuntivo_completato) {
+        return false
+      }
       if (yearFilter) {
         const commessaYear = getCommessaYear(commessa)
         if (commessaYear !== yearFilter) {
@@ -199,6 +203,62 @@ function Consuntivi({ onCreateFattura }) {
     ? (consuntivoTotale * consuntivoScontoRaw) / 100
     : Math.min(consuntivoTotale, consuntivoScontoRaw)
   const consuntivoFinale = Math.max(0, consuntivoTotale - consuntivoScontoValue)
+
+  const buildUpdatePayload = (commessa) => ({
+    titolo: commessa.titolo || '',
+    cliente_id: commessa.cliente_id || null,
+    cliente_nome: commessa.cliente_nome || null,
+    stato: commessa.stato || 'In corso',
+    sotto_stato: commessa.sotto_stato || null,
+    stato_pagamenti: commessa.stato_pagamenti || 'Non iniziato',
+    consuntivo_completato: 1,
+    preventivo: !!commessa.preventivo,
+    importo_preventivo: parseNumber(commessa.importo_preventivo ?? 0),
+    importo_totale: parseNumber(commessa.importo_totale ?? 0),
+    importo_pagato: parseNumber(commessa.importo_pagato ?? 0),
+    avanzamento_lavori: Number.parseInt(commessa.avanzamento_lavori ?? 0, 10) || 0,
+    monte_ore_stimato: commessa.monte_ore_stimato === '' ? null : commessa.monte_ore_stimato,
+    responsabile: commessa.responsabile || null,
+    ubicazione: commessa.ubicazione || null,
+    data_inizio: commessa.data_inizio || null,
+    data_fine: commessa.data_fine || null,
+    note: commessa.note || null,
+    allegati: commessa.allegati || null,
+    parent_commessa_id: commessa.parent_commessa_id || null,
+    is_struttura: commessa.is_struttura ? 1 : 0
+  })
+
+  const handleCompleteConsuntivo = async () => {
+    if (!consuntivoCommesse.length || completing) return
+    const missingVersion = consuntivoCommesse.find((commessa) => !Number.isInteger(Number(commessa?.row_version)))
+    if (missingVersion) {
+      setError('Impossibile completare il consuntivo: row_version mancante.')
+      return
+    }
+    try {
+      setCompleting(true)
+      setError(null)
+      const updates = await Promise.all(consuntivoCommesse.map(async (commessa) => {
+        const updated = await api.updateCommessa(
+          commessa.id,
+          { ...buildUpdatePayload(commessa), row_version: commessa.row_version }
+        )
+        await api.addCommessaAuditNote(commessa.id, { note: 'CONSUNTIVO COMPLETATO' })
+        return updated
+      }))
+      setCommesse((prev) => prev.map((item) => {
+        const updated = updates.find((entry) => entry.id === item.id)
+        return updated ? { ...item, ...updated } : item
+      }))
+      const updatedIds = new Set(updates.map((entry) => entry.id))
+      setConsuntivoIds((prev) => prev.filter((id) => !updatedIds.has(id)))
+    } catch (err) {
+      console.error('Errore completamento consuntivo:', err)
+      setError('Errore nel completamento del consuntivo. Riprova.')
+    } finally {
+      setCompleting(false)
+    }
+  }
 
   const exportPDF = async () => {
     if (!consuntivoCommesse.length) return
@@ -499,6 +559,15 @@ function Consuntivi({ onCreateFattura }) {
                   </button>
                   <button
                     type="button"
+                    className="btn btn-success btn-sm"
+                    onClick={handleCompleteConsuntivo}
+                    disabled={consuntivoCommesse.length === 0 || completing}
+                    style={{ minWidth: '11rem' }}
+                  >
+                    {completing ? 'Completamento...' : 'Completato'}
+                  </button>
+                  <button
+                    type="button"
                     className="btn btn-secondary btn-sm"
                     disabled={!canCreateFattura}
                     onClick={() => {
@@ -529,6 +598,7 @@ function Consuntivi({ onCreateFattura }) {
                       setConsuntivoSconto('')
                       setConsuntivoScontoTipo('percent')
                     }}
+                    style={{ minWidth: '11rem' }}
                   >
                     Reset selezione
                   </button>

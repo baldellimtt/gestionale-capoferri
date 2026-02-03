@@ -204,6 +204,20 @@ class EnvValidator {
       description: 'Directory per i file di log'
     })
 
+    this.validate('LOG_RETENTION_DAYS', {
+      required: false,
+      default: '30',
+      validator: (val) => !isNaN(parseInt(val, 10)) && parseInt(val, 10) > 0,
+      description: 'Numero di giorni di retention per i log'
+    })
+
+    this.validate('LOG_RETENTION_CHECK_HOURS', {
+      required: false,
+      default: '24',
+      validator: (val) => !isNaN(parseInt(val, 10)) && parseInt(val, 10) > 0,
+      description: 'Intervallo controllo cleanup log in ore'
+    })
+
     // Backup
     this.validate('BACKUP_ENABLED', {
       required: false,

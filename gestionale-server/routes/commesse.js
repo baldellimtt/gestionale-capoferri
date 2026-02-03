@@ -124,11 +124,11 @@ class CommesseController {
       getById: this.db.prepare('SELECT * FROM commesse WHERE id = ?'),
       create: this.db.prepare(`
         INSERT INTO commesse (
-          titolo, cliente_id, cliente_nome, stato, sotto_stato, stato_pagamenti,
+          titolo, cliente_id, cliente_nome, stato, sotto_stato, stato_pagamenti, consuntivo_completato,
           preventivo, importo_preventivo, importo_totale, importo_pagato,
           avanzamento_lavori, monte_ore_stimato, responsabile, ubicazione,
           data_inizio, data_fine, note, allegati, parent_commessa_id, is_struttura
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `),
       update: this.db.prepare(`
         UPDATE commesse SET
@@ -138,6 +138,7 @@ class CommesseController {
           stato = ?,
           sotto_stato = ?,
           stato_pagamenti = ?,
+          consuntivo_completato = ?,
           preventivo = ?,
           importo_preventivo = ?,
           importo_totale = ?,
@@ -315,6 +316,7 @@ class CommesseController {
       'stato',
       'sotto_stato',
       'stato_pagamenti',
+      'consuntivo_completato',
       'preventivo',
       'importo_preventivo',
       'importo_totale',
@@ -512,6 +514,8 @@ class CommesseController {
         stato,
         sotto_stato,
         stato_pagamenti,
+        consuntivo_completato,
+        consuntivoCompletato,
         preventivo,
         importo_preventivo,
         importo_totale,
@@ -542,6 +546,7 @@ class CommesseController {
           stato || 'In corso',
           sotto_stato || null,
           stato_pagamenti || 'Non iniziato',
+          this.parseBooleanFlag(consuntivo_completato ?? consuntivoCompletato, 0),
           preventivo ? 1 : 0,
           this.parseNumber(importo_preventivo, 0),
           this.parseNumber(importo_totale, 0),
@@ -593,6 +598,8 @@ class CommesseController {
         stato,
         sotto_stato,
         stato_pagamenti,
+        consuntivo_completato,
+        consuntivoCompletato,
         preventivo,
         importo_preventivo,
         importo_totale,
@@ -629,6 +636,10 @@ class CommesseController {
         stato: stato || 'In corso',
         sotto_stato: (stato === 'Conclusa') ? null : (sotto_stato || null),
         stato_pagamenti: stato_pagamenti || 'Non iniziato',
+        consuntivo_completato: this.parseBooleanFlag(
+          consuntivo_completato ?? consuntivoCompletato,
+          existing?.consuntivo_completato ? 1 : 0
+        ),
         preventivo: preventivo ? 1 : 0,
         importo_preventivo: this.parseNumber(importo_preventivo, 0),
         importo_totale: this.parseNumber(importo_totale, 0),
@@ -653,6 +664,7 @@ class CommesseController {
         nextValues.stato,
         nextValues.sotto_stato,
         nextValues.stato_pagamenti,
+        nextValues.consuntivo_completato,
         nextValues.preventivo,
         nextValues.importo_preventivo,
         nextValues.importo_totale,

@@ -72,8 +72,8 @@ function CommessaTrackingPanel({ tracking, loading, error, onOpenTracking, editi
                   <tbody>
                     {tracking.entries.slice(0, 5).map((entry) => (
                       <tr key={entry.id}>
-                        <td><div className="commessa-title">{formatTrackingDate(entry.data)}</div></td>
-                        <td><div className="commessa-title">{formatTrackingHours(entry.durata_minuti)} h</div></td>
+                        <td><div className="commessa-meta">{formatTrackingDate(entry.data)}</div></td>
+                        <td><div className="commessa-meta">{formatTrackingHours(entry.durata_minuti)} h</div></td>
                         <td><div className="commessa-meta">{getUserLabel(entry)}</div></td>
                         <td><div className="commessa-meta">{entry.note || '-'}</div></td>
                       </tr>

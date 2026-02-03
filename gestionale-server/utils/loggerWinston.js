@@ -22,6 +22,8 @@ const LOG_EXCEPTIONS_MAX_SIZE = process.env.LOG_EXCEPTIONS_MAX_SIZE || '5m';
 const LOG_EXCEPTIONS_MAX_FILES = process.env.LOG_EXCEPTIONS_MAX_FILES || '7d';
 const LOG_REJECTIONS_MAX_SIZE = process.env.LOG_REJECTIONS_MAX_SIZE || '5m';
 const LOG_REJECTIONS_MAX_FILES = process.env.LOG_REJECTIONS_MAX_FILES || '7d';
+const LOG_RETENTION_DAYS = Number.parseInt(process.env.LOG_RETENTION_DAYS || '30', 10);
+const LOG_RETENTION_CHECK_HOURS = Number.parseInt(process.env.LOG_RETENTION_CHECK_HOURS || '24', 10);
 
 // Valida log level
 const validLevels = ['error', 'warn', 'info', 'verbose', 'debug', 'silly'];
@@ -191,6 +193,49 @@ if (NODE_ENV !== 'production') {
     level: 'error'
   }));
 }
+
+const retentionDays = Number.isFinite(LOG_RETENTION_DAYS) && LOG_RETENTION_DAYS > 0
+  ? LOG_RETENTION_DAYS
+  : 30;
+const retentionCheckHours = Number.isFinite(LOG_RETENTION_CHECK_HOURS) && LOG_RETENTION_CHECK_HOURS > 0
+  ? LOG_RETENTION_CHECK_HOURS
+  : 24;
+const retentionCheckMs = retentionCheckHours * 60 * 60 * 1000;
+
+const cleanupOldLogs = () => {
+  try {
+    if (!fs.existsSync(LOG_DIR)) return;
+    const cutoffMs = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+    const entries = fs.readdirSync(LOG_DIR, { withFileTypes: true });
+    entries.forEach((entry) => {
+      if (!entry.isFile()) return;
+      if (entry.isSymbolicLink && entry.isSymbolicLink()) return;
+      const name = entry.name || '';
+      if (!name.endsWith('.log') && !name.endsWith('.log.gz') && !name.endsWith('.json')) {
+        return;
+      }
+      const fullPath = path.join(LOG_DIR, name);
+      let stats;
+      try {
+        stats = fs.statSync(fullPath);
+      } catch {
+        return;
+      }
+      if (stats.mtimeMs < cutoffMs) {
+        try {
+          fs.unlinkSync(fullPath);
+        } catch (err) {
+          winstonLogger.warn('Impossibile eliminare log vecchio', { file: fullPath, error: err.message });
+        }
+      }
+    });
+  } catch (error) {
+    winstonLogger.warn('Cleanup log fallito', { error: error.message });
+  }
+};
+
+cleanupOldLogs();
+setInterval(cleanupOldLogs, retentionCheckMs);
 
 // Gestione eventi rotazione
 errorRotateTransport.on('rotate', (oldFilename, newFilename) => {

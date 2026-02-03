@@ -88,6 +88,10 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
   const [selectedCommessaId, setSelectedCommessaId] = useState('')
   const [uploadMessageByCommessa, setUploadMessageByCommessa] = useState({})
   const uploadMessageTimers = useRef({})
+  const [previewAllegato, setPreviewAllegato] = useState(null)
+  const [previewUrl, setPreviewUrl] = useState('')
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const previewUrlRef = useRef('')
   const [utenti, setUtenti] = useState([])
   const [commessaAudit, setCommessaAudit] = useState([])
   const [commessaAuditLoading, setCommessaAuditLoading] = useState(false)
@@ -278,6 +282,28 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
     if (value == null || value === '') return 0
     const parsed = Number(String(value).replace(',', '.'))
     return Number.isFinite(parsed) ? parsed : NaN
+  }
+
+  const getPreviewType = (allegato) => {
+    const mime = String(allegato?.mime_type || '').toLowerCase()
+    if (mime.startsWith('image/')) return 'image'
+    if (mime === 'application/pdf') return 'pdf'
+    const name = String(allegato?.original_name || '').toLowerCase()
+    if (name.endsWith('.pdf')) return 'pdf'
+    if (/\.(png|jpe?g|gif|webp|bmp|svg)$/.test(name)) return 'image'
+    return 'other'
+  }
+
+  const getMimeFromName = (name) => {
+    const lower = String(name || '').toLowerCase()
+    if (lower.endsWith('.pdf')) return 'application/pdf'
+    if (lower.endsWith('.png')) return 'image/png'
+    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg'
+    if (lower.endsWith('.gif')) return 'image/gif'
+    if (lower.endsWith('.webp')) return 'image/webp'
+    if (lower.endsWith('.bmp')) return 'image/bmp'
+    if (lower.endsWith('.svg')) return 'image/svg+xml'
+    return ''
   }
 
   const handleCreateFattura = (commessaId) => {
@@ -840,6 +866,10 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
         : []
     if (!files.length) return
 
+    if (uploadMessageTimers.current[commessaId]) {
+      clearTimeout(uploadMessageTimers.current[commessaId])
+    }
+
     setUploading((prev) => ({ ...prev, [commessaId]: true }))
     setAllegatiError(null)
     setUploadStatusByCommessa((prev) => ({
@@ -897,6 +927,11 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
     }
     uploadMessageTimers.current[commessaId] = setTimeout(() => {
       setUploadMessageByCommessa((prev) => ({ ...prev, [commessaId]: '' }))
+      setUploadStatusByCommessa((prev) => {
+        const next = { ...prev }
+        delete next[commessaId]
+        return next
+      })
     }, 3000)
   }
 
@@ -915,6 +950,7 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
 
   const handleDownloadAllegato = async (allegato) => {
     if (!allegato?.id) return
+    const loadingToastId = toast?.showLoading('Download in corso...', 'Allegati')
     try {
       const { blob, filename } = await api.downloadCommessaAllegato(allegato.id)
       const url = URL.createObjectURL(blob)
@@ -925,11 +961,80 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
       link.click()
       link.remove()
       URL.revokeObjectURL(url)
+      if (loadingToastId) {
+        toast?.updateToast(loadingToastId, {
+          type: 'success',
+          title: 'Scaricato',
+          message: 'Download completato',
+          duration: 2500
+        })
+      } else {
+        toast?.showSuccess('Download completato', 'Allegati')
+      }
     } catch (err) {
       console.error('Errore download allegato:', err)
-      toast?.showError('Errore nel download dell’allegato', 'Allegati')
+      if (loadingToastId) {
+        toast?.updateToast(loadingToastId, {
+          type: 'error',
+          title: 'Errore',
+          message: 'Errore nel download dell’allegato',
+          duration: 3500
+        })
+      } else {
+        toast?.showError('Errore nel download dell’allegato', 'Allegati')
+      }
     }
   }
+
+  const handlePreviewAllegato = (allegato) => {
+    if (!allegato?.id) return
+    setPreviewAllegato(allegato)
+  }
+
+  useEffect(() => {
+    let isActive = true
+    const loadPreview = async () => {
+      if (!previewAllegato?.id) {
+        if (previewUrlRef.current) {
+          URL.revokeObjectURL(previewUrlRef.current)
+          previewUrlRef.current = ''
+        }
+        setPreviewUrl('')
+        setPreviewLoading(false)
+        return
+      }
+      setPreviewLoading(true)
+      setPreviewUrl('')
+      try {
+        const { blob, contentType } = await api.downloadCommessaAllegato(previewAllegato.id)
+        if (!isActive) return
+        if (previewUrlRef.current) {
+          URL.revokeObjectURL(previewUrlRef.current)
+        }
+        const resolvedType = (contentType && contentType !== 'application/octet-stream')
+          ? contentType
+          : (getMimeFromName(previewAllegato.original_name) || blob.type || '')
+        const nextBlob = resolvedType && resolvedType !== blob.type
+          ? new Blob([blob], { type: resolvedType })
+          : blob
+        const nextUrl = URL.createObjectURL(nextBlob)
+        previewUrlRef.current = nextUrl
+        setPreviewUrl(nextUrl)
+      } catch (err) {
+        console.error('Errore preview allegato:', err)
+        if (isActive) {
+          toast?.showError('Errore nel caricamento anteprima', 'Allegati')
+          setPreviewAllegato(null)
+        }
+      } finally {
+        if (isActive) setPreviewLoading(false)
+      }
+    }
+    void loadPreview()
+    return () => {
+      isActive = false
+    }
+  }, [previewAllegato, toast])
 
   const handleRowClick = (commessa) => {
     if (commessa.is_struttura) {
@@ -1395,6 +1500,7 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
           onUpload={handleUpload}
           onDeleteAllegato={handleDeleteAllegato}
           onDownloadAllegato={handleDownloadAllegato}
+          onPreviewAllegato={handlePreviewAllegato}
         />
       )}
 
@@ -1651,6 +1757,80 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
             )}
           </div>
         </>
+      )}
+
+      {previewAllegato && (
+        <div
+          className="modal fade show d-block"
+          tabIndex="-1"
+          role="dialog"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setPreviewAllegato(null)
+            }
+          }}
+          style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
+        >
+          <div className="modal-dialog modal-lg modal-dialog-centered">
+            <div className="modal-content" style={{ borderRadius: '12px', overflow: 'hidden' }}>
+              <div className="modal-header">
+                <h5 className="modal-title">{previewAllegato.original_name}</h5>
+                <button type="button" className="btn-close" onClick={() => setPreviewAllegato(null)} />
+              </div>
+              <div className="modal-body" style={{ padding: 0, background: 'var(--bg-2)' }}>
+                {previewLoading && (
+                  <div className="text-center py-5">
+                    <div className="spinner-border" role="status">
+                      <span className="visually-hidden">Caricamento...</span>
+                    </div>
+                  </div>
+                )}
+                {previewUrl && getPreviewType(previewAllegato) === 'image' && (
+                  <img
+                    src={previewUrl}
+                    alt={previewAllegato.original_name}
+                    style={{ width: '100%', height: '70vh', objectFit: 'contain', background: 'var(--bg-2)' }}
+                  />
+                )}
+                {previewUrl && getPreviewType(previewAllegato) === 'pdf' && (
+                  <iframe
+                    title={previewAllegato.original_name}
+                    src={`${previewUrl}#toolbar=0&navpanes=0&scrollbar=0`}
+                    style={{ width: '100%', height: '70vh', border: 0 }}
+                  />
+                )}
+                {getPreviewType(previewAllegato) === 'other' && (
+                  <div style={{ padding: '2rem', textAlign: 'center' }}>
+                    <div className="mb-3">Anteprima non disponibile per questo formato.</div>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => handleDownloadAllegato(previewAllegato)}
+                    >
+                      Scarica file
+                    </button>
+                  </div>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary"
+                  onClick={() => handleDownloadAllegato(previewAllegato)}
+                >
+                  Scarica
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setPreviewAllegato(null)}
+                >
+                  Chiudi
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       <ConfirmDeleteModal

@@ -720,7 +720,7 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
                                 onChange={(e) => setEditingEntry((prev) => ({ ...prev, data: e.target.value }))}
                               />
                             ) : (
-                              <div className="commessa-title">{formatEntryDate(entry)}</div>
+                              <div className="commessa-meta">{formatEntryDate(entry)}</div>
                             )}
                           </td>
                           <td>
@@ -734,7 +734,7 @@ function TrackingOre({ clienti, user, toast, selectedCommessaId, onSelectCommess
                                 step="0.25"
                               />
                             ) : (
-                              <div className="commessa-title">{formatEntryHours(entry)} h</div>
+                              <div className="commessa-meta">{formatEntryHours(entry)} h</div>
                             )}
                           </td>
                           <td>

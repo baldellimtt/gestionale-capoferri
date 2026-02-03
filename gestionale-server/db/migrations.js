@@ -106,6 +106,7 @@ class Migrations {
         stato TEXT DEFAULT 'In corso',
         sotto_stato TEXT,
         stato_pagamenti TEXT,
+        consuntivo_completato INTEGER DEFAULT 0,
         preventivo INTEGER DEFAULT 0,
         importo_preventivo REAL DEFAULT 0,
         importo_totale REAL DEFAULT 0,
@@ -719,6 +720,7 @@ class Migrations {
     addColumn('stato', 'TEXT', `'In corso'`);
     addColumn('sotto_stato', 'TEXT');
     addColumn('stato_pagamenti', 'TEXT');
+    addColumn('consuntivo_completato', 'INTEGER', 0);
     addColumn('preventivo', 'INTEGER', 0);
     addColumn('importo_preventivo', 'REAL', 0);
     addColumn('importo_totale', 'REAL', 0);

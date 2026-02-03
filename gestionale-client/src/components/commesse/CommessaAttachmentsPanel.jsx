@@ -9,7 +9,8 @@ function CommessaAttachmentsPanel({
   uploadMessage,
   onUpload,
   onDeleteAllegato,
-  onDownloadAllegato
+  onDownloadAllegato,
+  onPreviewAllegato
 }) {
   const [isDragActive, setIsDragActive] = useState(false)
   const isUploading = uploading[selectedCommessaId]
@@ -76,7 +77,7 @@ function CommessaAttachmentsPanel({
                     </div>
                     <div className="commessa-attachment-actions">
                       <label
-                        className="btn btn-secondary btn-sm btn-icon"
+                        className="btn btn-secondary btn-sm commessa-upload-btn"
                         htmlFor="commessa-file-global"
                         title="Carica allegati"
                       >
@@ -110,9 +111,11 @@ function CommessaAttachmentsPanel({
                     {uploadMessage && (
                       <div className="commessa-upload-message">{uploadMessage}</div>
                     )}
-                    <div className="commessa-dropzone-hint">
-                      Puoi selezionare o trascinare piu file insieme.
-                    </div>
+                    {!totalUploads && !uploadMessage && !isUploading && (
+                      <div className="commessa-dropzone-hint">
+                        Puoi selezionare o trascinare piu file insieme.
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -129,20 +132,32 @@ function CommessaAttachmentsPanel({
                 <ul className="commessa-attachments-list">
                   {selectedAllegati.map((allegato) => (
                     <li key={allegato.id}>
-                      <button
-                        type="button"
-                        className="btn btn-link p-0"
-                        onClick={() => onDownloadAllegato(allegato)}
-                      >
+                      <span className="commessa-attachment-name">
                         {allegato.original_name}
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => onDeleteAllegato(selectedCommessa.id, allegato.id)}
-                      >
-                        Rimuovi
-                      </button>
+                      </span>
+                      <div className="commessa-attachment-actions">
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => onPreviewAllegato(allegato)}
+                        >
+                          Apri
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => onDownloadAllegato(allegato)}
+                        >
+                          Scarica
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => onDeleteAllegato(selectedCommessa.id, allegato.id)}
+                        >
+                          Rimuovi
+                        </button>
+                      </div>
                     </li>
                   ))}
                 </ul>

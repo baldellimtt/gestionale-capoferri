@@ -1184,6 +1184,15 @@ header .logo {
   gap: 0.4rem;
 }
 
+.commessa-upload-btn {
+  white-space: nowrap;
+}
+
+.commessa-upload-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
 .commessa-upload-status {
   display: grid;
   gap: 0.35rem;
@@ -1230,6 +1239,19 @@ header .logo {
   align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
+}
+
+.commessa-attachment-name {
+  font-weight: 600;
+  color: var(--ink-800);
+}
+
+.commessa-attachments-list .commessa-attachment-actions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  justify-content: flex-end;
 }
 
 .commessa-attachments-list a {
