@@ -23,6 +23,14 @@ class FatturazioneController {
         ORDER BY datetime(f.created_at) DESC
         LIMIT 100
       `),
+      listLocalByType: this.db.prepare(`
+        SELECT f.*, c.denominazione as cliente_nome
+        FROM fatture f
+        LEFT JOIN clienti c ON c.id = f.cliente_id
+        WHERE f.tipo_documento = ?
+        ORDER BY datetime(f.created_at) DESC
+        LIMIT 100
+      `),
       insertLocal: this.db.prepare(`
         INSERT INTO fatture (
           fic_document_id,
@@ -82,7 +90,8 @@ class FatturazioneController {
 
   listLocal(req, res) {
     try {
-      const list = this.stmt.listLocal.all();
+      const type = req.query.type ? String(req.query.type) : null;
+      const list = type ? this.stmt.listLocalByType.all(type) : this.stmt.listLocal.all();
       res.json(list);
     } catch (error) {
       Logger.error('Errore GET /fatturazione/fatture', error);
@@ -297,6 +306,9 @@ class FatturazioneController {
       if (safeItems.some((item) => !String(item.name || item.descrizione || '').trim())) {
         return res.status(400).json({ error: 'Ogni riga deve avere una descrizione' });
       }
+      if (safeItems.some((item) => !Number.isFinite(Number(item.net_price ?? item.prezzo ?? 0)))) {
+        return res.status(400).json({ error: 'Ogni riga deve avere un prezzo valido' });
+      }
 
       const companyId = await this.api.getCompanyId();
       if (!companyId) {
@@ -304,6 +316,11 @@ class FatturazioneController {
       }
 
       const hasValue = (value) => value !== null && value !== undefined && value !== '';
+
+      const docType = type || 'invoice';
+      if (!['quote', 'proforma', 'invoice'].includes(docType)) {
+        return res.status(400).json({ error: 'Tipo documento non valido' });
+      }
 
       const mappedItems = safeItems.map((item) => ({
         name: String(item.name || item.descrizione || '').trim(),
@@ -329,40 +346,32 @@ class FatturazioneController {
         eInvoice.certified_email = String(recipient_pec).trim();
       }
 
-      const payload = {
-        data: {
-          type: type || 'invoice',
-          entity: { id: String(cliente.fatture_in_cloud_id) },
-          date: date || new Date().toISOString().slice(0, 10),
-          numeration: numeration || undefined,
-          currency: currency ? { id: currency } : { id: 'EUR' },
-          items_list: { items: mappedItems },
-          subject: subject || undefined,
-          visible_subject: visible_subject || subject || undefined,
-          notes: notes || undefined,
-          payment_method: hasValue(payment_method_id) ? { id: payment_method_id } : undefined,
-          payments_list: payment_due_date ? {
-            payments: [
-              {
-                due_date: payment_due_date,
-                status: payment_status || 'not_paid',
-                amount: Number.isFinite(totalNet) ? Number(totalNet.toFixed(2)) : undefined,
-                payment_account: hasValue(payment_account_id) ? { id: payment_account_id } : undefined
-              }
-            ]
-          } : undefined,
-          e_invoice: Object.keys(eInvoice).length ? eInvoice : undefined
-        }
+      const payloadData = {
+        entity: { id: String(cliente.fatture_in_cloud_id) },
+        date: date || new Date().toISOString().slice(0, 10),
+        numeration: numeration || undefined,
+        currency: currency ? { id: currency } : { id: 'EUR' },
+        items_list: { items: mappedItems },
+        subject: subject || undefined,
+        visible_subject: visible_subject || subject || undefined,
+        notes: notes || undefined,
+        payment_method: hasValue(payment_method_id) ? { id: payment_method_id } : undefined,
+        payments_list: payment_due_date ? {
+          payments: [
+            {
+              due_date: payment_due_date,
+              status: payment_status || 'not_paid',
+              amount: Number.isFinite(totalNet) ? Number(totalNet.toFixed(2)) : undefined,
+              payment_account: hasValue(payment_account_id) ? { id: payment_account_id } : undefined
+            }
+          ]
+        } : undefined,
+        e_invoice: Object.keys(eInvoice).length ? eInvoice : undefined
       };
 
-      const response = await this.api.requestJson(
-        'POST',
-        `/c/${companyId}/issued_documents`,
-        payload
-      );
-
-      const responseData = response?.data || response;
-      const responseId = responseData?.id || responseData?.issued_document_id || null;
+      const result = await this.api.createDocument(docType, payloadData);
+      const responseData = result?.data || {};
+      const responseId = result?.id || null;
       const responseTotal = responseData?.amount_net
         || responseData?.amount_gross
         || responseData?.amount_total
@@ -374,18 +383,19 @@ class FatturazioneController {
         clienteIdResolved,
         commessa_ids ? JSON.stringify(commessa_ids) : null,
         responseData?.number ? String(responseData.number) : null,
-        responseData?.date || payload.data.date,
-        payload.data.type,
+        responseData?.date || payloadData.date,
+        docType,
         responseData?.status || null,
         responseTotal,
-        payload.data.currency?.id || null,
+        payloadData.currency?.id || null,
         visible_subject || subject || null,
-        JSON.stringify(payload),
-        JSON.stringify(response)
+        JSON.stringify({ data: { ...payloadData, type: docType } }),
+        JSON.stringify(result?.response || responseData)
       );
 
       res.status(201).json({
-        data: response,
+        data: result?.response || responseData,
+        url_pdf: result?.url_pdf || null,
         local: {
           cliente_id: clienteIdResolved,
           fic_company_id: companyId,

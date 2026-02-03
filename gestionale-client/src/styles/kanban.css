@@ -164,9 +164,9 @@
 
 .kanban-plan-panel {
 
-  border: 1px solid rgba(15, 118, 110, 0.2);
+  border: 1px solid var(--border-soft);
 
-  background: linear-gradient(180deg, #f7fffb 0%, #ecfdf5 100%);
+  background: linear-gradient(180deg, var(--bg-1) 0%, var(--bg-2) 100%);
 
   border-radius: var(--radius-md);
 
@@ -216,7 +216,7 @@
 
   background: rgba(255, 255, 255, 0.75);
 
-  border: 1px solid rgba(16, 185, 129, 0.25);
+  border: 1px solid var(--border-soft);
 
   border-radius: 999px;
 
@@ -252,7 +252,7 @@
 
   background: rgba(255, 255, 255, 0.8);
 
-  border: 1px dashed rgba(16, 185, 129, 0.3);
+  border: 1px dashed var(--border-soft);
 
   border-radius: var(--radius-sm);
 

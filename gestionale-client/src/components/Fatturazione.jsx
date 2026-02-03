@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import api from '../services/api'
 
-const TIPI_DOCUMENTO = [
-  { value: 'invoice', label: 'Fattura' },
-  { value: 'credit_note', label: 'Nota di credito' },
-  { value: 'debit_note', label: 'Nota di debito' }
+const DOCUMENT_TABS = [
+  { value: 'invoice', label: 'Fatture', singular: 'Fattura' },
+  { value: 'quote', label: 'Preventivi', singular: 'Preventivo' },
+  { value: 'proforma', label: 'Proforma', singular: 'Proforma' }
 ]
 
 const DEFAULT_ITEM = {
@@ -33,10 +33,10 @@ function Fatturazione({ clienti = [], toast, draft, onDraftConsumed }) {
   const [error, setError] = useState(null)
   const [remoteError, setRemoteError] = useState(null)
   const draftAppliedRef = useRef(false)
+  const [activeDocType, setActiveDocType] = useState('invoice')
 
   const [formData, setFormData] = useState({
     clienteId: '',
-    type: 'invoice',
     date: new Date().toISOString().slice(0, 10),
     numeration: '',
     visibleSubject: '',
@@ -119,13 +119,18 @@ function Fatturazione({ clienti = [], toast, draft, onDraftConsumed }) {
         setError(null)
         const [statusData, localData] = await Promise.all([
           api.getFatturazioneStatus(),
-          api.getFattureLocali()
+          api.getFattureLocali(activeDocType)
         ])
         setStatus(statusData || {})
         setLocalFatture(Array.isArray(localData) ? localData : [])
         if (statusData?.configured) {
-          const precreateData = await api.getFatturePrecreateInfo('invoice')
-          setPrecreateInfo(precreateData || null)
+          try {
+            const precreateData = await api.getFatturePrecreateInfo(activeDocType)
+            setPrecreateInfo(precreateData || null)
+          } catch (precreateErr) {
+            console.error('Errore caricamento precreate info:', precreateErr)
+            setPrecreateInfo(null)
+          }
         }
       } catch (err) {
         console.error('Errore caricamento fatturazione:', err)
@@ -136,7 +141,7 @@ function Fatturazione({ clienti = [], toast, draft, onDraftConsumed }) {
     }
 
     loadInitial()
-  }, [])
+  }, [activeDocType])
 
   useEffect(() => {
     if (!status?.configured) return
@@ -145,8 +150,8 @@ function Fatturazione({ clienti = [], toast, draft, onDraftConsumed }) {
     const runSync = async () => {
       try {
         setSyncLoading(true)
-        await api.syncFattureInCloud({ type: 'invoice', year: new Date().getFullYear(), per_page: 50, max_pages: 10 })
-        const localData = await api.getFattureLocali()
+        await api.syncFattureInCloud({ type: activeDocType, year: new Date().getFullYear(), per_page: 50, max_pages: 10 })
+        const localData = await api.getFattureLocali(activeDocType)
         if (!cancelled) {
           setLocalFatture(Array.isArray(localData) ? localData : [])
         }
@@ -168,7 +173,7 @@ function Fatturazione({ clienti = [], toast, draft, onDraftConsumed }) {
       cancelled = true
       clearInterval(intervalId)
     }
-  }, [status?.configured])
+  }, [status?.configured, activeDocType])
 
   useEffect(() => {
     if (!draft || draftAppliedRef.current) return
@@ -185,7 +190,7 @@ function Fatturazione({ clienti = [], toast, draft, onDraftConsumed }) {
         draft.items.map((item) => ({
           ...DEFAULT_ITEM,
           ...item,
-          qty: item.qty ?? 1
+          qty: item.qty - 1
         }))
       )
     }
@@ -235,7 +240,7 @@ function Fatturazione({ clienti = [], toast, draft, onDraftConsumed }) {
     try {
       setRemoteLoading(true)
       setRemoteError(null)
-      const data = await api.getFattureInCloud({ per_page: 20 })
+      const data = await api.getFattureInCloud({ type: activeDocType, per_page: 20 })
       const list = normalizeList(data)
       setRemoteFatture(list)
     } catch (err) {
@@ -278,7 +283,7 @@ function Fatturazione({ clienti = [], toast, draft, onDraftConsumed }) {
       const payload = {
         cliente_id: Number(formData.clienteId),
         commessa_ids: commessaIds,
-        type: formData.type,
+        type: activeDocType,
         date: formData.date,
         numeration: formData.numeration || undefined,
         currency: 'EUR',
@@ -300,19 +305,19 @@ function Fatturazione({ clienti = [], toast, draft, onDraftConsumed }) {
         recipient_pec: formData.recipientPec || undefined
       }
 
-      const loadingToastId = toast?.showLoading('Emissione fattura in corso...', 'Fatturazione')
-      await api.createFatturaInCloud(payload)
+      const loadingToastId = toast?.showLoading(`Emissione ${activeDocSingular.toLowerCase()} in corso...`, 'Fatturazione')
+      await api.createIssuedDocument(payload)
       if (loadingToastId) {
         toast?.updateToast(loadingToastId, {
           type: 'success',
-          title: 'Fattura emessa',
+          title: `${activeDocSingular} emesso`,
           message: 'La fattura Ã¨ stata inviata a Fatture in Cloud.',
           duration: 3500
         })
       } else {
-        toast?.showSuccess('Fattura emessa con successo', 'Fatturazione')
+        toast?.showSuccess(`${activeDocSingular} emesso con successo`, 'Fatturazione')
       }
-      const localData = await api.getFattureLocali()
+      const localData = await api.getFattureLocali(activeDocType)
       setLocalFatture(Array.isArray(localData) ? localData : [])
       setItems([{ ...DEFAULT_ITEM, vat_id: formData.defaultVatId }])
       setCommessaIds([])
@@ -325,7 +330,7 @@ function Fatturazione({ clienti = [], toast, draft, onDraftConsumed }) {
         paymentDueDate: ''
       }))
     } catch (err) {
-      const message = err.message || 'Errore nella creazione della fattura.'
+      const message = err.message || `Errore nella creazione del ${activeDocSingular.toLowerCase()}.`
       setError(message)
       toast?.showError(message, 'Fatturazione')
     } finally {
@@ -336,6 +341,12 @@ function Fatturazione({ clienti = [], toast, draft, onDraftConsumed }) {
   const selectedCliente = formData.clienteId
     ? clientiById.get(String(formData.clienteId))
     : null
+  const activeDocMeta = useMemo(
+    () => DOCUMENT_TABS.find((tab) => tab.value === activeDocType) || DOCUMENT_TABS[0],
+    [activeDocType]
+  )
+  const activeDocLabel = activeDocMeta?.label || 'Documenti'
+  const activeDocSingular = activeDocMeta?.singular || 'Documento'
 
   if (loading) {
     return (
@@ -355,6 +366,19 @@ function Fatturazione({ clienti = [], toast, draft, onDraftConsumed }) {
           <span className="badge bg-warning text-dark">Token non configurato</span>
         )}
       </div>
+      <div className="fatturazione-tabs mb-4">
+        {DOCUMENT_TABS.map((tab) => (
+          <button
+            key={tab.value}
+            type="button"
+            className={`fatturazione-tab ${activeDocType === tab.value ? 'is-active' : ''}`}
+            onClick={() => setActiveDocType(tab.value)}
+          >
+            <span className="tab-label">{tab.label}</span>
+            <span className="tab-subtitle">Emissione e storico</span>
+          </button>
+        ))}
+      </div>
 
       {error && (
         <div className="alert alert-warning mb-3">
@@ -365,7 +389,7 @@ function Fatturazione({ clienti = [], toast, draft, onDraftConsumed }) {
       <div className="fatturazione-layout">
         <form className="fatturazione-panel" onSubmit={handleSubmit}>
           <div className="card">
-            <div className="card-header">Emissione fattura</div>
+            <div className="card-header">Emissione {activeDocSingular.toLowerCase()}</div>
             <div className="card-body">
               <div className="row g-3">
                 <div className="col-md-6">
@@ -389,20 +413,6 @@ function Fatturazione({ clienti = [], toast, draft, onDraftConsumed }) {
                   )}
                 </div>
                 <div className="col-md-3">
-                  <label className="form-label">Tipo documento</label>
-                  <select
-                    className="form-select"
-                    value={formData.type}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, type: e.target.value }))}
-                  >
-                    {TIPI_DOCUMENTO.map((tipo) => (
-                      <option key={tipo.value} value={tipo.value}>
-                        {tipo.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="col-md-3">
                   <label className="form-label">Data</label>
                   <input
                     type="date"
@@ -412,7 +422,7 @@ function Fatturazione({ clienti = [], toast, draft, onDraftConsumed }) {
                   />
                 </div>
                 <div className="col-md-3">
-                  <label className="form-label">Numero fattura</label>
+                  <label className="form-label">Numero {activeDocSingular.toLowerCase()}</label>
                   <input
                     className="form-control"
                     value="Automatico"
@@ -622,7 +632,7 @@ function Fatturazione({ clienti = [], toast, draft, onDraftConsumed }) {
               className="btn btn-primary"
               disabled={saving || !status?.configured}
             >
-              {saving ? 'Emissione...' : 'Emetti fattura'}
+              {saving ? 'Emissione...' : `Emetti ${activeDocSingular.toLowerCase()}`}
             </button>
             <button
               type="button"
@@ -647,7 +657,9 @@ function Fatturazione({ clienti = [], toast, draft, onDraftConsumed }) {
 
         <div className="fatturazione-panel">
           <div className="card mb-4">
-            <div className="card-header">Fatture emesse</div>
+            <div className="card-header">
+              {activeDocType === 'invoice' ? 'Fatture emesse' : `${activeDocLabel} emessi`}
+            </div>
             <div className="card-body">
               {remoteError && (
                 <div className="alert alert-warning mb-3">
@@ -657,7 +669,7 @@ function Fatturazione({ clienti = [], toast, draft, onDraftConsumed }) {
               <div className="fatture-list">
                 {localFatture.length === 0 ? (
                   <div className="alert alert-info mb-0">
-                    Nessuna fattura emessa dal gestionale.
+                    Nessun documento emesso dal gestionale.
                   </div>
                 ) : (
                   <ul className="list-group">
@@ -666,10 +678,10 @@ function Fatturazione({ clienti = [], toast, draft, onDraftConsumed }) {
                         <div className="fattura-row">
                           <div className="fattura-main">
                             <div className="fw-semibold">
-                              {fattura.numero ? `Fattura ${fattura.numero}` : 'Fattura'}
+                              {fattura.numero ? `${activeDocSingular} ${fattura.numero}` : activeDocSingular}
                             </div>
                             <div className="text-muted small">
-                              {fattura.cliente_nome || 'Cliente'} Â· {fattura.data || 'Data n/d'}
+                              {fattura.cliente_nome || 'Cliente'} - {fattura.data || 'Data n/d'}
                             </div>
                           </div>
                           <div className="fattura-meta">
@@ -696,35 +708,7 @@ function Fatturazione({ clienti = [], toast, draft, onDraftConsumed }) {
             </div>
           </div>
 
-          {!!remoteFatture.length && (
-            <div className="card">
-              <div className="card-header">Ultime fatture (Fatture in Cloud)</div>
-              <div className="card-body">
-                <ul className="list-group">
-                  {remoteFatture.slice(0, 10).map((doc) => (
-                    <li key={doc.id || doc.document_id} className="list-group-item">
-                      <div className="fattura-row">
-                        <div className="fattura-main">
-                          <div className="fw-semibold">
-                            {doc.number ? `Documento ${doc.number}` : 'Documento'}
-                          </div>
-                          <div className="text-muted small">
-                            {doc.date || doc.created_at || 'Data n/d'}
-                          </div>
-                        </div>
-                        <div className="fattura-meta">
-                          <span className="badge-chip">{doc.status || doc.type || 'doc'}</span>
-                          <strong>
-                            &euro; {Number(doc.amount_total || doc.amount_gross || doc.amount_net || 0).toFixed(2)}
-                          </strong>
-                        </div>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          )}
+          {null}
         </div>
       </div>
     </div>

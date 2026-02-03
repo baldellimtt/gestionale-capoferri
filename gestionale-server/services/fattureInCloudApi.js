@@ -81,6 +81,67 @@ class FattureInCloudApi {
       req.end();
     });
   }
+
+  async createDocument(docType, data) {
+    const allowedTypes = new Set(['quote', 'proforma', 'invoice']);
+    if (!allowedTypes.has(docType)) {
+      const error = new Error('Tipo documento non valido');
+      error.status = 400;
+      throw error;
+    }
+    if (!data || !data.entity || !data.entity.id) {
+      const error = new Error('entity_id obbligatorio');
+      error.status = 400;
+      throw error;
+    }
+    const items = data?.items_list?.items;
+    if (!Array.isArray(items) || items.length === 0) {
+      const error = new Error('items_list obbligatorio');
+      error.status = 400;
+      throw error;
+    }
+    if (items.some((item) => !String(item?.name || '').trim())) {
+      const error = new Error('Ogni riga deve avere un nome');
+      error.status = 400;
+      throw error;
+    }
+    if (items.some((item) => !Number.isFinite(Number(item?.net_price)))) {
+      const error = new Error('Ogni riga deve avere un prezzo netto valido');
+      error.status = 400;
+      throw error;
+    }
+
+    const companyId = await this.getCompanyId();
+    if (!companyId) {
+      const error = new Error('Company ID non disponibile');
+      error.status = 400;
+      throw error;
+    }
+
+    const payload = {
+      data: {
+        ...data,
+        type: docType
+      }
+    };
+
+    const response = await this.requestJson(
+      'POST',
+      `/c/${companyId}/issued_documents`,
+      payload
+    );
+
+    const responseData = response?.data || response || {};
+    const responseId = responseData?.id || responseData?.issued_document_id || null;
+    const responseUrl = responseData?.url_pdf || responseData?.url || null;
+
+    return {
+      id: responseId,
+      url_pdf: responseUrl,
+      data: responseData,
+      response
+    };
+  }
 }
 
 module.exports = FattureInCloudApi;

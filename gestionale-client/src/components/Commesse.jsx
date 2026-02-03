@@ -1180,7 +1180,6 @@ function Commesse({ clienti, toast, onOpenTracking, openCommessaId, onOpenCommes
     commesse,
     onOpenCommessaHandled,
     handleEdit,
-    setLoading,
     setFilters,
     defaultFilters: DEFAULT_FILTERS,
     setYearFilter,

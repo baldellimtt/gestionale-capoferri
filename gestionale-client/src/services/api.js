@@ -970,8 +970,9 @@ class ApiService {
     return this.request('/fatturazione/status');
   }
 
-  async getFattureLocali() {
-    return this.request('/fatturazione/fatture');
+  async getFattureLocali(type = '') {
+    const query = type ? `?type=${encodeURIComponent(type)}` : '';
+    return this.request(`/fatturazione/fatture${query}`);
   }
 
   async getFatturePrecreateInfo(type = 'invoice') {
@@ -990,11 +991,15 @@ class ApiService {
     return this.request(endpoint);
   }
 
-  async createFatturaInCloud(payload) {
+  async createIssuedDocument(payload) {
     return this.request('/fatturazione/issued-documents', {
       method: 'POST',
       body: payload,
     });
+  }
+
+  async createFatturaInCloud(payload) {
+    return this.createIssuedDocument(payload);
   }
 
   async getFatturaInCloudUrls(id) {
