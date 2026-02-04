@@ -405,6 +405,7 @@ function Fatturazione({ clienti = [], toast, draft, onDraftConsumed }) {
   )
   const activeDocLabel = activeDocMeta?.label || 'Documenti'
   const activeDocSingular = activeDocMeta?.singular || 'Documento'
+  const defaultStatusLabel = activeDocType === 'invoice' ? 'inviata' : 'inviato'
 
   if (loading) {
     return (
@@ -743,7 +744,7 @@ function Fatturazione({ clienti = [], toast, draft, onDraftConsumed }) {
                             </div>
                           </div>
                           <div className="fattura-meta">
-                            <span className="badge-chip">{fattura.stato || 'inviata'}</span>
+                            <span className="badge-chip">{fattura.stato || defaultStatusLabel}</span>
                             <strong>
                               &euro; {Number(fattura.totale || 0).toFixed(2)}
                             </strong>
@@ -766,41 +767,6 @@ function Fatturazione({ clienti = [], toast, draft, onDraftConsumed }) {
             </div>
           </div>
 
-          {(remoteLoading || remoteFatture.length > 0) && (
-            <div className="card">
-              <div className="card-header">
-                Ultimi {activeDocLabel.toLowerCase()} (Fatture in Cloud)
-              </div>
-              <div className="card-body">
-                {remoteLoading ? (
-                  <div className="text-muted">Caricamento documenti...</div>
-                ) : (
-                  <ul className="list-group">
-                    {remoteFatture.slice(0, 10).map((doc) => (
-                      <li key={doc.id || doc.document_id} className="list-group-item">
-                        <div className="fattura-row">
-                          <div className="fattura-main">
-                            <div className="fw-semibold">
-                              {doc.number ? `Documento ${doc.number}` : 'Documento'}
-                            </div>
-                            <div className="text-muted small">
-                              {doc.date || doc.created_at || 'Data n/d'}
-                            </div>
-                          </div>
-                          <div className="fattura-meta">
-                            <span className="badge-chip">{doc.status || doc.type || 'doc'}</span>
-                            <strong>
-                              &euro; {Number(doc.amount_total || doc.amount_gross || doc.amount_net || 0).toFixed(2)}
-                            </strong>
-                          </div>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>

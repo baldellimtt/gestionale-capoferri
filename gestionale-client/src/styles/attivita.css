@@ -685,14 +685,17 @@
   min-width: 0;
  }
  .fattura-meta {
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: 86px 120px max-content;
   align-items: center;
   gap: 0.65rem;
   font-weight: 600;
   white-space: nowrap;
+  justify-content: end;
  }
  .fattura-meta strong {
   white-space: nowrap;
+  text-align: right;
  }
  @media (max-width: 640px) {
   .fattura-row {
@@ -701,7 +704,9 @@
   }
   .fattura-meta {
     white-space: normal;
-    flex-wrap: wrap;
+    grid-template-columns: 1fr;
+    justify-content: start;
+    justify-items: start;
   }
  }
 .attivita-table td input[type="checkbox"],
