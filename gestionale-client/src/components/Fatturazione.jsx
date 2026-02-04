@@ -34,6 +34,9 @@ function Fatturazione({ clienti = [], toast, draft, onDraftConsumed }) {
   const [remoteError, setRemoteError] = useState(null)
   const draftAppliedRef = useRef(false)
   const [activeDocType, setActiveDocType] = useState('invoice')
+  const requestTokenRef = useRef(0)
+  const precreateCacheRef = useRef(new Map())
+  const lastSyncAtRef = useRef({})
 
   const [formData, setFormData] = useState({
     clienteId: '',
@@ -113,30 +116,95 @@ function Fatturazione({ clienti = [], toast, draft, onDraftConsumed }) {
   }, [defaultVatId])
 
   useEffect(() => {
+    const docType = activeDocType
+    const requestToken = ++requestTokenRef.current
+    const isCurrent = () => requestToken === requestTokenRef.current
+    const shouldSync = () => {
+      const lastSyncAt = lastSyncAtRef.current[docType] || 0
+      return Date.now() - lastSyncAt > 2 * 60 * 1000
+    }
+
+    const loadRemoteFatture = async ({ silent = false } = {}) => {
+      if (!silent) setRemoteLoading(true)
+      setRemoteError(null)
+      try {
+        const data = await api.getFattureInCloud({ type: docType, per_page: 20 })
+        if (!isCurrent()) return
+        const list = normalizeList(data)
+        setRemoteFatture(list)
+      } catch (err) {
+        if (!isCurrent()) return
+        console.error('Errore caricamento fatture Fatture in Cloud:', err)
+        setRemoteError('Impossibile recuperare i documenti da Fatture in Cloud.')
+      } finally {
+        if (isCurrent() && !silent) {
+          setRemoteLoading(false)
+        }
+      }
+    }
+
+    const syncNow = async (configured) => {
+      if (!configured) return
+      try {
+        setSyncLoading(true)
+        await api.syncFattureInCloud({ type: docType, year: new Date().getFullYear(), per_page: 50, max_pages: 10 })
+        lastSyncAtRef.current[docType] = Date.now()
+        const localData = await api.getFattureLocali(docType)
+        if (!isCurrent()) return
+        setLocalFatture(Array.isArray(localData) ? localData : [])
+        await loadRemoteFatture({ silent: true })
+      } catch (err) {
+        if (!isCurrent()) return
+        setRemoteError(err.message || 'Errore durante la sincronizzazione automatica')
+      } finally {
+        if (isCurrent()) {
+          setSyncLoading(false)
+        }
+      }
+    }
+
     const loadInitial = async () => {
       try {
         setLoading(true)
         setError(null)
+        setRemoteError(null)
+        setRemoteFatture([])
         const [statusData, localData] = await Promise.all([
           api.getFatturazioneStatus(),
-          api.getFattureLocali(activeDocType)
+          api.getFattureLocali(docType)
         ])
+        if (!isCurrent()) return
         setStatus(statusData || {})
         setLocalFatture(Array.isArray(localData) ? localData : [])
         if (statusData?.configured) {
           try {
-            const precreateData = await api.getFatturePrecreateInfo(activeDocType)
-            setPrecreateInfo(precreateData || null)
+            if (precreateCacheRef.current.has(docType)) {
+              setPrecreateInfo(precreateCacheRef.current.get(docType) || null)
+            } else {
+              const precreateData = await api.getFatturePrecreateInfo(docType)
+              if (!isCurrent()) return
+              precreateCacheRef.current.set(docType, precreateData || null)
+              setPrecreateInfo(precreateData || null)
+            }
           } catch (precreateErr) {
             console.error('Errore caricamento precreate info:', precreateErr)
             setPrecreateInfo(null)
           }
+          if (shouldSync()) {
+            await syncNow(statusData?.configured)
+          } else {
+            await loadRemoteFatture()
+          }
+        } else {
+          setPrecreateInfo(null)
         }
       } catch (err) {
         console.error('Errore caricamento fatturazione:', err)
         setError('Errore nel caricamento della sezione fatturazione.')
       } finally {
-        setLoading(false)
+        if (isCurrent()) {
+          setLoading(false)
+        }
       }
     }
 
@@ -144,33 +212,31 @@ function Fatturazione({ clienti = [], toast, draft, onDraftConsumed }) {
   }, [activeDocType])
 
   useEffect(() => {
-    if (!status?.configured) return
-    let cancelled = false
-
-    const runSync = async () => {
+    if (!status?.configured) return undefined
+    const intervalId = setInterval(async () => {
+      const requestToken = requestTokenRef.current
+      const docType = activeDocType
+      const isCurrent = () => requestToken === requestTokenRef.current
       try {
         setSyncLoading(true)
-        await api.syncFattureInCloud({ type: activeDocType, year: new Date().getFullYear(), per_page: 50, max_pages: 10 })
-        const localData = await api.getFattureLocali(activeDocType)
-        if (!cancelled) {
-          setLocalFatture(Array.isArray(localData) ? localData : [])
-        }
-        await loadRemoteFatture()
+        await api.syncFattureInCloud({ type: docType, year: new Date().getFullYear(), per_page: 50, max_pages: 10 })
+        lastSyncAtRef.current[docType] = Date.now()
+        const localData = await api.getFattureLocali(docType)
+        if (!isCurrent()) return
+        setLocalFatture(Array.isArray(localData) ? localData : [])
+        const data = await api.getFattureInCloud({ type: docType, per_page: 20 })
+        if (!isCurrent()) return
+        setRemoteFatture(normalizeList(data))
       } catch (err) {
-        if (!cancelled) {
-          setRemoteError(err.message || 'Errore durante la sincronizzazione automatica')
-        }
+        if (!isCurrent()) return
+        setRemoteError(err.message || 'Errore durante la sincronizzazione automatica')
       } finally {
-        if (!cancelled) {
+        if (isCurrent()) {
           setSyncLoading(false)
         }
       }
-    }
-
-    runSync()
-    const intervalId = setInterval(runSync, 6 * 60 * 60 * 1000)
+    }, 6 * 60 * 60 * 1000)
     return () => {
-      cancelled = true
       clearInterval(intervalId)
     }
   }, [status?.configured, activeDocType])
@@ -190,7 +256,7 @@ function Fatturazione({ clienti = [], toast, draft, onDraftConsumed }) {
         draft.items.map((item) => ({
           ...DEFAULT_ITEM,
           ...item,
-          qty: item.qty - 1
+          qty: item.qty ?? 1
         }))
       )
     }
@@ -234,21 +300,6 @@ function Fatturazione({ clienti = [], toast, draft, onDraftConsumed }) {
 
   const removeItemRow = (index) => {
     setItems((prev) => prev.filter((_, idx) => idx !== index))
-  }
-
-  const loadRemoteFatture = async () => {
-    try {
-      setRemoteLoading(true)
-      setRemoteError(null)
-      const data = await api.getFattureInCloud({ type: activeDocType, per_page: 20 })
-      const list = normalizeList(data)
-      setRemoteFatture(list)
-    } catch (err) {
-      console.error('Errore caricamento fatture Fatture in Cloud:', err)
-      setRemoteError('Impossibile recuperare le fatture da Fatture in Cloud.')
-    } finally {
-      setRemoteLoading(false)
-    }
   }
 
   const handleOpenPdf = async (fattura) => {
@@ -311,7 +362,7 @@ function Fatturazione({ clienti = [], toast, draft, onDraftConsumed }) {
         toast?.updateToast(loadingToastId, {
           type: 'success',
           title: `${activeDocSingular} emesso`,
-          message: 'La fattura Ã¨ stata inviata a Fatture in Cloud.',
+          message: 'La fattura è stata inviata a Fatture in Cloud.',
           duration: 3500
         })
       } else {
@@ -319,6 +370,13 @@ function Fatturazione({ clienti = [], toast, draft, onDraftConsumed }) {
       }
       const localData = await api.getFattureLocali(activeDocType)
       setLocalFatture(Array.isArray(localData) ? localData : [])
+      setRemoteLoading(true)
+      try {
+        const remoteData = await api.getFattureInCloud({ type: activeDocType, per_page: 20 })
+        setRemoteFatture(normalizeList(remoteData))
+      } finally {
+        setRemoteLoading(false)
+      }
       setItems([{ ...DEFAULT_ITEM, vat_id: formData.defaultVatId }])
       setCommessaIds([])
       setFormData((prev) => ({
@@ -507,7 +565,7 @@ function Fatturazione({ clienti = [], toast, draft, onDraftConsumed }) {
                           step="0.1"
                           value={item.qty}
                           onChange={(e) => handleItemChange(idx, 'qty', e.target.value)}
-                          placeholder="Q.tÃ "
+                          placeholder="Q.tà"
                         />
                         <input
                           className="form-control"
@@ -708,7 +766,41 @@ function Fatturazione({ clienti = [], toast, draft, onDraftConsumed }) {
             </div>
           </div>
 
-          {null}
+          {(remoteLoading || remoteFatture.length > 0) && (
+            <div className="card">
+              <div className="card-header">
+                Ultimi {activeDocLabel.toLowerCase()} (Fatture in Cloud)
+              </div>
+              <div className="card-body">
+                {remoteLoading ? (
+                  <div className="text-muted">Caricamento documenti...</div>
+                ) : (
+                  <ul className="list-group">
+                    {remoteFatture.slice(0, 10).map((doc) => (
+                      <li key={doc.id || doc.document_id} className="list-group-item">
+                        <div className="fattura-row">
+                          <div className="fattura-main">
+                            <div className="fw-semibold">
+                              {doc.number ? `Documento ${doc.number}` : 'Documento'}
+                            </div>
+                            <div className="text-muted small">
+                              {doc.date || doc.created_at || 'Data n/d'}
+                            </div>
+                          </div>
+                          <div className="fattura-meta">
+                            <span className="badge-chip">{doc.status || doc.type || 'doc'}</span>
+                            <strong>
+                              &euro; {Number(doc.amount_total || doc.amount_gross || doc.amount_net || 0).toFixed(2)}
+                            </strong>
+                          </div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
