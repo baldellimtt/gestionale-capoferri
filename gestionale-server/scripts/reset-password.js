@@ -11,8 +11,18 @@ const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
 
 try {
-  const username = process.argv[2] || 'lcapoferri';
-  const newPassword = (process.argv[3] || 'rasputin123').trim();
+  const username = process.argv[2];
+  const newPassword = (process.argv[3] || '').trim();
+
+  if (!username || !newPassword) {
+    console.error('Uso: node scripts/reset-password.js <username> <nuova_password>');
+    process.exit(1);
+  }
+
+  if (newPassword.length < 12) {
+    console.error('La nuova password deve avere almeno 12 caratteri.');
+    process.exit(1);
+  }
   
   Logger.info('Reset password in corso...', { username });
   
@@ -45,7 +55,6 @@ try {
   if (result.changes > 0) {
     Logger.info('Password resettata con successo', { username });
     console.log(`✅ Password resettata con successo per l'utente "${username}"`);
-    console.log(`   Nuova password: ${newPassword}`);
   } else {
     Logger.error('Errore durante il reset della password', { username });
     console.error(`❌ Errore durante il reset della password`);

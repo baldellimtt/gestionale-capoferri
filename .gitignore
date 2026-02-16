@@ -3,5 +3,6 @@ logs/
 node_modules/
 .env
 .env.*
+!gestionale-server/.env.example
 gestionale-server/.env
 gestionale-client/.env

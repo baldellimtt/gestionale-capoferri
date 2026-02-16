@@ -1,7 +1,4 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
-const TOKEN_STORAGE_KEY = 'gestionale_auth_token';
-const REFRESH_TOKEN_STORAGE_KEY = 'gestionale_refresh_token';
-
 const parseFilenameFromDisposition = (value) => {
   if (!value || typeof value !== 'string') return '';
   const match = value.match(/filename\*?=(?:UTF-8''|")?([^\";]+)/i);
@@ -11,13 +8,34 @@ const parseFilenameFromDisposition = (value) => {
   } catch {
     return match[1].replace(/\"/g, '').trim();
   }
-};
+};
+
+const CSRF_COOKIE_NAME = 'gestionale_csrf_token';
+const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+const readCookie = (name) => {
+  if (typeof document === 'undefined' || !name) return '';
+
+  const cookie = document.cookie
+    .split(';')
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${name}=`));
+
+  if (!cookie) return '';
+
+  const value = cookie.slice(name.length + 1);
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+};
 
 class ApiService {
   constructor() {
     this.baseURL = API_BASE_URL;
-    this.token = localStorage.getItem(TOKEN_STORAGE_KEY) || null;
-    this.refreshToken = localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY) || null;
+    this.token = null;
+    this.refreshToken = null;
     this.refreshing = false;
     this.refreshPromise = null;
     this.refreshBlockedUntil = null;
@@ -52,114 +70,187 @@ class ApiService {
     this.commessePromise = null;
     this.commessePromiseByKey = new Map();
   }
-
-  setToken(token, refreshToken = null, customToken = null) {
-    this.token = token;
-    if (token) {
-      localStorage.setItem(TOKEN_STORAGE_KEY, token);
-    } else {
-      localStorage.removeItem(TOKEN_STORAGE_KEY);
-    }
-
-    if (refreshToken) {
-      this.refreshToken = refreshToken;
-      localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, refreshToken);
-    }
-  }
-
+  setToken(token, refreshToken = null) {
+
+    this.token = token;
+
+    this.refreshToken = refreshToken || null;
+
+  }
+
+
+
   getToken() {
     return this.token;
   }
 
   getRefreshToken() {
-    return this.refreshToken || localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
+    return this.refreshToken;
   }
-
-  clearTokens() {
-    this.token = null;
-    this.refreshToken = null;
-    localStorage.removeItem(TOKEN_STORAGE_KEY);
-    localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
-    this.clearMeCache();
-    this.refreshBlockedUntil = null;
-  }
-
-  async refreshAccessToken() {
-    // Evita multiple chiamate simultanee di refresh
-    if (this.refreshing && this.refreshPromise) {
-      return this.refreshPromise;
-    }
-
-    const refreshToken = this.getRefreshToken();
-    if (!refreshToken) {
-      throw new Error('Nessun refresh token disponibile');
-    }
-
-    this.refreshing = true;
-    this.refreshPromise = fetch(`${this.baseURL}/auth/refresh`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ refreshToken }),
-    })
-      .then(async (response) => {
-        if (!response.ok) {
-          const data = await response.json().catch(() => ({}));
-          const error = new Error(data.error || 'Refresh token fallito');
-          error.status = response.status;
-          if (data.current) {
-            error.current = data.current;
-          }
-          if (response.status === 429) {
-            error.retryAfter = data.retryAfter || 60;
-          }
-          if (data.details) {
-            error.details = data.details;
-          }
-          throw error;
-        }
-        return response.json();
-      })
-      .then((data) => {
-        if (data.token) {
-          if (data.refreshToken) {
-            this.setToken(data.token, data.refreshToken);
-          } else {
-            this.setToken(data.token);
-          }
-          this.refreshBlockedUntil = null;
-          return data.token;
-        }
-        throw new Error('Token non ricevuto dal server');
-      })
-      .finally(() => {
-        this.refreshing = false;
-        this.refreshPromise = null;
-      });
-
-    return this.refreshPromise;
-  }
-
+  getCsrfToken() {
+
+    return readCookie(CSRF_COOKIE_NAME);
+
+  }
+
+  shouldAttachCsrf(method) {
+
+    const normalized = String(method || 'GET').toUpperCase();
+
+    return MUTATING_METHODS.has(normalized);
+
+  }
+  clearTokens() {
+
+    this.token = null;
+
+    this.refreshToken = null;
+
+    this.clearMeCache();
+
+    this.refreshBlockedUntil = null;
+
+  }
+  async refreshAccessToken() {
+
+    if (this.refreshing && this.refreshPromise) {
+
+      return this.refreshPromise;
+
+    }
+
+
+
+    this.refreshing = true;
+
+    const refreshToken = this.getRefreshToken();
+
+
+
+    this.refreshPromise = fetch(`${this.baseURL}/auth/refresh`, {
+
+      method: 'POST',
+
+      credentials: 'include',
+
+      headers: {
+
+        'Content-Type': 'application/json',
+
+      },
+
+      body: JSON.stringify(refreshToken ? { refreshToken } : {}),
+
+    })
+
+      .then(async (response) => {
+
+        if (!response.ok) {
+
+          const data = await response.json().catch(() => ({}));
+
+          const error = new Error(data.error || 'Refresh token fallito');
+
+          error.status = response.status;
+
+          if (data.current) {
+
+            error.current = data.current;
+
+          }
+
+          if (response.status === 429) {
+
+            error.retryAfter = data.retryAfter || 60;
+
+          }
+
+          if (data.details) {
+
+            error.details = data.details;
+
+          }
+
+          throw error;
+
+        }
+
+        return response.json();
+
+      })
+
+      .then((data) => {
+
+        if (data.token) {
+
+          this.setToken(data.token, data.refreshToken || null);
+
+          this.refreshBlockedUntil = null;
+
+          return data.token;
+
+        }
+
+
+
+        throw new Error('Token non ricevuto dal server');
+
+      })
+
+      .finally(() => {
+
+        this.refreshing = false;
+
+        this.refreshPromise = null;
+
+      });
+
+
+
+    return this.refreshPromise;
+
+  }
+
+
+
   async request(endpoint, options = {}) {
     const url = `${this.baseURL}${endpoint}`;
-    const config = {
+    const config = {
+
+      ...options,
+
+      credentials: options.credentials || 'include',
+
       headers: {
         'Content-Type': 'application/json',
         ...options.headers,
       },
-      ...options,
     };
-
-    if (this.token) {
-      config.headers.Authorization = `Bearer ${this.token}`;
-    }
-
-    if (config.body && typeof config.body === 'object') {
-      config.body = JSON.stringify(config.body);
-    }
-
-    try {
+    if (this.token) {
+
+      config.headers.Authorization = `Bearer ${this.token}`;
+
+    }
+
+    if (this.shouldAttachCsrf(config.method)) {
+
+      const csrfToken = this.getCsrfToken();
+
+      if (csrfToken) {
+
+        config.headers['x-csrf-token'] = csrfToken;
+
+      }
+
+    }
+
+    if (config.body && typeof config.body === 'object') {
+
+      config.body = JSON.stringify(config.body);
+
+    }
+
+    try {
       const response = await fetch(url, config);
       
       // Per DELETE, la risposta potrebbe essere vuota o contenere JSON
@@ -177,12 +268,12 @@ class ApiService {
         }
       }
 
-      // Se il token Ã¨ scaduto (401), prova a fare refresh
-      if (response.status === 401 && this.getRefreshToken() && !endpoint.includes('/auth/')) {
+      // Se il token ÃƒÆ’Ã‚Â¨ scaduto (401), prova a fare refresh
+      if (response.status === 401 && !endpoint.includes('/auth/')) {
         try {
           if (this.refreshBlockedUntil && Date.now() < this.refreshBlockedUntil) {
             const retryAfter = Math.ceil((this.refreshBlockedUntil - Date.now()) / 1000);
-            const error = new Error('Troppe richieste, riprova piÃ¹ tardi');
+            const error = new Error('Troppe richieste, riprova piÃƒÆ’Ã‚Â¹ tardi');
             error.status = 429;
             error.retryAfter = retryAfter;
             throw error;
@@ -203,7 +294,7 @@ class ApiService {
             // Gestione speciale per errori 429
             if (retryResponse.status === 429) {
               const retryAfter = retryData.retryAfter || 60;
-              const error = new Error(retryData.error || 'Troppe richieste, riprova piÃ¹ tardi');
+              const error = new Error(retryData.error || 'Troppe richieste, riprova piÃƒÆ’Ã‚Â¹ tardi');
               error.status = 429;
               error.retryAfter = retryAfter;
               throw error;
@@ -239,7 +330,7 @@ class ApiService {
 
           return data;
         } catch (refreshError) {
-          // Se il refresh Ã¨ limitato, non fare logout: aspetta il retryAfter
+          // Se il refresh ÃƒÆ’Ã‚Â¨ limitato, non fare logout: aspetta il retryAfter
           if (refreshError.status === 429) {
             const retryAfter = refreshError.retryAfter || 60;
             this.refreshBlockedUntil = Date.now() + retryAfter * 1000;
@@ -263,7 +354,7 @@ class ApiService {
         throw error;
       }
 
-      // Per DELETE, se non c'Ã¨ data, restituisci success: true
+      // Per DELETE, se non c'ÃƒÆ’Ã‚Â¨ data, restituisci success: true
       if (options.method === 'DELETE' && Object.keys(data).length === 0) {
         return { success: true };
       }
@@ -274,22 +365,45 @@ class ApiService {
       throw error;
     }
   }
-
-  async requestForm(endpoint, formData, options = {}) {
-    const url = `${this.baseURL}${endpoint}`;
-    const config = {
-      method: 'POST',
-      ...options,
-      headers: {
-        ...options.headers,
-      },
-      body: formData,
-    };
-
-    if (this.token) {
-      config.headers.Authorization = `Bearer ${this.token}`;
-    }
-
+  async requestForm(endpoint, formData, options = {}) {
+
+    const url = `${this.baseURL}${endpoint}`;
+
+    const config = {
+
+      ...options,
+
+      method: options.method || 'POST',
+
+      credentials: options.credentials || 'include',
+
+      headers: {
+
+        ...options.headers,
+
+      },
+
+      body: formData,
+
+    };
+    if (this.token) {
+
+      config.headers.Authorization = `Bearer ${this.token}`;
+
+    }
+
+    if (this.shouldAttachCsrf(config.method)) {
+
+      const csrfToken = this.getCsrfToken();
+
+      if (csrfToken) {
+
+        config.headers['x-csrf-token'] = csrfToken;
+
+      }
+
+    }
+
     try {
       const response = await fetch(url, config);
       let data = {};
@@ -322,38 +436,62 @@ class ApiService {
   }
 
   // Auth API
-  async login(credentials) {
-    const data = await this.request('/auth/login', {
-      method: 'POST',
-      body: credentials,
-    });
-
-    // Salva sia access token che refresh token
-    if (data.token) {
-      this.setToken(data.token, data.refreshToken);
-    }
-
-    return data;
-  }
-
-  async logout() {
-    try {
-      const refreshToken = this.getRefreshToken();
-      await this.request('/auth/logout', { method: 'POST', body: { refreshToken } });
-    } finally {
-      this.clearTokens();
-    }
-  }
-
+  async login(credentials) {
+
+    const data = await this.request('/auth/login', {
+
+      method: 'POST',
+
+      body: credentials,
+
+    });
+
+
+
+    if (data.token) {
+
+      this.setToken(data.token, data.refreshToken || null);
+
+    }
+
+
+
+    return data;
+
+  }
+  async logout() {
+
+    try {
+
+      const refreshToken = this.getRefreshToken();
+
+      await this.request('/auth/logout', {
+
+        method: 'POST',
+
+        body: refreshToken ? { refreshToken } : {},
+
+      });
+
+    } finally {
+
+      this.clearTokens();
+
+    }
+
+  }
+
+
+
   async me(forceRefresh = false) {
-    // Usa cache se disponibile e non Ã¨ scaduta
+    // Usa cache se disponibile e non ÃƒÆ’Ã‚Â¨ scaduta
     const now = Date.now();
     if (!forceRefresh && this.meCache.data && this.meCache.timestamp && 
         (now - this.meCache.timestamp) < this.meCache.ttl) {
       return Promise.resolve(this.meCache.data);
     }
 
-    // Se c'Ã¨ giÃ  una chiamata in corso, aspetta quella
+    // Se c'ÃƒÆ’Ã‚Â¨ giÃƒÆ’Ã‚Â  una chiamata in corso, aspetta quella
     if (this.mePromise) {
       return this.mePromise;
     }
@@ -437,14 +575,14 @@ class ApiService {
 
   // Utenti API (admin)
   async getUtenti(forceRefresh = false) {
-    // Usa cache se disponibile e non Ã¨ scaduta
+    // Usa cache se disponibile e non ÃƒÆ’Ã‚Â¨ scaduta
     const now = Date.now();
     if (!forceRefresh && this.utentiCache.data && this.utentiCache.timestamp && 
         (now - this.utentiCache.timestamp) < this.utentiCache.ttl) {
       return Promise.resolve(this.utentiCache.data);
     }
 
-    // Se c'Ã¨ giÃ  una chiamata in corso, aspetta quella
+    // Se c'ÃƒÆ’Ã‚Â¨ giÃƒÆ’Ã‚Â  una chiamata in corso, aspetta quella
     if (this.utentiPromise) {
       return this.utentiPromise;
     }
@@ -491,6 +629,44 @@ class ApiService {
     return result;
   }
 
+
+  async getInvitiUtente() {
+
+    return this.request('/utenti/inviti');
+
+  }
+
+
+
+  async createInvitoUtente(payload) {
+
+    return this.request('/utenti/inviti', {
+
+      method: 'POST',
+
+      body: payload,
+
+    });
+
+  }
+
+
+
+  async revokeInvitoUtente(id, rowVersion) {
+
+    return this.request(`/utenti/inviti/${id}/revoke`, {
+
+      method: 'POST',
+
+      body: {
+
+        row_version: rowVersion
+
+      },
+
+    });
+
+  }
   // Commesse API
   async getCommesse(filters = {}, forceRefresh = false) {
     const params = new URLSearchParams();
@@ -511,7 +687,7 @@ class ApiService {
       return Promise.resolve(this.commesseCache.data);
     }
 
-    // Se c'è già una chiamata in corso per questi filtri, aspetta quella
+    // Se c'ÃƒÂ¨ giÃƒÂ  una chiamata in corso per questi filtri, aspetta quella
     if (this.commessePromiseByKey && this.commessePromiseByKey.has(filtersKey)) {
       return this.commessePromiseByKey.get(filtersKey);
     }
@@ -591,65 +767,128 @@ class ApiService {
   async getCommessaAllegati(id) {
     return this.request(`/commesse/${id}/allegati`);
   }
-
-  async requestBlob(endpoint, options = {}) {
-    const url = `${this.baseURL}${endpoint}`;
-    const buildConfig = (token) => ({
-      ...options,
-      headers: {
-        ...options.headers,
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-    });
-
-    const handleResponse = async (response) => {
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        const error = new Error(data.error || `HTTP error! status: ${response.status}`);
-          error.status = response.status;
-          if (data.current) {
-            error.current = data.current;
-          }
-        if (data.details) {
-          error.details = data.details;
-        }
-        throw error;
-      }
-      const blob = await response.blob();
-      const disposition = response.headers.get('content-disposition') || '';
-      const filename = parseFilenameFromDisposition(disposition);
-      return {
-        blob,
-        filename,
-        contentType: response.headers.get('content-type') || '',
-      };
-    };
-
-    let response = await fetch(url, buildConfig(this.token));
-
-    if (response.status === 401 && this.getRefreshToken() && !endpoint.includes('/auth/')) {
-      try {
-        if (this.refreshBlockedUntil && Date.now() < this.refreshBlockedUntil) {
-          const retryAfter = Math.ceil((this.refreshBlockedUntil - Date.now()) / 1000);
-          const error = new Error('Troppe richieste, riprova piÃ¹ tardi');
-          error.status = 429;
-          error.retryAfter = retryAfter;
-          throw error;
-        }
-        const newToken = await this.refreshAccessToken();
-        response = await fetch(url, buildConfig(newToken));
-      } catch (refreshError) {
-        if (refreshError.status === 429) {
-          const retryAfter = refreshError.retryAfter || 60;
-          this.refreshBlockedUntil = Date.now() + retryAfter * 1000;
-        }
-        throw refreshError;
-      }
-    }
-
-    return handleResponse(response);
-  }
-
+  async requestBlob(endpoint, options = {}) {
+
+    const url = `${this.baseURL}${endpoint}`;
+
+    const csrfToken = this.shouldAttachCsrf(options.method) ? this.getCsrfToken() : '';
+
+    const buildConfig = (token) => ({
+
+      ...options,
+
+      credentials: options.credentials || 'include',
+
+      headers: {
+
+        ...options.headers,
+
+        ...(csrfToken ? { 'x-csrf-token': csrfToken } : {}),
+
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+
+      },
+
+    });
+
+
+
+    const handleResponse = async (response) => {
+
+      if (!response.ok) {
+
+        const data = await response.json().catch(() => ({}));
+
+        const error = new Error(data.error || `HTTP error! status: ${response.status}`);
+
+          error.status = response.status;
+
+          if (data.current) {
+
+            error.current = data.current;
+
+          }
+
+        if (data.details) {
+
+          error.details = data.details;
+
+        }
+
+        throw error;
+
+      }
+
+      const blob = await response.blob();
+
+      const disposition = response.headers.get('content-disposition') || '';
+
+      const filename = parseFilenameFromDisposition(disposition);
+
+      return {
+
+        blob,
+
+        filename,
+
+        contentType: response.headers.get('content-type') || '',
+
+      };
+
+    };
+
+
+
+    let response = await fetch(url, buildConfig(this.token));
+
+
+
+    if (response.status === 401 && !endpoint.includes('/auth/')) {
+
+      try {
+
+        if (this.refreshBlockedUntil && Date.now() < this.refreshBlockedUntil) {
+
+          const retryAfter = Math.ceil((this.refreshBlockedUntil - Date.now()) / 1000);
+
+          const error = new Error('Troppe richieste, riprova piÃƒÂ¹ tardi');
+
+          error.status = 429;
+
+          error.retryAfter = retryAfter;
+
+          throw error;
+
+        }
+
+        const newToken = await this.refreshAccessToken();
+
+        response = await fetch(url, buildConfig(newToken));
+
+      } catch (refreshError) {
+
+        if (refreshError.status === 429) {
+
+          const retryAfter = refreshError.retryAfter || 60;
+
+          this.refreshBlockedUntil = Date.now() + retryAfter * 1000;
+
+        }
+
+        throw refreshError;
+
+      }
+
+    }
+
+
+
+    return handleResponse(response);
+
+  }
+
+
+
   async getCommesseAllegatiBulk(commessaIds = []) {
     const ids = commessaIds.map((item) => Number(item)).filter((item) => Number.isInteger(item) && item >= 1);
     if (!ids.length) return [];
@@ -746,7 +985,7 @@ class ApiService {
       return Promise.resolve(this.clientiCache.data);
     }
 
-    // Se c'Ã¨ giÃ  una chiamata in corso per questa ricerca, aspetta quella
+    // Se c'ÃƒÆ’Ã‚Â¨ giÃƒÆ’Ã‚Â  una chiamata in corso per questa ricerca, aspetta quella
     if (this.clientiPromise) {
       return this.clientiPromise;
     }
@@ -828,7 +1067,7 @@ class ApiService {
     });
   }
 
-  // AttivitÃ  API
+  // AttivitÃƒÆ’Ã‚Â  API
   async getAttivita(filters = {}, forceRefresh = false) {
     const params = new URLSearchParams();
     if (filters.filter) params.append('filter', filters.filter);
@@ -839,7 +1078,7 @@ class ApiService {
     if (filters.endDate) params.append('endDate', filters.endDate);
     if (filters.userId) params.append('userId', filters.userId);
     
-    // Aggiungi timestamp per evitare cache del browser quando forceRefresh Ã¨ true
+    // Aggiungi timestamp per evitare cache del browser quando forceRefresh ÃƒÆ’Ã‚Â¨ true
     if (forceRefresh) {
       params.append('_t', Date.now().toString());
     }
@@ -1197,5 +1436,22 @@ export default new ApiService();
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 

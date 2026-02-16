@@ -396,6 +396,51 @@ class Migrations {
       CREATE INDEX IF NOT EXISTS idx_note_spese_data ON note_spese(data);
       CREATE INDEX IF NOT EXISTS idx_note_spese_categoria ON note_spese(categoria);
       CREATE INDEX IF NOT EXISTS idx_note_spese_stato ON note_spese(stato);
+
+      -- Tabella richieste privacy (DSAR)
+      CREATE TABLE IF NOT EXISTS privacy_requests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        requester_type TEXT NOT NULL,
+        requester_id INTEGER,
+        requester_label TEXT,
+        request_type TEXT NOT NULL,
+        status TEXT DEFAULT 'open',
+        opened_at TEXT DEFAULT (datetime('now', 'localtime')),
+        due_at TEXT,
+        closed_at TEXT,
+        notes TEXT,
+        handled_by INTEGER,
+        payload_json TEXT,
+        created_at TEXT DEFAULT (datetime('now', 'localtime')),
+        updated_at TEXT DEFAULT (datetime('now', 'localtime')),
+        FOREIGN KEY (handled_by) REFERENCES utenti(id) ON DELETE SET NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_privacy_requests_status ON privacy_requests(status);
+      CREATE INDEX IF NOT EXISTS idx_privacy_requests_due_at ON privacy_requests(due_at);
+      CREATE INDEX IF NOT EXISTS idx_privacy_requests_request_type ON privacy_requests(request_type);
+
+      -- Tabella inviti utenti
+      CREATE TABLE IF NOT EXISTS user_invites (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'user',
+        invited_nome TEXT,
+        invited_cognome TEXT,
+        note TEXT,
+        token_hash TEXT NOT NULL UNIQUE,
+        invited_by INTEGER,
+        expires_at TEXT NOT NULL,
+        used_at TEXT,
+        revoked_at TEXT,
+        created_at TEXT DEFAULT (datetime('now', 'localtime')),
+        updated_at TEXT DEFAULT (datetime('now', 'localtime')),
+        FOREIGN KEY (invited_by) REFERENCES utenti(id) ON DELETE SET NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_user_invites_email ON user_invites(email);
+      CREATE INDEX IF NOT EXISTS idx_user_invites_expires_at ON user_invites(expires_at);
+      CREATE INDEX IF NOT EXISTS idx_user_invites_status ON user_invites(used_at, revoked_at);
     `);
 
     this.ensureUserColumns(db);
@@ -416,6 +461,8 @@ class Migrations {
     this.ensureDatiFiscaliInitialized(db);
     this.ensureDocumentiAziendaliTable(db);
     this.ensureFattureTable(db);
+    this.ensurePrivacyRequestsTable(db);
+    this.ensureUserInvitesTable(db);
 
     console.log('[MIGRATIONS] Schema database creato/verificato');
   }
@@ -616,7 +663,10 @@ class Migrations {
       'kanban_card',
       'kanban_scadenze',
       'kanban_notifiche',
-      'kanban_card_commenti'
+      'kanban_card_commenti',
+      'privacy_requests'
+      ,
+      'user_invites'
     ];
 
     const addRowVersion = (table) => {
@@ -790,14 +840,102 @@ class Migrations {
 
   ensureDefaultUser(db) {
     const { hashPassword } = require('../utils/auth');
-    const existing = db.prepare('SELECT id FROM utenti WHERE username = ?').get('lcapoferri');
+    const shouldSeed = (process.env.SEED_DEFAULT_ADMIN || '').toLowerCase();
+    const isProduction = process.env.NODE_ENV === 'production';
+    const allowSeed = shouldSeed
+      ? shouldSeed === 'true'
+      : !isProduction;
+
+    if (!allowSeed) {
+      return;
+    }
+
+    const username = (process.env.DEFAULT_ADMIN_USERNAME || 'lcapoferri').trim();
+    let password = process.env.DEFAULT_ADMIN_PASSWORD || '';
+    const nome = (process.env.DEFAULT_ADMIN_NOME || 'Default').trim();
+    const cognome = (process.env.DEFAULT_ADMIN_COGNOME || 'Admin').trim();
+    const existing = db.prepare('SELECT id FROM utenti WHERE username = ?').get(username);
 
     if (!existing) {
-      const { hash, salt } = hashPassword('rasputin123');
+      if (!password && !isProduction) {
+        password = require('crypto').randomBytes(16).toString('hex');
+        console.warn(`[MIGRATIONS] Seed admin creato in sviluppo. Username: ${username}, password temporanea: ${password}`);
+      }
+      if (!password || password.length < 12) {
+        throw new Error('DEFAULT_ADMIN_PASSWORD obbligatoria (minimo 12 caratteri) quando SEED_DEFAULT_ADMIN=true');
+      }
+      const { hash, salt } = hashPassword(password);
       db.prepare(`
         INSERT INTO utenti (username, role, password_hash, password_salt, rimborso_km, nome, cognome)
         VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run('lcapoferri', 'admin', hash, salt, 0, 'Luca', 'Capoferri');
+      `).run(username, 'admin', hash, salt, 0, nome, cognome);
+    }
+  }
+
+  ensurePrivacyRequestsTable(db) {
+    try {
+      const tableInfo = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='privacy_requests'").get();
+      if (!tableInfo) {
+        db.exec(`
+          CREATE TABLE privacy_requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            requester_type TEXT NOT NULL,
+            requester_id INTEGER,
+            requester_label TEXT,
+            request_type TEXT NOT NULL,
+            status TEXT DEFAULT 'open',
+            opened_at TEXT DEFAULT (datetime('now', 'localtime')),
+            due_at TEXT,
+            closed_at TEXT,
+            notes TEXT,
+            handled_by INTEGER,
+            payload_json TEXT,
+            created_at TEXT DEFAULT (datetime('now', 'localtime')),
+            updated_at TEXT DEFAULT (datetime('now', 'localtime')),
+            row_version INTEGER DEFAULT 1,
+            FOREIGN KEY (handled_by) REFERENCES utenti(id) ON DELETE SET NULL
+          );
+          CREATE INDEX IF NOT EXISTS idx_privacy_requests_status ON privacy_requests(status);
+          CREATE INDEX IF NOT EXISTS idx_privacy_requests_due_at ON privacy_requests(due_at);
+          CREATE INDEX IF NOT EXISTS idx_privacy_requests_request_type ON privacy_requests(request_type);
+        `);
+        console.log('[MIGRATIONS] Tabella privacy_requests creata');
+      }
+    } catch (error) {
+      console.log('[MIGRATIONS] Errore verifica tabella privacy_requests:', error.message);
+    }
+  }
+
+  ensureUserInvitesTable(db) {
+    try {
+      const tableInfo = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='user_invites'").get();
+      if (!tableInfo) {
+        db.exec(`
+          CREATE TABLE user_invites (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT NOT NULL,
+            role TEXT NOT NULL DEFAULT 'user',
+            invited_nome TEXT,
+            invited_cognome TEXT,
+            note TEXT,
+            token_hash TEXT NOT NULL UNIQUE,
+            invited_by INTEGER,
+            expires_at TEXT NOT NULL,
+            used_at TEXT,
+            revoked_at TEXT,
+            created_at TEXT DEFAULT (datetime('now', 'localtime')),
+            updated_at TEXT DEFAULT (datetime('now', 'localtime')),
+            row_version INTEGER DEFAULT 1,
+            FOREIGN KEY (invited_by) REFERENCES utenti(id) ON DELETE SET NULL
+          );
+          CREATE INDEX IF NOT EXISTS idx_user_invites_email ON user_invites(email);
+          CREATE INDEX IF NOT EXISTS idx_user_invites_expires_at ON user_invites(expires_at);
+          CREATE INDEX IF NOT EXISTS idx_user_invites_status ON user_invites(used_at, revoked_at);
+        `);
+        console.log('[MIGRATIONS] Tabella user_invites creata');
+      }
+    } catch (error) {
+      console.log('[MIGRATIONS] Errore verifica tabella user_invites:', error.message);
     }
   }
 

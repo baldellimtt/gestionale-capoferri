@@ -9,13 +9,10 @@ export const useAuth = () => {
 
   useEffect(() => {
     const checkAuth = async () => {
-      if (!api.getToken()) {
-        setAuthError(null)
-        setAuthChecking(false)
-        return
-      }
-
       try {
+        if (!api.getToken()) {
+          await api.refreshAccessToken()
+        }
         const me = await api.me()
         setUser(me)
         setAuthError(null)
@@ -25,8 +22,10 @@ export const useAuth = () => {
           api.clearTokens()
           setUser(null)
           setAuthError(null)
-        } else if (err.status === 401) {
-          setAuthError('Sessione scaduta. Riprova piu tardi.')
+        } else if (err.status === 401 || err.status === 400) {
+          api.clearTokens()
+          setUser(null)
+          setAuthError(null)
         } else {
           setAuthError('Errore di connessione. Riprova.')
         }

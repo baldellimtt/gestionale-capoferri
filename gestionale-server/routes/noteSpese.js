@@ -75,14 +75,16 @@ class NoteSpeseController {
       update: this.db.prepare(`
         UPDATE note_spese SET
           data = ?, categoria = ?, descrizione = ?, importo = ?, metodo_pagamento = ?,
-          rimborsabile = ?, stato = ?, updated_at = datetime('now', 'localtime')
-        WHERE id = ?
+          rimborsabile = ?, stato = ?, updated_at = datetime('now', 'localtime'),
+          row_version = row_version + 1
+        WHERE id = ? AND row_version = ?
       `),
       updateAllegato: this.db.prepare(`
         UPDATE note_spese SET
           allegato_nome = ?, allegato_path = ?, allegato_mime = ?, allegato_size = ?,
-          updated_at = datetime('now', 'localtime')
-        WHERE id = ?
+          updated_at = datetime('now', 'localtime'),
+          row_version = row_version + 1
+        WHERE id = ? AND row_version = ?
       `),
       delete: this.db.prepare('DELETE FROM note_spese WHERE id = ?')
     };

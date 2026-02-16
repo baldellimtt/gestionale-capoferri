@@ -17,15 +17,18 @@ const FattureInCloudSync = require('./services/fattureInCloudSync');
 const authMiddleware = require('./utils/authMiddleware');
 const ErrorHandler = require('./utils/errorHandler');
 const rateLimiter = require('./utils/rateLimiter');
+const createCsrfProtection = require('./utils/csrfProtection');
+const createPrivacyRetention = require('./utils/privacyRetention');
 
 // Usa variabili d'ambiente validate
 const PORT = parseInt(process.env.PORT, 10);
 const HOST = process.env.HOST || '127.0.0.1';
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'data', 'gestionale.db');
 const NODE_ENV = process.env.NODE_ENV || 'development';
-const HTTP_ENABLED = (process.env.HTTP_ENABLED || 'true').toLowerCase() === 'true';
-const HTTPS_ENABLED = (process.env.HTTPS_ENABLED || 'false').toLowerCase() === 'true';
+const HTTP_ENABLED = (process.env.HTTP_ENABLED || (NODE_ENV === 'production' ? 'false' : 'true')).toLowerCase() === 'true';
+const HTTPS_ENABLED = (process.env.HTTPS_ENABLED || (NODE_ENV === 'production' ? 'true' : 'false')).toLowerCase() === 'true';
 const HTTPS_REDIRECT = (process.env.HTTPS_REDIRECT || (HTTPS_ENABLED ? 'true' : 'false')).toLowerCase() === 'true';
+const FORCE_HTTPS = (process.env.FORCE_HTTPS || (NODE_ENV === 'production' ? 'true' : 'false')).toLowerCase() === 'true';
 const HTTPS_PORT = parseInt(process.env.HTTPS_PORT || '443', 10);
 const HTTPS_KEY_PATH = process.env.HTTPS_KEY_PATH || '';
 const HTTPS_CERT_PATH = process.env.HTTPS_CERT_PATH || '';
@@ -38,6 +41,7 @@ const db = dbManager.getDb();
 
 // Inizializza Express
 const app = express();
+const csrfProtection = createCsrfProtection();
 
 // Trust proxy (per IP reali dietro reverse proxy)
 const trustProxy = process.env.TRUST_PROXY;
@@ -53,6 +57,11 @@ if (trustProxy === 'true') {
 }
 
 let httpsServerEnabled = false;
+const trustProxyEnabled = !!app.get('trust proxy');
+
+if (NODE_ENV === 'production' && FORCE_HTTPS && !HTTPS_ENABLED && !trustProxyEnabled) {
+  throw new Error('Configurazione non sicura: in produzione con FORCE_HTTPS=true serve HTTPS_ENABLED=true o TRUST_PROXY abilitato');
+}
 
 // Security Headers (Helmet)
 const hstsEnabled = (process.env.HSTS_ENABLED || 'true').toLowerCase() === 'true';
@@ -98,10 +107,14 @@ app.use(cors(corsOptions));
 
 // Redirect HTTP -> HTTPS when HTTPS is available (avoid mixed content)
 app.use((req, res, next) => {
-  if (!HTTPS_REDIRECT || !httpsServerEnabled) {
+  const isSecure = req.secure || req.headers['x-forwarded-proto'] === 'https';
+  if (isSecure) {
     return next();
   }
-  if (req.secure || req.headers['x-forwarded-proto'] === 'https') {
+  if (NODE_ENV === 'production' && FORCE_HTTPS && (!HTTPS_REDIRECT || !httpsServerEnabled)) {
+    return res.status(426).json({ error: 'HTTPS obbligatorio' });
+  }
+  if (!HTTPS_REDIRECT || !httpsServerEnabled) {
     return next();
   }
   const host = req.headers.host || '';
@@ -114,6 +127,7 @@ const uploadMaxSize = process.env.UPLOAD_MAX_SIZE_MB
   : '10mb';
 app.use(express.json({ limit: uploadMaxSize }));
 app.use(express.urlencoded({ extended: true, limit: uploadMaxSize }));
+app.use('/api', csrfProtection.issueToken, csrfProtection.verifyRequest);
 
 // Rate Limiting (applicato a tutte le route API, tranne auth)
 const rateLimitWindowMs = parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10);
@@ -123,11 +137,28 @@ const apiLimiter = rateLimiter.createLimiter({
   max: rateLimitMax,
   message: 'Troppe richieste, riprova pi? tardi'
 });
+const authRateLimitWindowMs = parseInt(process.env.AUTH_RATE_LIMIT_WINDOW_MS || '600000', 10);
+const authRateLimitMax = parseInt(process.env.AUTH_RATE_LIMIT_MAX_REQUESTS || (NODE_ENV === 'production' ? '20' : '200'), 10);
+const authLimiter = rateLimiter.createLimiter({
+  windowMs: authRateLimitWindowMs,
+  max: authRateLimitMax,
+  message: 'Troppi tentativi di autenticazione, riprova piu tardi',
+  skipSuccessfulRequests: true
+});
 app.use('/api', (req, res, next) => {
   if ((req.path || '').startsWith('/auth/')) {
     return next();
   }
   return apiLimiter(req, res, next);
+});
+app.use('/api/auth', (req, res, next) => {
+  const path = req.path || '';
+  const isSensitiveAuth = req.method === 'POST'
+    && (path === '/login' || path === '/refresh' || path === '/accept-invite');
+  if (!isSensitiveAuth) {
+    return next();
+  }
+  return authLimiter(req, res, next);
 });
 
 // Static files
@@ -181,6 +212,12 @@ app.use('/api/impostazioni', (req, res, next) => {
   }
   return next();
 }, require('./routes/impostazioni')(db));
+app.use('/api/privacy', (req, res, next) => {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ error: 'Permesso negato' });
+  }
+  return next();
+}, require('./routes/privacy')(db, createPrivacyRetention(db)));
 app.use('/api/clienti', require('./routes/clienti')(db));
 app.use('/api/attivita', require('./routes/attivita')(db));
 app.use('/api/commesse', require('./routes/commesse')(db));
@@ -235,6 +272,33 @@ if (backupEnabled) {
   Logger.info(`Backup automatico configurato (ogni ${BACKUP_INTERVAL_HOURS} ore)`);
 } else {
   Logger.info('Backup automatico disabilitato');
+}
+
+const privacyRetentionEnabled = (process.env.PRIVACY_RETENTION_ENABLED || 'true').toLowerCase() === 'true';
+if (privacyRetentionEnabled) {
+  const privacyRetention = createPrivacyRetention(db);
+  const privacyRetentionIntervalHours = parseInt(process.env.PRIVACY_RETENTION_RUN_HOURS || '24', 10);
+  const privacyRetentionIntervalMs = Math.max(1, privacyRetentionIntervalHours) * 60 * 60 * 1000;
+  const privacyDays = parseInt(process.env.PRIVACY_REQUEST_RETENTION_DAYS || '730', 10);
+  const securityDays = parseInt(process.env.SECURITY_EVENT_RETENTION_DAYS || '90', 10);
+
+  const runPrivacyRetention = () => {
+    try {
+      const result = privacyRetention.run({ privacyDays, securityDays });
+      Logger.info('Privacy retention eseguita', {
+        privacyDays,
+        securityDays,
+        ...result
+      });
+    } catch (error) {
+      Logger.error('Errore privacy retention', error);
+    }
+  };
+
+  runPrivacyRetention();
+  setInterval(runPrivacyRetention, privacyRetentionIntervalMs);
+} else {
+  Logger.info('Privacy retention disabilitata');
 }
 
 // Sync automatico anagrafica da Fatture in Cloud (se abilitato)

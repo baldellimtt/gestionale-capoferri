@@ -25,6 +25,18 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onUsersChanged, onBack
     targa: '',
     rimborso_km: ''
   })
+  const [inviti, setInviti] = useState([])
+  const [invitiLoading, setInvitiLoading] = useState(false)
+  const [invitoSaving, setInvitoSaving] = useState(false)
+  const [latestInvito, setLatestInvito] = useState(null)
+  const [inviteData, setInviteData] = useState({
+    email: '',
+    role: 'user',
+    nome: '',
+    cognome: '',
+    note: '',
+    expiresHours: 48
+  })
 
   const normalizeErrorPayload = (value) => {
     if (!value) {
@@ -58,8 +70,22 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onUsersChanged, onBack
     }
   }
 
+  const loadInviti = async () => {
+    try {
+      setInvitiLoading(true)
+      const data = await api.getInvitiUtente()
+      setInviti(Array.isArray(data) ? data : [])
+    } catch (err) {
+      console.error('Errore caricamento inviti:', err)
+      toast?.showError(err.message || 'Errore caricamento inviti', 'Inviti utenti')
+    } finally {
+      setInvitiLoading(false)
+    }
+  }
+
   useEffect(() => {
     loadUtenti()
+    loadInviti()
   }, [])
 
   const startEdit = (utente) => {
@@ -210,6 +236,70 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onUsersChanged, onBack
 
   const handleDelete = (utente) => {
     setDeleteUtente(utente)
+  }
+
+  const handleCreateInvite = async () => {
+    const email = String(inviteData.email || '').trim().toLowerCase()
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      showError('Inserisci una email valida per l\'invito.')
+      return
+    }
+
+    try {
+      setInvitoSaving(true)
+      showError(null)
+      const result = await api.createInvitoUtente({
+        email,
+        role: inviteData.role || 'user',
+        nome: inviteData.nome || '',
+        cognome: inviteData.cognome || '',
+        note: inviteData.note || '',
+        expiresHours: Number(inviteData.expiresHours || 48)
+      })
+      setLatestInvito(result || null)
+      setInviteData({
+        email: '',
+        role: 'user',
+        nome: '',
+        cognome: '',
+        note: '',
+        expiresHours: 48
+      })
+      await loadInviti()
+      toast?.showSuccess('Invito creato con successo', 'Inviti utenti')
+    } catch (err) {
+      console.error('Errore creazione invito:', err)
+      showError(err.message || 'Errore creazione invito')
+    } finally {
+      setInvitoSaving(false)
+    }
+  }
+
+  const copyToClipboard = async (value, successMessage = 'Copiato') => {
+    const text = String(value || '').trim()
+    if (!text) return
+    try {
+      await navigator.clipboard.writeText(text)
+      toast?.showSuccess(successMessage, 'Clipboard')
+    } catch {
+      toast?.showError('Copia non riuscita', 'Clipboard')
+    }
+  }
+
+  const handleRevokeInvite = async (invito) => {
+    if (!invito?.id || !Number.isInteger(Number(invito?.row_version))) return
+    if (!window.confirm(`Revocare l'invito per ${invito.email}?`)) return
+    try {
+      setInvitoSaving(true)
+      await api.revokeInvitoUtente(invito.id, invito.row_version)
+      await loadInviti()
+      toast?.showSuccess('Invito revocato', 'Inviti utenti')
+    } catch (err) {
+      console.error('Errore revoca invito:', err)
+      showError(err.message || 'Errore revoca invito')
+    } finally {
+      setInvitoSaving(false)
+    }
   }
 
   const confirmDeleteUtente = async () => {
@@ -388,6 +478,158 @@ function ImpostazioniUtenti({ currentUser, onUserUpdated, onUsersChanged, onBack
           </div>
         </div>
       )}
+
+      <div className="card mb-4">
+        <div className="card-header">Inviti onboarding utenti</div>
+        <div className="card-body">
+          <div className="row g-3">
+            <div className="col-md-4">
+              <label className="form-label">Email</label>
+              <input
+                type="email"
+                className="form-control"
+                value={inviteData.email}
+                onChange={(e) => setInviteData((prev) => ({ ...prev, email: e.target.value }))}
+                placeholder="utente@azienda.it"
+              />
+            </div>
+            <div className="col-md-2">
+              <label className="form-label">Ruolo</label>
+              <select
+                className="form-select"
+                value={inviteData.role}
+                onChange={(e) => setInviteData((prev) => ({ ...prev, role: e.target.value }))}
+              >
+                <option value="user">Utente</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+            <div className="col-md-2">
+              <label className="form-label">Scadenza (ore)</label>
+              <input
+                type="number"
+                min="1"
+                max="336"
+                className="form-control"
+                value={inviteData.expiresHours}
+                onChange={(e) => setInviteData((prev) => ({ ...prev, expiresHours: e.target.value }))}
+              />
+            </div>
+            <div className="col-md-2">
+              <label className="form-label">Nome</label>
+              <input
+                className="form-control"
+                value={inviteData.nome}
+                onChange={(e) => setInviteData((prev) => ({ ...prev, nome: e.target.value }))}
+              />
+            </div>
+            <div className="col-md-2">
+              <label className="form-label">Cognome</label>
+              <input
+                className="form-control"
+                value={inviteData.cognome}
+                onChange={(e) => setInviteData((prev) => ({ ...prev, cognome: e.target.value }))}
+              />
+            </div>
+            <div className="col-12">
+              <label className="form-label">Note (opzionale)</label>
+              <input
+                className="form-control"
+                value={inviteData.note}
+                onChange={(e) => setInviteData((prev) => ({ ...prev, note: e.target.value }))}
+                placeholder="Note per il destinatario o per uso interno"
+              />
+            </div>
+          </div>
+          <div className="actions-sticky mt-3 d-flex gap-2">
+            <button className="btn btn-primary" onClick={handleCreateInvite} disabled={invitoSaving}>
+              {invitoSaving ? 'Creazione...' : 'Crea invito'}
+            </button>
+            <button className="btn btn-outline-secondary" onClick={loadInviti} disabled={invitiLoading || invitoSaving}>
+              Aggiorna lista inviti
+            </button>
+          </div>
+
+          {latestInvito?.onboarding_url && (
+            <div className="alert alert-success mt-3">
+              <div className="small fw-semibold mb-2">Invito creato</div>
+              <div className="d-flex gap-2 flex-wrap">
+                <button
+                  className="btn btn-sm btn-outline-success"
+                  onClick={() => copyToClipboard(latestInvito.onboarding_url, 'Link invito copiato')}
+                >
+                  Copia link invito
+                </button>
+                <button
+                  className="btn btn-sm btn-outline-success"
+                  onClick={() => copyToClipboard(latestInvito.onboarding_token, 'Token invito copiato')}
+                >
+                  Copia token invito
+                </button>
+              </div>
+              <div className="small text-break mt-2">{latestInvito.onboarding_url}</div>
+            </div>
+          )}
+
+          <div className="mt-3">
+            {invitiLoading ? (
+              <div className="text-muted small">Caricamento inviti...</div>
+            ) : inviti.length === 0 ? (
+              <div className="text-muted small">Nessun invito presente.</div>
+            ) : (
+              <div className="table-responsive">
+                <table className="table table-sm align-middle mb-0">
+                  <thead>
+                    <tr>
+                      <th>Email</th>
+                      <th>Ruolo</th>
+                      <th>Scade</th>
+                      <th>Stato</th>
+                      <th>Azioni</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {inviti.map((invito) => {
+                      const isRevoked = Boolean(invito.revoked_at)
+                      const isUsed = Boolean(invito.used_at)
+                      const isExpired = invito.expires_at ? new Date(invito.expires_at) <= new Date() : false
+                      const status = isRevoked
+                        ? 'Revocato'
+                        : isUsed
+                          ? 'Usato'
+                          : isExpired
+                            ? 'Scaduto'
+                            : 'Attivo'
+                      const canRevoke = !isRevoked && !isUsed && !isExpired
+                      return (
+                        <tr key={invito.id}>
+                          <td>{invito.email}</td>
+                          <td>{invito.role}</td>
+                          <td>{invito.expires_at ? new Date(invito.expires_at).toLocaleString('it-IT') : '-'}</td>
+                          <td>{status}</td>
+                          <td>
+                            {canRevoke ? (
+                              <button
+                                className="btn btn-sm btn-outline-danger"
+                                onClick={() => handleRevokeInvite(invito)}
+                                disabled={invitoSaving}
+                              >
+                                Revoca
+                              </button>
+                            ) : (
+                              <span className="text-muted small">-</span>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
 
       <div className="card">
         <div className="card-header">Dati operatore</div>
