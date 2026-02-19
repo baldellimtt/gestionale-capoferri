@@ -8,7 +8,7 @@ const DOCUMENT_TABS = [
 ]
 
 const DEFAULT_ITEM = {
-  name: '',
+  descrizione: '',
   qty: 1,
   net_price: '',
   vat_id: ''
@@ -256,6 +256,7 @@ function Fatturazione({ clienti = [], toast, draft, onDraftConsumed }) {
         draft.items.map((item) => ({
           ...DEFAULT_ITEM,
           ...item,
+          descrizione: item.descrizione || item.description || item.name || '',
           qty: item.qty ?? 1
         }))
       )
@@ -323,7 +324,7 @@ function Fatturazione({ clienti = [], toast, draft, onDraftConsumed }) {
       toast?.showError('Seleziona un cliente', 'Fatturazione')
       return
     }
-    if (!items.length || items.some((item) => !String(item.name || '').trim())) {
+    if (!items.length || items.some((item) => !String(item.descrizione || '').trim())) {
       toast?.showError('Compila almeno una riga con descrizione', 'Fatturazione')
       return
     }
@@ -339,7 +340,8 @@ function Fatturazione({ clienti = [], toast, draft, onDraftConsumed }) {
         numeration: formData.numeration || undefined,
         currency: 'EUR',
         items: items.map((item) => ({
-          name: item.name,
+          descrizione: item.descrizione,
+          name: item.descrizione,
           qty: Number(item.qty || 1),
           net_price: Number(String(item.net_price || '').replace(',', '.')) || 0,
           vat_id: item.vat_id || formData.defaultVatId || undefined
@@ -555,8 +557,8 @@ function Fatturazione({ clienti = [], toast, draft, onDraftConsumed }) {
                       <div className="fatturazione-item-main">
                         <input
                           className="form-control"
-                          value={item.name}
-                          onChange={(e) => handleItemChange(idx, 'name', e.target.value)}
+                          value={item.descrizione}
+                          onChange={(e) => handleItemChange(idx, 'descrizione', e.target.value)}
                           placeholder="Descrizione"
                         />
                         <input

@@ -303,7 +303,7 @@ class FatturazioneController {
       if (!safeItems.length) {
         return res.status(400).json({ error: 'items obbligatorio (almeno 1 riga)' });
       }
-      if (safeItems.some((item) => !String(item.name || item.descrizione || '').trim())) {
+      if (safeItems.some((item) => !String(item.name || item.descrizione || item.description || '').trim())) {
         return res.status(400).json({ error: 'Ogni riga deve avere una descrizione' });
       }
       if (safeItems.some((item) => !Number.isFinite(Number(item.net_price ?? item.prezzo ?? 0)))) {
@@ -323,7 +323,7 @@ class FatturazioneController {
       }
 
       const mappedItems = safeItems.map((item) => ({
-        name: String(item.name || item.descrizione || '').trim(),
+        name: String(item.name || item.descrizione || item.description || '').trim(),
         qty: Number(item.qty ?? 1),
         net_price: Number(item.net_price ?? item.prezzo ?? 0),
         vat: item.vat_id
@@ -338,12 +338,12 @@ class FatturazioneController {
         return sum + qty * price;
       }, 0);
 
-      const eInvoice = {};
+      const eInvoiceData = {};
       if (hasValue(recipient_code)) {
-        eInvoice.recipient_code = String(recipient_code).trim();
+        eInvoiceData.recipient_code = String(recipient_code).trim();
       }
       if (hasValue(recipient_pec)) {
-        eInvoice.certified_email = String(recipient_pec).trim();
+        eInvoiceData.certified_email = String(recipient_pec).trim();
       }
 
       const payloadData = {
@@ -351,7 +351,7 @@ class FatturazioneController {
         date: date || new Date().toISOString().slice(0, 10),
         numeration: numeration || undefined,
         currency: currency ? { id: currency } : { id: 'EUR' },
-        items_list: { items: mappedItems },
+        items_list: mappedItems,
         subject: subject || undefined,
         visible_subject: visible_subject || subject || undefined,
         notes: notes || undefined,
@@ -366,7 +366,8 @@ class FatturazioneController {
             }
           ]
         } : undefined,
-        e_invoice: Object.keys(eInvoice).length ? eInvoice : undefined
+        e_invoice: docType === 'invoice' ? Object.keys(eInvoiceData).length > 0 : undefined,
+        ei_data: docType === 'invoice' && Object.keys(eInvoiceData).length ? eInvoiceData : undefined
       };
 
       const result = await this.api.createDocument(docType, payloadData);

@@ -14,6 +14,7 @@ function KanbanColumn({
   onColumnDragStart = null,
   onColumnDragEnd = null,
   onColumnDrop = null,
+  onColumnDoubleClick = null,
   columnDragDisabled = false,
   isColumnDragging = false,
   columnDragId = null
@@ -108,12 +109,19 @@ function KanbanColumn({
     }
   }
 
+  const handleDoubleClick = (e) => {
+    if (!onColumnDoubleClick) return
+    if (e.target?.closest('.kanban-card')) return
+    onColumnDoubleClick(colonna)
+  }
+
   return (
     <div
       className="kanban-column"
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
+      onDoubleClick={handleDoubleClick}
       style={{
         minWidth: '300px',
         width: '300px',

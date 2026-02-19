@@ -124,6 +124,12 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
     setShowCardDetail(true)
   }
 
+  const handleColumnDoubleClick = (colonna) => {
+    if (!colonna?.id) return
+    setSelectedCard({ colonna_id: colonna.id })
+    setShowCardDetail(true)
+  }
+
   const handleCardUpdate = async (updatedCard) => {
     try {
       await api.updateKanbanCard(updatedCard.id, updatedCard)
@@ -1021,6 +1027,7 @@ function KanbanBoard({ clienti, user, toast, hideControls = false }) {
                     onColumnDragStart={allowReorder ? handleColumnDragStart(colonna.id) : null}
                     onColumnDragEnd={handleColumnDragEnd}
                     onColumnDrop={allowReorder ? handleColumnDrop(colonna.id) : null}
+                    onColumnDoubleClick={handleColumnDoubleClick}
                     columnDragDisabled={!allowReorder}
                     isColumnDragging={colonnaDragId === colonna.id}
                     columnDragId={colonnaDragId}
