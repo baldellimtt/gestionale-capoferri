@@ -422,6 +422,7 @@ class CommesseController {
   }
 
   getAll(req, res) {
+    const startTime = Date.now();
     try {
       const { clienteId, stato, statoPagamenti } = req.query;
       const { page, limit, offset } = Pagination.getParams(req, 50, 100);
@@ -464,17 +465,36 @@ class CommesseController {
           : this.stmt.getAll.all();
       }
 
-      Logger.info('GET /commesse', { count: commesse.length, total, page, limit, clienteId, stato, statoPagamenti });
+      const durationMs = Date.now() - startTime;
+      Logger.info('GET /commesse', {
+        count: commesse.length,
+        total,
+        page,
+        limit,
+        clienteId,
+        stato,
+        statoPagamenti,
+        durationMs,
+        status: 200
+      });
       
       // Se ci sono parametri di paginazione, restituisci risposta paginata
       if (usePagination) {
         res.json(Pagination.createResponse(commesse, total, page, limit));
       } else {
         // Per retrocompatibilità, restituisci array semplice
-        res.json(commesse);
+      res.json(commesse);
       }
     } catch (error) {
-      Logger.error('Errore GET /commesse', error);
+      const durationMs = Date.now() - startTime;
+      Logger.error('Errore GET /commesse', {
+        error: error?.message || String(error),
+        stack: error?.stack,
+        clienteId: req.query?.clienteId,
+        stato: req.query?.stato,
+        statoPagamenti: req.query?.statoPagamenti,
+        durationMs
+      });
       const isProduction = process.env.NODE_ENV === 'production';
       res.status(500).json({ error: isProduction ? 'Errore interno del server' : error.message });
     }

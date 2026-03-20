@@ -11,6 +11,11 @@ $clientBuildOutLog = Join-Path $logDir 'client.build.out.log'
 $clientBuildErrLog = Join-Path $logDir 'client.build.err.log'
 $startupLog = Join-Path $logDir 'startup.log'
 
+$healthUrlHttps = 'https://localhost/health'
+$healthUrlHttp = 'http://localhost/health'
+$healthCheckIntervalSec = 15
+$healthFailThreshold = 4
+
 $npm = (Get-Command 'npm.cmd' -ErrorAction SilentlyContinue).Source
 if (-not $npm) {
   $npm = 'C:\Program Files\nodejs\npm.cmd'
@@ -56,6 +61,18 @@ function Build-Client {
   return Start-Process -FilePath $npm -ArgumentList 'run', 'build' -WorkingDirectory $clientPath -WindowStyle Hidden -RedirectStandardOutput $clientBuildOutLog -RedirectStandardError $clientBuildErrLog -Wait -PassThru
 }
 
+function Test-Health {
+  try {
+    $code = & curl.exe -k -s -o NUL -w "%{http_code}" $healthUrlHttps
+    if ($code -eq '200') { return $true }
+  } catch {}
+  try {
+    $code = & curl.exe -s -o NUL -w "%{http_code}" $healthUrlHttp
+    if ($code -eq '200') { return $true }
+  } catch {}
+  return $false
+}
+
 $didBuildClient = $false
 while ($true) {
   Stop-PortListeners -Port 80
@@ -76,12 +93,25 @@ while ($true) {
   
   $serverProcess = Start-Server
   Write-StartupLog "Server PID: $($serverProcess.Id)"
+  $consecutiveHealthFails = 0
   while ($true) {
     $serverAlive = Get-Process -Id $serverProcess.Id -ErrorAction SilentlyContinue
     if (-not $serverAlive) {
       break
     }
-    Start-Sleep -Seconds 2
+    $healthy = Test-Health
+    if ($healthy) {
+      $consecutiveHealthFails = 0
+    } else {
+      $consecutiveHealthFails++
+      Write-StartupLog "Health check failed ($consecutiveHealthFails/$healthFailThreshold)"
+      if ($consecutiveHealthFails -ge $healthFailThreshold) {
+        Write-StartupLog 'Health check threshold exceeded; restarting server'
+        try { Stop-Process -Id $serverProcess.Id -Force -ErrorAction Stop } catch {}
+        break
+      }
+    }
+    Start-Sleep -Seconds $healthCheckIntervalSec
   }
   Write-StartupLog 'Detected server exit; restarting'
   if ($serverProcess -and -not $serverProcess.HasExited) {
