@@ -210,6 +210,9 @@ class AttivitaController {
       if (!data) {
         return res.status(400).json({ error: 'Data obbligatoria' });
       }
+      if (!Number.isInteger(Number(row_version))) {
+        return res.status(400).json({ error: 'row_version obbligatorio' });
+      }
 
       let ownerId = req.user?.id || null;
       if (req.user?.role === 'admin' && userId) {
@@ -277,15 +280,21 @@ class AttivitaController {
         km || 0,
         indennita ? 1 : 0,
         note || null,
-        id
+        id,
+        row_version
       );
 
       if (result.changes === 0) {
-        return res.status(404).json({ error: 'Attività non trovata' });
+        const current = this.stmt.getById.get(id);
+        if (!current) {
+          return res.status(404).json({ error: 'Attività non trovata' });
+        }
+        return res.status(409).json({ error: 'Conflitto di aggiornamento', current });
       }
 
       Logger.info(`PUT /attivita/${id}`);
-      res.json({ id: parseInt(id, 10), ...req.body, userId: nextUserId });
+      const updated = this.stmt.getById.get(id);
+      res.json(updated || { id: parseInt(id, 10), ...req.body, userId: nextUserId });
     } catch (error) {
       Logger.error(`Errore PUT /attivita/${req.params.id}`, error);
       res.status(500).json({ error: ErrorHandler.sanitizeErrorMessage(error) });
