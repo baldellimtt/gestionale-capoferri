@@ -351,7 +351,7 @@ class FatturazioneController {
         date: date || new Date().toISOString().slice(0, 10),
         numeration: numeration || undefined,
         currency: currency ? { id: currency } : { id: 'EUR' },
-        items_list: mappedItems,
+        items_list: { items: mappedItems },
         subject: subject || undefined,
         visible_subject: visible_subject || subject || undefined,
         notes: notes || undefined,
@@ -366,8 +366,7 @@ class FatturazioneController {
             }
           ]
         } : undefined,
-        e_invoice: docType === 'invoice' ? Object.keys(eInvoiceData).length > 0 : undefined,
-        ei_data: docType === 'invoice' && Object.keys(eInvoiceData).length ? eInvoiceData : undefined
+        e_invoice: docType === 'invoice' && Object.keys(eInvoiceData).length ? eInvoiceData : undefined
       };
 
       const result = await this.api.createDocument(docType, payloadData);

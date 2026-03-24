@@ -94,9 +94,10 @@ class FattureInCloudApi {
       error.status = 400;
       throw error;
     }
-    const items = Array.isArray(data?.items_list)
-      ? data.items_list
-      : data?.items_list?.items;
+    if (Array.isArray(data?.items_list)) {
+      data.items_list = { items: data.items_list };
+    }
+    const items = data?.items_list?.items;
     if (!Array.isArray(items) || items.length === 0) {
       const error = new Error('items_list obbligatorio');
       error.status = 400;

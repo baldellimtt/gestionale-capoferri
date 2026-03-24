@@ -10,10 +10,7 @@ export const useAuth = () => {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        if (!api.getToken()) {
-          await api.refreshAccessToken()
-        }
-        const me = await api.me()
+        const me = await api.bootstrapSession()
         setUser(me)
         setAuthError(null)
       } catch (err) {

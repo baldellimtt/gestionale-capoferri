@@ -8,7 +8,8 @@ export const normalizeAttivitaFromApi = (row) => ({
   attivita: row.attivita || '',
   km: row.km || '',
   indennita: row.indennita === 1,
-  note: row.note || ''
+  note: row.note || '',
+  row_version: row.row_version ?? row.rowVersion ?? null
 })
 
 export const dedupeAttivita = (rows, deletedIds = new Set()) => {

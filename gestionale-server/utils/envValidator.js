@@ -275,7 +275,7 @@ class EnvValidator {
     });
     this.validate('CSRF_COOKIE_PATH', {
       required: false,
-      default: '/api',
+      default: '/',
       description: 'CSRF cookie path'
     });
     this.validate('CSRF_COOKIE_DOMAIN', {

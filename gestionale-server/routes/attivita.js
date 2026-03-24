@@ -205,15 +205,11 @@ class AttivitaController {
 
   create(req, res) {
     try {
-      const { data, clienteId, clienteNome, attivita, km, indennita, note, userId, row_version } = req.body;
+      const { data, clienteId, clienteNome, attivita, km, indennita, note, userId } = req.body;
 
       if (!data) {
         return res.status(400).json({ error: 'Data obbligatoria' });
       }
-      if (!Number.isInteger(Number(row_version))) {
-        return res.status(400).json({ error: 'row_version obbligatorio' });
-      }
-
       let ownerId = req.user?.id || null;
       if (req.user?.role === 'admin' && userId) {
         const parsed = parseInt(userId, 10);

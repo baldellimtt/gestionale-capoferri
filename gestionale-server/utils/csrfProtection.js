@@ -68,7 +68,7 @@ function getRequestOrigin(req) {
 function createCsrfProtection() {
   const NODE_ENV = process.env.NODE_ENV || 'development';
   const cookieName = process.env.CSRF_COOKIE_NAME || 'gestionale_csrf_token';
-  const cookiePath = process.env.CSRF_COOKIE_PATH || '/api';
+  const cookiePath = process.env.CSRF_COOKIE_PATH || '/';
   const cookieDomain = (process.env.CSRF_COOKIE_DOMAIN || '').trim() || undefined;
   const secure = (process.env.CSRF_COOKIE_SECURE || (NODE_ENV === 'production' ? 'true' : 'false')).toLowerCase() === 'true';
   const rawSameSite = String(process.env.CSRF_COOKIE_SAMESITE || 'lax').toLowerCase();
