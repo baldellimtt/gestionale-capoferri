@@ -869,10 +869,29 @@ function TabellaAttivita({ clienti, user, toast, hideControls = false, targetUse
       }
 
       const result = await api.createAttivita(attivitaData)
+      const normalizedRow = normalizeAttivitaFromApi(result)
+
       clearAutoCreateSuppression(row.data)
-      await loadAttivita()
+      setAttivita((prev) =>
+        prev.map((currentRow) => {
+          if (currentRow?.id !== row.id) return currentRow
+          return {
+            ...normalizedRow,
+            cliente: field === 'cliente' ? value : normalizedRow.cliente,
+            attivita: field === 'attivita' ? value : normalizedRow.attivita,
+            km: field === 'km' ? value : normalizedRow.km,
+            indennita: field === 'indennita' ? value : normalizedRow.indennita,
+            note: field === 'note' ? value : normalizedRow.note
+          }
+        })
+      )
+
+      if (String(editingRowId) === String(row.id)) {
+        setEditingRowId(normalizedRow.id)
+      }
+
       notifyAttivitaChanged?.()
-      return result?.id || true
+      return normalizedRow.id || true
     } catch (err) {
       console.error('Errore creazione riga:', err)
       setError('Errore nella creazione della riga: ' + (err.message || 'Errore sconosciuto'))
